@@ -155,3 +155,32 @@ PROGRAMS.push({
   sessionsFor: cutlerWeek,
   sessions: cutlerWeek(0),
 });
+
+// Куда идёт программа: цель и фазы по неделям (для экрана «Программа» и полоски над календарём).
+const mid = r => { const [a, b] = String(r).split(/[–-]/).map(Number); return b ? (a + b) / 2 : a; };
+export function programPlan(prog) {
+  if (prog.id === "cutler") {
+    const cycles = CUTLER_SETS.map((row, c) => {
+      const all = row.split(" ").map(x => mid(x.split("x")[1]));
+      const avg = a => Math.round(a.reduce((s, x) => s + x, 0) / a.length);
+      return { c, heavy: avg(all.slice(0, 28)), mod: avg(all.slice(28)) };
+    });
+    return {
+      goal: "За 12 недель тяжёлые недели ведут к силе: повторов всё меньше, вес всё больше. Умеренные — к объёму и выносливости мышц: повторов всё больше.",
+      next: c => c < 5 ? `Следующий цикл: тяжёлые ~${cycles[c + 1].heavy} повт., умеренные ~${cycles[c + 1].mod}` : "Финальный цикл: самые тяжёлые веса",
+      cycles,
+      phases: cycles.map(x => ({ weeks: [x.c * 2 + 1, x.c * 2 + 2], title: `Цикл ${x.c + 1}`, text: `Тяжёлая ~${x.heavy} повт. · умеренная ~${x.mod}` })),
+      weekLabel: w => (w % 2 === 0 ? "тяжёлая" : "умеренная"),
+    };
+  }
+  return {
+    goal: "Рост рабочих весов. Сделал верх диапазона во всех подходах — в следующий раз добавляешь вес. Каждые 3 недели варианты упражнений меняются, чтобы мышцы получали новую нагрузку.",
+    phases: [
+      { weeks: [1, 3], title: "Блок 1", text: "Первые варианты упражнений. Найди рабочие веса и технику" },
+      { weeks: [4, 6], title: "Блок 2", text: "Вторые варианты: новая нагрузка на те же мышцы" },
+      { weeks: [7, 9], title: "Блок 3", text: "Снова первые варианты — веса выше, чем в блоке 1" },
+      { weeks: [10, 12], title: "Блок 4", text: "Вторые варианты — веса выше, чем в блоке 2" },
+    ],
+    weekLabel: w => (Math.floor(w / 3) % 2 ? "вторые варианты" : "первые варианты"),
+  };
+}
