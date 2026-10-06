@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import "./fonts.css";
 import { PROGRAMS, PRINCIPLES, programById, sessionFor as programSession, programPlan } from "./programs.js";
-import { media } from "./exercise-media.js";
+import { media, NAMES as KNOWN_NAMES } from "./exercise-media.js";
 import "./style.css";
 
 // Та же база, что у рассрочки (проект RassP); дневник живёт в своих таблицах gym_*, каждая строка видна только владельцу.
@@ -173,6 +173,8 @@ function rerender() { // перерисовать экран без анимац
   const main = document.getElementById("main"); if (!main) return render();
   main.classList.remove("screen");
   main.innerHTML = route().view();
+  if (S._shownDay && S._shownDay !== S.day) { const dir = S.day > S._shownDay ? "next" : "prev"; document.getElementById("day-panel")?.classList.add("swap", dir); }
+  S._shownDay = S.day;
 }
 function skeleton() {
   return `<div style="display:grid;gap:12px;padding-top:28px"><div class="skel" style="height:14px;width:40%"></div><div class="skel" style="height:68px"></div><div class="skel" style="height:40px;width:60%"></div><div class="skel" style="height:140px"></div><div class="skel" style="height:140px"></div></div>`;
@@ -317,7 +319,6 @@ function weekView() {
   }
   return `
     <section class="hero cal">
-      ${programBand()}
       <div class="cal-top">
         <div class="cal-title">${head}</div>
         <div class="row">
@@ -436,7 +437,7 @@ function dayPanel() {
     return `${eyebrow}
       <section class="hero-card rest">
         <div class="hc-text"><h2>${S.profile?.program_id ? "День отдыха" : "Свободный день"}</h2>
-        <p class="hc-sub">${S.profile?.program_id ? (nx ? `Следующая — ${WD_FULL[(parse(nx.d).getDay() + 6) % 7].toLowerCase()}, ${shortDay(nx.d)}: ${esc(nx.p.title)}. Мышцы растут как раз во время отдыха.` : "") : `Выберите <a href="#/program">программу</a> — и на каждый день будет готовый план.`}</p></div>
+        <p class="hc-sub">${S.profile?.program_id ? (nx ? `Следующая — ${WD_FULL[(parse(nx.d).getDay() + 6) % 7].toLowerCase()}, ${shortDay(nx.d)}: ${esc(nx.p.title)}. Мышцы растут как раз во время отдыха.` : "") : `Выбери <a href="#/program">программу</a> или попроси тренера расписать неделю.`}</p></div>
         <div class="row">${S.profile?.program_id ? `<button class="btn quiet" data-act="move">Поставить сюда тренировку</button>` : ""}<button class="btn ${S.profile?.program_id ? "quiet" : ""}" data-act="new-w">${I.plus}Своя тренировка</button>
         ${S.templates.length || S.workouts.length ? `<button class="btn quiet" data-act="from-tpl">Из шаблона</button>` : ""}</div>
       </section>
@@ -446,11 +447,11 @@ function dayPanel() {
   }
   const items = w ? exercisesOf(w.id) : p.ex.map(e => { const s = suggestSets(e.name, e.sets, e.reps); return { isPlan: true, name: e.name, plan: `${e.sets} × ${e.reps}`, sets: s.sets, up: s.up, done: false }; });
   const done = items.filter(e => e.done).length;
-  const kick = p ? `${ps ? `Неделя ${ps.local + 1}` : `Неделя ${p.week}`} · ${p.focus}` : "Своя тренировка";
+  const kick = p ? `${ps ? `Неделя ${ps.local + 1}` : `Неделя ${p.week}`} · ${p.focus}` : "Тренировка";
   const ton = w ? tonnage(items) : 0;
   const feel = ["Тяжело", "Так себе", "Норм", "Хорошо", "Отлично"];
   return `${eyebrow}
-    <section class="hero-card">
+    <section class="hero-card ${w && items.length && done === items.length ? "is-done" : ""}">
       <div class="hc-text">
         <div class="kicker">${esc(kick)}</div>
         ${w ? `<input class="title-inp" data-field="w-title" value="${esc(w.title)}" placeholder="Название тренировки" aria-label="Название тренировки" maxlength="80">` : `<h2 class="title-inp">${esc(p.title)}</h2>`}
@@ -461,10 +462,13 @@ function dayPanel() {
       <div class="hc-actions">
         ${w ? "" : `<button class="btn big" data-act="start">${d < today() ? "Отметить выполненное" : "Начать тренировку"}</button>`}
         <button class="btn ${w ? "quiet small" : "quiet"}" data-act="move">Перенести</button>
+        ${w && items.length && done === items.length ? `<button class="btn quiet small" data-act="unfinish">Снять отметки</button>` : ""}
       </div>
     </section>
     ${coachCard(d)}
+    ${w && done < items.length ? `<p class="how">Сделал упражнение — нажми кружок справа. Нажми на само упражнение, чтобы открыть подходы и вес.</p>` : ""}
     <ol class="ex-list" id="ex-list">${items.map((e, i) => exRow(e, i, d)).join("")}</ol>
+    ${w && items.length && done < items.length ? `<button class="btn big finish" data-act="finish">${I.check}Завершить тренировку</button>` : ""}
     <form class="add-ex" data-form="add-ex">
       <input class="inp" name="name" list="ex-names" placeholder="Добавить упражнение" autocomplete="off" maxlength="80" aria-label="Новое упражнение">
       <datalist id="ex-names">${[...new Set([...S.exercises.map(e => e.name.trim()), ...PROGRAMS.flatMap(pr => (pr.sessions || []).flatMap(s => s.ex.flatMap(e => e.n)))].filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")).map(n => `<option value="${esc(n)}">`).join("")}</datalist>
@@ -491,6 +495,8 @@ function refreshDayBits() { // кольцо, подпись и отметка д
 }
 function replaceRow(e) {
   const li = document.querySelector(`[data-ex="${e.id}"]`), list = exercisesOf(e.workout_id);
+  const allBefore = document.querySelector(".hero-card")?.classList.contains("is-done"), all = list.length && list.every(x => x.done);
+  if (!!all !== !!allBefore) { rerender(); if (all) document.querySelector(".hero-card")?.classList.add("celebrate"); return; }
   if (li) li.outerHTML = exRow(e, list.indexOf(e), S.day);
   refreshDayBits();
 }
@@ -616,7 +622,7 @@ function coachCard(d) {
   const c = coachCached(d);
   return `<button class="coach" data-act="coach">
     <span class="co-mark" aria-hidden="true"></span>
-    <span class="co-main"><b>Тренер</b><span>${c?.headline ? esc(c.headline) : d === today() ? "Что качать сегодня — совет по твоим данным" : "Совет по этому дню"}</span></span>
+    <span class="co-main"><b>Тренер</b><span>${c?.headline ? esc(c.headline) : "Совет на сегодня — или попроси расписать неделю"}</span></span>
     <span class="ex-chev" aria-hidden="true">${I.right}</span>
   </button>`;
 }
@@ -646,28 +652,126 @@ function coachHTML(c) {
 }
 function coachSheet() {
   const cached = coachCached(S.day);
-  sheet("Тренер", `<div id="co-body">${cached ? coachHTML(cached) : `<p class="co-wait"><i></i><i></i><i></i> Смотрю твои тренировки, питание и сон…</p>`}</div>
-    <form id="cq" class="add-ex"><input class="inp" name="q" placeholder="Спросить тренера" maxlength="600" autocomplete="off"><button class="btn" type="submit">Спросить</button></form>
-    ${cached ? `<button class="linkbtn muted-link" data-refresh>Обновить совет</button>` : ""}`, (el, close) => {
-    const body = el.querySelector("#co-body"), f = el.querySelector("#cq");
-    const show = c => {
-      body.innerHTML = coachHTML(c);
-      body.querySelector("[data-apply]")?.addEventListener("click", async ev => { ev.target.classList.add("loading"); await applyCoach(c.changes); close(); });
-    };
-    const load = async question => {
-      body.innerHTML = `<p class="co-wait"><i></i><i></i><i></i> ${question ? "Думаю над вопросом…" : "Смотрю твои тренировки, питание и сон…"}</p>`;
+  const chatKey = `gym-chat-${S.user?.id}`;
+  let msgs = []; try { msgs = JSON.parse(localStorage.getItem(chatKey) || "[]").slice(-20); } catch {}
+  const chips = ["Распиши мне неделю", "Перенеси сегодняшнюю на завтра", "Отметь вчерашнюю выполненной", "Сделай тренировку полегче — не выспался"];
+  sheet("Тренер", `
+    <div class="co-feed" id="co-feed"></div>
+    <div class="co-chips">${chips.map(c => `<button type="button" data-chip>${c}</button>`).join("")}</div>
+    <form id="cq" class="co-input"><textarea class="inp" name="q" rows="1" placeholder="Напиши тренеру…" maxlength="1000"></textarea><button class="btn" type="submit" aria-label="Отправить">${I.right}</button></form>`, (el, close) => {
+    const feed = el.querySelector("#co-feed"), f = el.querySelector("#cq");
+    const save = () => { try { localStorage.setItem(chatKey, JSON.stringify(msgs.slice(-20))); } catch {} };
+    const bubble = (role, html) => { const d = document.createElement("div"); d.className = `co-msg ${role}`; d.innerHTML = html; feed.append(d); d.scrollIntoView({ block: "end", behavior: "smooth" }); return d; };
+    // совет на сегодня — первым сообщением
+    const adviceBox = bubble("assistant", cached ? coachHTML(cached) : `<p class="co-wait"><i></i><i></i><i></i> Смотрю твои тренировки, питание и сон…</p>`);
+    const wireApply = (box, c) => box.querySelector("[data-apply]")?.addEventListener("click", async ev => { ev.target.classList.add("loading"); await applyCoach(c.changes); close(); });
+    if (cached) wireApply(adviceBox, cached);
+    else askCoach().then(c => { try { localStorage.setItem(coachKey(S.day), JSON.stringify(c)); } catch {} adviceBox.innerHTML = coachHTML(c); wireApply(adviceBox, c); document.querySelector(".coach")?.replaceWith(Object.assign(document.createElement("div"), { innerHTML: coachCard(S.day) }).firstElementChild); })
+      .catch(e => { adviceBox.innerHTML = `<p class="muted">${e.message === "no_key" ? "Тренер ещё не подключён." : "Совет на сегодня не загрузился — можешь просто написать, что нужно."}</p>`; });
+    for (const m of msgs) bubble(m.role, m.role === "user" ? `<p>${esc(m.content)}</p>` : `<p>${esc(m.reply || m.content)}</p>`);
+    const send = async text => {
+      text = text.trim(); if (!text) return;
+      bubble("user", `<p>${esc(text)}</p>`); msgs.push({ role: "user", content: text }); save();
+      const wait = bubble("assistant", `<p class="co-wait"><i></i><i></i><i></i> Думаю…</p>`);
       try {
-        const c = await askCoach(question);
-        if (!question) try { localStorage.setItem(coachKey(S.day), JSON.stringify(c)); } catch {}
-        show(c); document.getElementById("day-panel") && (document.querySelector(".coach")?.replaceWith(Object.assign(document.createElement("div"), { innerHTML: coachCard(S.day) }).firstElementChild));
-      } catch (e) {
-        body.innerHTML = `<p class="muted">${e.message === "no_key" ? "Тренер ещё не подключён: нужен ключ OpenRouter." : "Тренер сейчас не ответил. Попробуй ещё раз через минуту."}</p>`;
-      }
+        const out = await chatCoach(msgs);
+        msgs.push({ role: "assistant", content: JSON.stringify({ reply: out.reply, actions: out.actions }), reply: out.reply }); save();
+        wait.innerHTML = `<p>${esc(out.reply)}</p>${out.actions.length ? actionsHTML(out.actions) : ""}`;
+        const ap = wait.querySelector("[data-apply-actions]");
+        ap?.addEventListener("click", async () => {
+          ap.classList.add("loading"); ap.disabled = true;
+          try { const n = await applyActions(out.actions); wait.querySelector(".co-actions").classList.add("applied"); ap.replaceWith(Object.assign(document.createElement("p"), { className: "co-done", textContent: `Готово — изменений: ${n}. Календарь обновлён.` })); rerender(); }
+          catch { ap.classList.remove("loading"); ap.disabled = false; toast("Не всё получилось применить — попробуй ещё раз"); }
+        });
+        wait.querySelector("[data-skip]")?.addEventListener("click", ev => { ev.target.closest(".co-actions-wrap").remove(); });
+      } catch (e) { wait.innerHTML = `<p class="muted">${e.message === "no_key" ? "Тренер ещё не подключён." : "Тренер не ответил. Попробуй ещё раз."}</p>`; msgs.pop(); save(); }
     };
-    if (cached) show(cached); else load();
-    el.querySelector("[data-refresh]")?.addEventListener("click", ev => { ev.target.remove(); load(); });
-    f.onsubmit = ev => { ev.preventDefault(); const qv = f.q.value.trim(); if (!qv) return; f.q.value = ""; load(qv); };
+    el.querySelectorAll("[data-chip]").forEach(b => b.onclick = () => send(b.textContent));
+    f.onsubmit = ev => { ev.preventDefault(); const v = f.q.value; f.q.value = ""; f.q.style.height = ""; send(v); };
+    f.q.addEventListener("keydown", ev => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); f.requestSubmit(); } });
+    f.q.addEventListener("input", () => { f.q.style.height = "auto"; f.q.style.height = Math.min(140, f.q.scrollHeight) + "px"; });
   });
+}
+// Календарь для тренера: неделя назад и 4 вперёд — что стоит в каждый день.
+function calendarForCoach() {
+  const out = [];
+  for (let i = -7; i <= 28; i++) {
+    const d = addDays(today(), i), s = dayStatus(d);
+    const ex = s.w ? s.ex.map(e => e.name) : s.plan ? s.plan.ex.map(e => `${e.name} ${e.sets}×${e.reps}`) : [];
+    out.push({ day: d, wd: WD[wdOf(d)], st: s.st, title: s.title || null, ex });
+  }
+  return out;
+}
+async function chatCoach(msgs) {
+  const { data } = await sb.auth.getSession(), ps = S.profile?.program_id ? programStats() : null;
+  const r = await fetch(FN_COACH, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
+    body: JSON.stringify({
+      mode: "chat", today: today(), messages: msgs.map(m => ({ role: m.role, content: m.content })),
+      calendar: calendarForCoach(), known: KNOWN_NAMES, program: ps ? { title: ps.prog.title, week: ps.local + 1, of: ps.L } : null,
+    }),
+  });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "failed");
+  return out;
+}
+const dayName = d => `${WD[wdOf(d)]}, ${shortDay(d)}`;
+function actionsHTML(actions) {
+  const line = a => {
+    switch (a.type) {
+      case "create": return `<b>${dayName(a.day)}</b> — «${esc(a.title)}»<span>${a.exercises.map(e => `${esc(e.name)} ${e.sets}×${esc(e.reps || "—")}${e.weight != null ? `, ${fmt(e.weight, 1)} кг` : ""}`).join(" · ")}</span>`;
+      case "delete": return `<b>${dayName(a.day)}</b> — сделать днём отдыха`;
+      case "move": return `<b>${dayName(a.from)} ⇄ ${dayName(a.to)}</b> — поменять местами`;
+      case "done": return `<b>${dayName(a.day)}</b> — отметить выполненным${a.exercises.length ? `<span>${a.exercises.map(esc).join(", ")}</span>` : ""}`;
+      case "edit": return `<b>${dayName(a.day)}</b> — ${esc(a.name)}<span>${[a.weight != null ? `${fmt(a.weight, 1)} кг` : "", a.sets ? `${a.sets} подх.` : "", a.reps ? `${esc(a.reps)} повт.` : ""].filter(Boolean).join(" · ")}</span>`;
+    }
+    return "";
+  };
+  return `<div class="co-actions-wrap"><ul class="co-actions">${actions.map(a => `<li class="ca-${a.type}">${line(a)}</li>`).join("")}</ul>
+    <div class="row"><button class="btn" data-apply-actions>Применить в календарь</button><button class="btn quiet" data-skip>Не надо</button></div></div>`;
+}
+// Тренировка на любой день: если там план программы — берём его.
+async function workoutFor(day) {
+  const w = workoutOn(day); if (w) return w;
+  const p = sessionOn(day);
+  const items = p ? p.ex.map(e => ({ name: e.name, plan: `${e.sets} × ${e.reps}`, sets: suggestSets(e.name, e.sets, e.reps).sets })) : [];
+  return createWorkout(day, p?.title || "Тренировка", items);
+}
+async function removeWorkout(day) {
+  const w = workoutOn(day); if (!w) return;
+  await q(sb.from("gym_workouts").delete().eq("id", w.id));
+  S.workouts = S.workouts.filter(x => x !== w); S.exercises = S.exercises.filter(x => x.workout_id !== w.id);
+}
+function setRest(day) { // день программы становится отдыхом
+  const p = S.profile; if (!p.program_id || !programSession(p, day, { parse, monday }) && !Object.hasOwn(p.program_moves || {}, day)) return;
+  p.program_moves = { ...(p.program_moves || {}), [day]: null };
+}
+async function applyActions(actions) {
+  let n = 0;
+  for (const a of actions) {
+    if (a.type === "create") {
+      await removeWorkout(a.day);
+      const items = a.exercises.map(e => { const s = suggestSets(e.name, e.sets, e.reps || "10"); return { name: e.name, plan: `${e.sets} × ${e.reps || "—"}`, sets: s.sets.map(x => ({ ...x, w: e.weight ?? x.w, r: parseInt(e.reps) || x.r })) }; });
+      await createWorkout(a.day, a.title, items); n++;
+    } else if (a.type === "delete") { await removeWorkout(a.day); setRest(a.day); n++; }
+    else if (a.type === "move") { await swapDays(a.from, a.to); n++; }
+    else if (a.type === "done" || a.type === "edit") {
+      const w = await workoutFor(a.day), list = exercisesOf(w.id);
+      if (a.type === "done") {
+        const pick = a.exercises.length ? list.filter(e => a.exercises.some(x => norm(x) === norm(e.name))) : list;
+        for (const e of pick) { e.done = true; e.sets = (e.sets || []).map(s => ({ ...s, done: true })); await q(sb.from("gym_exercises").update({ sets: e.sets, done: true }).eq("id", e.id)); }
+      } else {
+        let e = list.find(x => norm(x.name) === norm(a.name));
+        const cnt = a.sets || e?.sets.length || 3, r = parseInt(a.reps) || e?.sets[0]?.r || null, wv = a.weight ?? e?.sets.find(s => s.w != null)?.w ?? null;
+        const sets = Array.from({ length: cnt }, (_, i) => ({ w: wv, r, done: e?.sets[i]?.done || false }));
+        if (e) { e.sets = sets; if (a.reps || a.sets) e.plan = `${cnt} × ${a.reps || r || "—"}`; await q(sb.from("gym_exercises").update({ sets, plan: e.plan }).eq("id", e.id)); }
+        else S.exercises.push(await q(sb.from("gym_exercises").insert({ workout_id: w.id, position: list.length, name: a.name, plan: `${cnt} × ${a.reps || r || "—"}`, sets }).select().single()));
+      }
+      n++;
+    }
+  }
+  saveProfile();
+  return n;
 }
 async function applyCoach(changes) {
   const w = await ensureWorkout().catch(() => null); if (!w) return;
@@ -1134,6 +1238,13 @@ async function run(b, act) {
       later("sleep" + d, () => q(sb.from("gym_days").upsert({ day: d, sleep_h: row.sleep_h })), 500); break;
     }
     case "coach": coachSheet(); break;
+    case "finish": case "unfinish": {
+      const on = act === "finish", list = exercisesOf(w.id);
+      for (const e of list) { e.done = on; e.sets = (e.sets || []).map(x => ({ ...x, done: on })); saveEx(e); }
+      S.open.clear(); rerender();
+      if (on) { document.querySelector(".hero-card")?.classList.add("celebrate"); scrollTo({ top: Math.max(0, document.querySelector(".hero-card").getBoundingClientRect().top + scrollY - 90), behavior: "smooth" }); toast("Тренировка завершена. Отличная работа"); }
+      break;
+    }
     case "photo": photoSheet(b.dataset.name); break;
     case "music-add": musicSheet(); break;
     case "music-del": await saveMusic(S.day, b.dataset.scope, list => list.filter(u => u !== b.dataset.u)); rerender(); break;

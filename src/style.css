@@ -578,3 +578,73 @@ details.card.pf{display:block}details.card.pf[open] summary{margin-bottom:8px}.m
 .mu-item iframe{width:100%;border:0;border-radius:12px;background:var(--chip)}
 .mu-meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
 .pl-img-btn{flex:none;padding:0;border:0;background:none;border-radius:10px;cursor:zoom-in}
+
+/* ===== v6: чат с тренером ===== */
+.co-feed{display:grid;gap:10px;max-height:min(56dvh,520px);overflow-y:auto;overscroll-behavior:contain;padding:2px}
+.co-msg{display:grid;gap:8px;padding:12px 14px;border-radius:16px;line-height:1.5;font-size:15px;animation:rise var(--t2) var(--ease-out);max-width:92%}
+.co-msg.assistant{background:var(--bg);border:1px solid var(--line);justify-self:start}
+.co-msg.user{background:var(--accent);color:var(--accent-ink);justify-self:end;border-bottom-right-radius:6px}
+.co-msg.assistant{border-bottom-left-radius:6px}
+.co-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.co-chips button{flex:none;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--ink);white-space:nowrap}
+@media (hover:hover){.co-chips button:hover{border-color:var(--accent)}}
+.co-input{display:flex;gap:8px;align-items:flex-end}
+.co-input textarea{flex:1;resize:none;min-height:46px;max-height:140px;line-height:1.4}
+.co-input .btn{width:46px;min-height:46px;padding:0}
+.co-actions{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.co-actions li{display:grid;gap:2px;padding:9px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);font-size:14px}
+.co-actions li.ca-delete{border-left-color:var(--bad)}
+.co-actions li span{font-size:13px;color:var(--muted)}
+.co-actions.applied li{opacity:.6}
+.co-actions-wrap{display:grid;gap:8px}
+.co-done{color:var(--accent);font-weight:600;font-size:14px}
+.sheet:has(.co-feed){max-height:min(92dvh,820px)}
+
+/* ===== v7: ясность и приятная анимация ===== */
+.how{font-size:14px;color:var(--muted);padding:2px 4px;line-height:1.45}
+.btn.finish{width:100%;min-height:56px;margin-top:2px;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.finish svg{width:20px;height:20px}
+/* карточка дня: выполнено */
+.hero-card{transition:background-color var(--t3) ease,border-color var(--t3) ease,box-shadow var(--t3) ease}
+.hero-card.is-done{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 26%,var(--surface)),var(--accent-soft) 75%);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.hero-card.is-done .hc-sub{color:var(--ink);font-weight:600}
+.hero-card.celebrate .ring-wrap{animation:ringPop .9s var(--ease-out)}
+.hero-card.celebrate{animation:cardGlow 1.4s var(--ease-out)}
+@keyframes ringPop{0%{transform:scale(.85)}45%{transform:scale(1.12)}100%{transform:none}}
+@keyframes cardGlow{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 18px transparent}}
+.hero-card.is-done .ring-n{color:var(--accent)}
+/* смена дня: панель въезжает, упражнения по очереди */
+.day-panel.swap{animation:panelIn var(--t3) var(--ease-out) both}
+.day-panel.swap.prev{animation-name:panelInPrev}
+@keyframes panelIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes panelInPrev{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+.screen .ex-list>li,.day-panel.swap .ex-list>li{animation:rise var(--t3) var(--ease-out) both}
+.screen .ex-list>li:nth-child(2),.day-panel.swap .ex-list>li:nth-child(2){animation-delay:40ms}
+.screen .ex-list>li:nth-child(3),.day-panel.swap .ex-list>li:nth-child(3){animation-delay:80ms}
+.screen .ex-list>li:nth-child(4),.day-panel.swap .ex-list>li:nth-child(4){animation-delay:120ms}
+.screen .ex-list>li:nth-child(5),.day-panel.swap .ex-list>li:nth-child(5){animation-delay:160ms}
+.screen .ex-list>li:nth-child(n+6),.day-panel.swap .ex-list>li:nth-child(n+6){animation-delay:200ms}
+/* упражнение: отметка заметна, строка мягко меняется */
+.ex{transition:border-color var(--t2) ease,background-color var(--t3) ease,transform var(--t1) ease}
+.ex.done{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface));border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+.ex-row:active{background:color-mix(in srgb,var(--chip) 50%,transparent)}
+.ex .check[aria-pressed="true"] i{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent);animation:tick var(--t3) var(--ease-out),ringOut .6s var(--ease-out)}
+@keyframes ringOut{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}to{box-shadow:0 0 0 12px transparent}}
+.ex-title{transition:color var(--t2) ease}
+/* нижнее меню: подсветка активного пункта */
+.tabbar a{position:relative}
+.tabbar a::before{content:"";position:absolute;top:2px;left:50%;width:46px;height:30px;margin-left:-23px;border-radius:15px;background:var(--accent-soft);opacity:0;transform:scale(.6);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
+.tabbar a svg{position:relative}
+.tabbar a[aria-current="page"]::before{opacity:1;transform:none}
+/* календарь чуть спокойнее */
+.legend{font-size:11.5px;gap:4px 12px}
+.day{transition:background-color var(--t2) ease,border-color var(--t2) ease,transform var(--t1) ease,box-shadow var(--t2) ease}
+.day[aria-current="true"] .dn{color:var(--accent)}
+/* кнопки и карточки: ничего не налезает */
+.hc-actions .btn{min-width:0}
+.tile{min-width:0}
+.t-v b{overflow-wrap:anywhere}
+.hero-card .kicker{line-height:1.5}
+.co-msg p{margin:0}
+@media (prefers-reduced-motion: reduce){.day-panel.swap,.screen .ex-list>li,.day-panel.swap .ex-list>li,.hero-card.celebrate,.hero-card.celebrate .ring-wrap{animation:none}}
+.hc-sub a,.lead a,.hint a{color:var(--accent);font-weight:600;text-underline-offset:3px}

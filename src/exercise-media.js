@@ -90,3 +90,4 @@ const key = s => String(s || "").trim().toLowerCase().replace(/ё/g, "е");
 const BY = new Map(Object.entries(M).map(([k, v]) => [key(k), v]));
 export const media = name => { const m = BY.get(key(name)); return m ? { img: `/ex/${m[0]}/0.jpg`, img2: `/ex/${m[0]}/1.jpg`, group: m[1] } : null; };
 export const IDS = [...new Set(Object.values(M).map(v => v[0]))];
+export const NAMES = Object.keys(M);
