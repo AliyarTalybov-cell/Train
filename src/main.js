@@ -440,7 +440,9 @@ function dayPanel() {
         <div class="row">${S.profile?.program_id ? `<button class="btn quiet" data-act="move">Поставить сюда тренировку</button>` : ""}<button class="btn ${S.profile?.program_id ? "quiet" : ""}" data-act="new-w">${I.plus}Своя тренировка</button>
         ${S.templates.length || S.workouts.length ? `<button class="btn quiet" data-act="from-tpl">Из шаблона</button>` : ""}</div>
       </section>
-      ${tiles}`;
+      ${coachCard(d)}
+      ${tiles}
+      ${musicBlock(d)}`;
   }
   const items = w ? exercisesOf(w.id) : p.ex.map(e => { const s = suggestSets(e.name, e.sets, e.reps); return { isPlan: true, name: e.name, plan: `${e.sets} × ${e.reps}`, sets: s.sets, up: s.up, done: false }; });
   const done = items.filter(e => e.done).length;
@@ -461,6 +463,7 @@ function dayPanel() {
         <button class="btn ${w ? "quiet small" : "quiet"}" data-act="move">Перенести</button>
       </div>
     </section>
+    ${coachCard(d)}
     <ol class="ex-list" id="ex-list">${items.map((e, i) => exRow(e, i, d)).join("")}</ol>
     <form class="add-ex" data-form="add-ex">
       <input class="inp" name="name" list="ex-names" placeholder="Добавить упражнение" autocomplete="off" maxlength="80" aria-label="Новое упражнение">
@@ -468,6 +471,7 @@ function dayPanel() {
       <button class="btn ghost" type="submit" aria-label="Добавить">${I.plus}</button>
     </form>
     ${tiles}
+    ${musicBlock(d)}
     ${w ? `<div class="summary">
       <div class="eyebrow">Как прошло</div>
       <div class="seg full feel" role="radiogroup" aria-label="Самочувствие">${feel.map((f, i) => `<button role="radio" data-act="feel" data-v="${i + 1}" aria-checked="${w.feeling === i + 1}">${f}</button>`).join("")}</div>
@@ -604,6 +608,138 @@ function templatePicker() {
   });
 }
 
+/* ---------- coach ---------- */
+const FN_COACH = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-coach";
+const coachKey = d => `gym-coach-${S.user?.id}-${d}`;
+const coachCached = d => { try { return JSON.parse(localStorage.getItem(coachKey(d)) || "null"); } catch { return null; } };
+function coachCard(d) {
+  const c = coachCached(d);
+  return `<button class="coach" data-act="coach">
+    <span class="co-mark" aria-hidden="true"></span>
+    <span class="co-main"><b>Тренер</b><span>${c?.headline ? esc(c.headline) : d === today() ? "Что качать сегодня — совет по твоим данным" : "Совет по этому дню"}</span></span>
+    <span class="ex-chev" aria-hidden="true">${I.right}</span>
+  </button>`;
+}
+async function askCoach(question) {
+  const { data } = await sb.auth.getSession();
+  const p = sessionOn(S.day), ps = S.profile?.program_id ? programStats() : null;
+  const r = await fetch(FN_COACH, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
+    body: JSON.stringify({
+      question, today: S.day,
+      plan: workoutOn(S.day) ? { title: workoutOn(S.day).title, ex: exercisesOf(workoutOn(S.day).id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) } : p ? { title: p.title, focus: p.focus, ex: p.ex.map(e => ({ name: e.name, sets: e.sets, reps: e.reps })) } : null,
+      program: ps ? { title: ps.prog.title, week: ps.local + 1, of: ps.L } : null,
+    }),
+  });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "failed");
+  return out;
+}
+function coachHTML(c) {
+  return `${c.headline ? `<p class="co-head">${esc(c.headline)}</p>` : ""}
+    ${c.today ? `<p>${esc(c.today)}</p>` : ""}
+    ${c.changes?.length ? `<div class="eyebrow" style="margin-top:6px">Поправки на сегодня</div>
+      <ul class="co-changes">${c.changes.map(x => `<li><b>${esc(x.name)}</b><span class="mono">${[x.weight != null ? `${fmt(x.weight, 1)} кг` : "", x.sets ? `${x.sets} × ${x.reps || "—"}` : x.reps ? `${x.reps} повт.` : ""].filter(Boolean).join(" · ")}</span>${x.why ? `<span class="muted">${esc(x.why)}</span>` : ""}</li>`).join("")}</ul>
+      <button class="btn" data-apply>Применить к тренировке</button>` : ""}
+    ${c.tips?.length ? `<ul class="co-tips">${c.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${c.answer ? `<div class="co-answer">${esc(c.answer)}</div>` : ""}`;
+}
+function coachSheet() {
+  const cached = coachCached(S.day);
+  sheet("Тренер", `<div id="co-body">${cached ? coachHTML(cached) : `<p class="co-wait"><i></i><i></i><i></i> Смотрю твои тренировки, питание и сон…</p>`}</div>
+    <form id="cq" class="add-ex"><input class="inp" name="q" placeholder="Спросить тренера" maxlength="600" autocomplete="off"><button class="btn" type="submit">Спросить</button></form>
+    ${cached ? `<button class="linkbtn muted-link" data-refresh>Обновить совет</button>` : ""}`, (el, close) => {
+    const body = el.querySelector("#co-body"), f = el.querySelector("#cq");
+    const show = c => {
+      body.innerHTML = coachHTML(c);
+      body.querySelector("[data-apply]")?.addEventListener("click", async ev => { ev.target.classList.add("loading"); await applyCoach(c.changes); close(); });
+    };
+    const load = async question => {
+      body.innerHTML = `<p class="co-wait"><i></i><i></i><i></i> ${question ? "Думаю над вопросом…" : "Смотрю твои тренировки, питание и сон…"}</p>`;
+      try {
+        const c = await askCoach(question);
+        if (!question) try { localStorage.setItem(coachKey(S.day), JSON.stringify(c)); } catch {}
+        show(c); document.getElementById("day-panel") && (document.querySelector(".coach")?.replaceWith(Object.assign(document.createElement("div"), { innerHTML: coachCard(S.day) }).firstElementChild));
+      } catch (e) {
+        body.innerHTML = `<p class="muted">${e.message === "no_key" ? "Тренер ещё не подключён: нужен ключ OpenRouter." : "Тренер сейчас не ответил. Попробуй ещё раз через минуту."}</p>`;
+      }
+    };
+    if (cached) show(cached); else load();
+    el.querySelector("[data-refresh]")?.addEventListener("click", ev => { ev.target.remove(); load(); });
+    f.onsubmit = ev => { ev.preventDefault(); const qv = f.q.value.trim(); if (!qv) return; f.q.value = ""; load(qv); };
+  });
+}
+async function applyCoach(changes) {
+  const w = await ensureWorkout().catch(() => null); if (!w) return;
+  let n = 0;
+  for (const c of changes || []) {
+    const e = exercisesOf(w.id).find(x => norm(x.name) === norm(c.name)); if (!e) continue;
+    const cnt = c.sets || e.sets.length || 3, r = parseInt(c.reps) || e.sets[0]?.r || null, wv = c.weight ?? e.sets.find(s => s.w != null)?.w ?? null;
+    e.sets = Array.from({ length: cnt }, (_, i) => ({ w: wv, r, done: e.sets[i]?.done || false }));
+    if (c.reps || c.sets) { e.plan = `${cnt} × ${c.reps || r || "—"}`; q(sb.from("gym_exercises").update({ plan: e.plan }).eq("id", e.id)); }
+    saveEx(e); n++;
+  }
+  rerender(); toast(n ? `Поправки применены: ${n}` : "Таких упражнений в тренировке нет");
+}
+
+/* ---------- music ---------- */
+// Плеер Яндекс Музыки: принимаем код iframe или обычную ссылку на трек, альбом или плейлист.
+function musicSrc(text) {
+  const m = String(text).match(/https?:\/\/music\.yandex\.(?:ru|com|by|kz|uz)\/[^\s"'<>]+/); if (!m) return null;
+  const u = new URL(m[0].replace(/&amp;/g, "&")), path = u.pathname;
+  let x;
+  if (path.startsWith("/iframe/")) return `https://music.yandex.ru${path}`;
+  if ((x = path.match(/^\/album\/(\d+)\/track\/(\d+)/))) return `https://music.yandex.ru/iframe/album/${x[1]}/track/${x[2]}`;
+  if ((x = path.match(/^\/album\/(\d+)\/?$/))) return `https://music.yandex.ru/iframe/album/${x[1]}`;
+  if ((x = path.match(/^\/users\/([^/]+)\/playlists\/(\d+)/))) return `https://music.yandex.ru/iframe/playlist/${x[1]}/${x[2]}`;
+  return null;
+}
+const wdOf = d => (parse(d).getDay() + 6) % 7;
+const WD_EVERY = ["Каждый понедельник", "Каждый вторник", "Каждую среду", "Каждый четверг", "Каждую пятницу", "Каждую субботу", "Каждое воскресенье"];
+function dayMusic(d) {
+  return [...(S.days.find(x => x.day === d)?.music || []).map(u => ({ u, scope: "day" })), ...((S.profile?.week_music || {})[wdOf(d)] || []).map(u => ({ u, scope: "week" }))];
+}
+function musicBlock(d) {
+  const list = dayMusic(d);
+  return `<section class="music">
+    <div class="mu-head"><span class="eyebrow">Музыка</span><button class="linkbtn" data-act="music-add">+ Добавить трек</button></div>
+    ${list.map(m => `<div class="mu-item"><iframe src="${esc(m.u)}" loading="lazy" allow="clipboard-write" title="Плеер Яндекс Музыки" style="height:${m.u.includes("/track/") ? 244 : 450}px"></iframe>
+      <div class="mu-meta"><span>${m.scope === "week" ? WD_EVERY[wdOf(d)] : "Только в этот день"}</span><button class="linkbtn muted-link" data-act="music-del" data-scope="${m.scope}" data-u="${esc(m.u)}">Убрать</button></div></div>`).join("")}
+  </section>`;
+}
+function musicSheet() {
+  const d = S.day;
+  sheet("Добавить музыку", `<p class="hint">Вставь ссылку на трек, альбом или плейлист Яндекс Музыки — или код «Встроить» оттуда же.</p>
+    <form id="mf" style="display:grid;gap:12px">
+      <textarea class="inp" name="t" rows="3" placeholder="https://music.yandex.ru/album/…/track/…"></textarea>
+      <div class="seg full" role="radiogroup" aria-label="Когда"><button type="button" role="radio" data-sc="day" aria-checked="true">Только ${shortDay(d)}</button><button type="button" role="radio" data-sc="week" aria-checked="false">${WD_EVERY[wdOf(d)]}</button></div>
+      <p class="err" id="merr" style="color:var(--bad);font-size:14px;min-height:0"></p>
+      <button class="btn" type="submit">Добавить</button>
+    </form>`, (el, close) => {
+    const f = el.querySelector("#mf"); let scope = "day";
+    el.querySelectorAll("[data-sc]").forEach(b => b.onclick = () => { scope = b.dataset.sc; el.querySelectorAll("[data-sc]").forEach(x => x.setAttribute("aria-checked", x === b)); });
+    setTimeout(() => f.t.focus(), 300);
+    f.onsubmit = async ev => {
+      ev.preventDefault();
+      const src = musicSrc(f.t.value);
+      if (!src) { el.querySelector("#merr").textContent = "Не похоже на ссылку Яндекс Музыки на трек, альбом или плейлист"; return; }
+      await saveMusic(d, scope, list => list.includes(src) ? list : [...list, src]);
+      close(); rerender(); toast("Трек добавлен");
+    };
+  });
+}
+async function saveMusic(d, scope, fn) {
+  if (scope === "week") {
+    const wm = { ...(S.profile.week_music || {}) }, k = wdOf(d);
+    wm[k] = fn(wm[k] || []); if (!wm[k].length) delete wm[k];
+    S.profile.week_music = wm; saveProfile();
+  } else {
+    let row = S.days.find(x => x.day === d); if (!row) { row = { day: d, sleep_h: null, music: [] }; S.days.push(row); }
+    row.music = fn(row.music || []);
+    await q(sb.from("gym_days").upsert({ day: d, music: row.music }));
+  }
+}
+
 /* ---------- program ---------- */
 function programView() {
   const p = S.profile, cur = programById(p.program_id), ps = cur && programStats();
@@ -634,7 +770,7 @@ function programView() {
       ${cur.sessionsFor ? `<p class="hint">«Суперсет» — два упражнения подряд без отдыха. <a href="${cur.source}" target="_blank" rel="noopener">Источник программы</a></p>` : ""}
       <div class="sessions">${list.map(s => `
         <div class="card sess"><div class="sess-head"><b>${esc(s.title)}</b><span class="muted">${esc(s.focus)}</span></div>
-          <ol class="plan-list">${s.ex.map(e => { const n = e.n[block] || e.n[0], m = media(n); return `<li>${m ? `<img class="pl-img" src="${m.img}" alt="" loading="lazy">` : `<span class="pl-img none"></span>`}<div class="pl-main"><b>${esc(n)}</b>${e.tip ? `<span>${esc(e.tip)}</span>` : ""}</div><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`; }).join("")}</ol>
+          <ol class="plan-list">${s.ex.map(e => { const n = e.n[block] || e.n[0], m = media(n); return `<li>${m ? `<button class="pl-img-btn" data-act="photo" data-name="${esc(n)}" aria-label="Как делать: ${esc(n)}"><img class="pl-img" src="${m.img}" alt="" loading="lazy"></button>` : `<span class="pl-img none"></span>`}<div class="pl-main"><b>${esc(n)}</b>${e.tip ? `<span>${esc(e.tip)}</span>` : ""}</div><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`; }).join("")}</ol>
         </div>`).join("")}</div>
     </section>
     <section class="block">
@@ -969,6 +1105,12 @@ const saveProfile = () => later("profile", () => { const { user_id, updated_at, 
 
 /* ---------- events ---------- */
 document.addEventListener("click", ev => {
+  const home = ev.target.closest('a[href="#/"]');
+  if (home && S.user) {
+    S.day = today(); S.moving = null; S.open.clear();
+    if (!location.hash || location.hash === "#/") { ev.preventDefault(); render(); scrollTo({ top: 0, behavior: "smooth" }); }
+    return;
+  }
   const b = ev.target.closest("[data-act]"); if (!b || b.closest(".sheet")) return;
   run(b, b.dataset.act);
 });
@@ -991,6 +1133,10 @@ async function run(b, act) {
       b.closest(".tile").querySelector(".t-v b").textContent = fmt(row.sleep_h, 1);
       later("sleep" + d, () => q(sb.from("gym_days").upsert({ day: d, sleep_h: row.sleep_h })), 500); break;
     }
+    case "coach": coachSheet(); break;
+    case "photo": photoSheet(b.dataset.name); break;
+    case "music-add": musicSheet(); break;
+    case "music-del": await saveMusic(S.day, b.dataset.scope, list => list.filter(u => u !== b.dataset.u)); rerender(); break;
     case "move": S.moving = S.day; S.moveWeek = monday(S.day); rerender(); scrollTo({ top: 0, behavior: "smooth" }); break;
     case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); rerender(); break;
     case "move-cancel": S.moving = null; rerender(); break;
