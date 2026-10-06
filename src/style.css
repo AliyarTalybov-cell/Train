@@ -278,3 +278,63 @@ textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
 @media (min-width:600px){.feel button{font-size:14px}}
 .sets{max-width:460px}
 .preview:empty{display:none}
+
+/* calendar */
+.tabbar{grid-template-columns:repeat(5,1fr);padding-inline:4px}
+.tabbar a{font-size:10.5px}
+.cal-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cal-title{font-family:var(--display);font-size:20px;font-weight:500;text-transform:none}
+.week-head{margin-top:4px}
+.day.planned .mark{background:transparent;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 70%,transparent)}
+.day .dt.rest{color:var(--muted)}
+.day.planned .dt{color:var(--muted)}
+.month{margin-top:10px}
+.wd-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-bottom:4px}
+.days-month{margin-top:0;gap:3px}
+.days-month .day{min-height:52px;padding:6px 2px 8px}
+.days-month .day .dn{font-size:16px}
+.day.outside{opacity:.38}
+@media (min-width:760px){
+  .wd-row{gap:8px;text-align:left;padding-left:12px}
+  .days-month{gap:6px}
+  .days-month .day{min-height:92px;padding:10px}
+}
+/* program plan on a day */
+.plan{display:grid;gap:14px;padding:18px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.plan-head{display:grid;gap:2px}
+.plan-head .muted{font-size:14px}
+.plan-list{list-style:none;margin:0;padding:0;counter-reset:pl}
+.plan-list li{counter-increment:pl;display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.plan-list li:last-child{border-bottom:0}
+.plan-list li::before{content:counter(pl);flex:none;width:22px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.pl-main{flex:1;min-width:0;display:grid;gap:1px}
+.pl-main b{font-weight:600;line-height:1.3}
+.pl-main span{font-size:13px;color:var(--muted)}
+.pl-sets{white-space:nowrap;font-size:14px;color:var(--accent);font-weight:600}
+.ex-last b{color:var(--accent);font-weight:600}
+/* program screen */
+.prog-cards{display:grid;gap:10px}
+@media (min-width:760px){.prog-cards{grid-template-columns:repeat(3,1fr)}}
+.prog-card{display:grid;gap:6px;align-content:start;text-align:left;padding:16px;border-radius:16px;border:1px solid var(--line);background:var(--surface);font-size:14px;line-height:1.45;transition:border-color var(--t2) ease,box-shadow var(--t2) ease,transform var(--t1) ease}
+.prog-card:active{transform:scale(.98)}
+.pc-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pc-top b{font-family:var(--display);font-weight:500;font-size:17px}
+.pc-top .mono{font-size:12px;color:var(--muted)}
+.prog-card[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+@media (hover:hover){.prog-card:hover{border-color:var(--accent)}}
+.wd-pick{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:460px}
+.wd-pick button{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:500;font-size:14px;transition:background-color var(--t2) ease,color var(--t2) ease,border-color var(--t2) ease}
+.wd-pick button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.sessions{display:grid;gap:10px}
+@media (min-width:760px){.sessions{grid-template-columns:repeat(2,1fr)}}
+.sess{display:grid;gap:4px;padding-bottom:6px}
+.sess-head{display:grid;gap:2px;padding-bottom:4px}
+.sess-head b{font-family:var(--display);font-weight:500;font-size:17px}
+.sess-head .muted{font-size:13px}
+.principles{margin:0;display:grid;gap:14px}
+@media (min-width:760px){.principles{grid-template-columns:repeat(2,1fr);column-gap:28px}}
+.principles dt{font-weight:600}
+.principles dd{margin:2px 0 0;color:var(--muted);font-size:14px}
+.hint a,.empty-day a{color:var(--accent)}
+.login .seg{margin-top:-8px}
+.days-month .day .dt.rest{visibility:hidden}

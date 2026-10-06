@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import "./fonts.css";
+import { PROGRAMS, PRINCIPLES, programById, sessionFor } from "./programs.js";
 import "./style.css";
 
 // Та же база, что у рассрочки (проект RassP); дневник живёт в своих таблицах gym_*, каждая строка видна только владельцу.
@@ -37,6 +38,7 @@ const I = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
 };
 
@@ -145,7 +147,8 @@ function goals() {
 
 /* ---------- routing ---------- */
 const ROUTES = [
-  { path: "", label: "Неделя", icon: I.week, view: weekView },
+  { path: "", label: "Календарь", icon: I.week, view: weekView },
+  { path: "program", label: "Программа", icon: I.list, view: programView },
   { path: "food", label: "Питание", icon: I.food, view: foodView },
   { path: "progress", label: "Прогресс", icon: I.chart, view: progressView },
   { path: "me", label: "Профиль", icon: I.user, view: profileView },
@@ -174,78 +177,140 @@ function skeleton() {
 window.addEventListener("hashchange", () => { render(); scrollTo({ top: 0 }); });
 
 /* ---------- login ---------- */
-function loginView() {
+const FN_SIGNUP = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-signup";
+function loginView(mode = "in") {
+  const up = mode === "up";
   app.innerHTML = `
     <main class="login screen">
       <div class="hero" style="padding:0">
         <div class="kicker">Тренировки · питание</div>
         <h1>Дневник<em>.</em></h1>
-        <p class="lead">План на неделю, отметки упражнений и калории за день.</p>
+        <p class="lead">Программа на каждый день, отметки подходов и калории.</p>
+      </div>
+      <div class="seg full" role="radiogroup" aria-label="Вход или регистрация">
+        <button role="radio" data-auth="in" aria-checked="${!up}">Вход</button>
+        <button role="radio" data-auth="up" aria-checked="${up}">Регистрация</button>
       </div>
       <form id="login" novalidate>
-        <label class="field"><span>Почта</span><input class="inp" type="email" name="email" autocomplete="username" inputmode="email" required></label>
-        <label class="field"><span>Пароль</span><input class="inp" type="password" name="password" autocomplete="current-password" required></label>
+        ${up ? `<label class="field"><span>Имя</span><input class="inp" name="name" autocomplete="given-name" maxlength="40"></label>` : ""}
+        <label class="field"><span>Почта</span><input class="inp" type="email" name="email" autocomplete="${up ? "email" : "username"}" inputmode="email" required></label>
+        <label class="field"><span>Пароль${up ? ", не короче 6 символов" : ""}</span><input class="inp" type="password" name="password" autocomplete="${up ? "new-password" : "current-password"}" required></label>
         <p class="err" id="lerr" role="alert"></p>
-        <button class="btn" type="submit">Войти</button>
+        <button class="btn" type="submit">${up ? "Создать аккаунт" : "Войти"}</button>
       </form>
     </main>`;
+  app.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => { if (b.dataset.auth !== mode) { const em = app.querySelector("[name=email]").value; loginView(b.dataset.auth); app.querySelector("[name=email]").value = em; } });
   const f = document.getElementById("login");
   f.onsubmit = async e => {
     e.preventDefault();
-    const btn = f.querySelector("button"), err = document.getElementById("lerr");
+    const btn = f.querySelector("[type=submit]"), err = document.getElementById("lerr");
     const email = f.email.value.trim(), password = f.password.value;
-    if (!email || !password) { err.textContent = "Введите почту и пароль"; return; }
+    const fail = text => { err.textContent = text; f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake"); btn.classList.remove("loading"); btn.disabled = false; };
+    if (!email || !password) return fail("Введите почту и пароль");
+    if (up && password.length < 6) return fail("Пароль должен быть не короче 6 символов");
     btn.classList.add("loading"); btn.disabled = true; err.textContent = "";
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    btn.classList.remove("loading"); btn.disabled = false;
-    if (error) {
-      err.textContent = /invalid/i.test(error.message) ? "Неверная почта или пароль" : "Не получилось войти — проверьте интернет";
-      f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake");
+    if (up) {
+      let r;
+      try { r = await fetch(FN_SIGNUP, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, name: f.name.value.trim() }) }).then(x => x.json()); }
+      catch { return fail("Не получилось — проверьте интернет"); }
+      if (!r.ok) return fail({ exists: "Такая почта уже зарегистрирована — войдите", email: "Проверьте почту — похоже, в ней опечатка", password: "Пароль должен быть от 6 до 72 символов" }[r.error] || "Не получилось создать аккаунт");
     }
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) fail(/invalid/i.test(error.message) ? "Неверная почта или пароль" : "Не получилось войти — проверьте интернет");
   };
 }
 
-/* ---------- week ---------- */
+/* ---------- calendar ---------- */
+const sessionOn = day => sessionFor(S.profile, day, { parse, monday });
+const getCalMode = () => { try { return localStorage.getItem("gym-cal") === "month" ? "month" : "week"; } catch { return "week"; } };
+const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+
+function dayInfo(d) {
+  const w = workoutOn(d), ex = w ? exercisesOf(w.id) : [], plan = !w && sessionOn(d);
+  return { w, plan, done: !!ex.length && ex.every(e => e.done), title: w ? (w.title || "Тренировка") : plan ? plan.title : "" };
+}
+function dayCell(d, { label, outside } = {}) {
+  const t = today(), i = dayInfo(d);
+  const cls = ["day", i.w && "has", i.plan && "planned", i.done && "done", d === t && "today", outside && "outside"].filter(Boolean).join(" ");
+  return `<button class="${cls}" data-act="pick-day" data-day="${d}" ${d === S.day ? 'aria-current="true"' : ""} aria-label="${longDay(d)}${i.title ? ", " + esc(i.title) : ""}">
+    ${label ? `<span class="dw">${label}</span>` : ""}<span class="dn">${parse(d).getDate()}</span><span class="dt ${i.title ? "" : "rest"}">${esc(i.title || "Отдых")}</span><i class="mark"></i></button>`;
+}
 function weekView() {
-  const start = monday(S.day), t = today();
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  const end = days[6];
-  const range = parse(start).getMonth() === parse(end).getMonth()
-    ? `${parse(start).getDate()} – ${shortDay(end)}` : `${shortDay(start)} – ${shortDay(end)}`;
-  const strip = days.map((d, i) => {
-    const w = workoutOn(d), ex = w ? exercisesOf(w.id) : [];
-    const done = ex.length && ex.every(e => e.done);
-    const cls = ["day", w && "has", done && "done", d === t && "today"].filter(Boolean).join(" ");
-    const title = w ? (w.title || "Тренировка") : "Отдых";
-    return `<button class="${cls}" data-act="pick-day" data-day="${d}" ${d === S.day ? 'aria-current="true"' : ""} aria-label="${longDay(d)}${w ? ", " + esc(title) : ""}">
-      <span class="dw">${WD[i]}</span><span class="dn">${parse(d).getDate()}</span><span class="dt ${w ? "" : "rest"}">${esc(title)}</span><i class="mark"></i></button>`;
-  }).join("");
+  const mode = getCalMode(), t = today();
+  let head, grid;
+  if (mode === "month") {
+    const d0 = parse(S.day), first = iso(new Date(d0.getFullYear(), d0.getMonth(), 1)), start = monday(first);
+    const last = iso(new Date(d0.getFullYear(), d0.getMonth() + 1, 0)), end = addDays(monday(last), 6);
+    const cells = []; for (let d = start; d <= end; d = addDays(d, 1)) cells.push(dayCell(d, { outside: parse(d).getMonth() !== d0.getMonth() }));
+    head = `${MONTHS[d0.getMonth()]} ${d0.getFullYear()}`;
+    grid = `<div class="month"><div class="wd-row">${WD.map(w => `<span>${w}</span>`).join("")}</div><nav class="days days-month" aria-label="Дни месяца">${cells.join("")}</nav></div>`;
+  } else {
+    const start = monday(S.day), days = Array.from({ length: 7 }, (_, i) => addDays(start, i)), end = days[6];
+    head = parse(start).getMonth() === parse(end).getMonth() ? `${parse(start).getDate()} – ${shortDay(end)}` : `${shortDay(start)} – ${shortDay(end)}`;
+    grid = `<nav class="days" aria-label="Дни недели">${days.map((d, i) => dayCell(d, { label: WD[i] })).join("")}</nav>`;
+  }
+  const away = mode === "month" ? S.day.slice(0, 7) !== t.slice(0, 7) : monday(S.day) !== monday(t);
   return `
     <section class="hero">
+      <div class="cal-top">
+        <div class="seg" role="radiogroup" aria-label="Вид календаря"><button role="radio" data-act="cal-mode" data-v="week" aria-checked="${mode === "week"}">Неделя</button><button role="radio" data-act="cal-mode" data-v="month" aria-checked="${mode === "month"}">Месяц</button></div>
+        ${away || S.day !== t ? `<button class="linkbtn" data-act="today">Сегодня</button>` : ""}
+      </div>
       <div class="week-head">
-        <div class="kicker">${range}</div>
+        <div class="cal-title">${head}</div>
         <div class="row">
-          ${monday(t) !== start ? `<button class="linkbtn" data-act="today" style="margin-right:6px">Сегодня</button>` : ""}
-          <button class="icon-btn bare" data-act="shift" data-n="-7" aria-label="Прошлая неделя">${I.left}</button>
-          <button class="icon-btn bare" data-act="shift" data-n="7" aria-label="Следующая неделя">${I.right}</button>
+          <button class="icon-btn bare" data-act="shift" data-n="-1" aria-label="Назад">${I.left}</button>
+          <button class="icon-btn bare" data-act="shift" data-n="1" aria-label="Вперёд">${I.right}</button>
         </div>
       </div>
-      <nav class="days" aria-label="Дни недели">${strip}</nav>
+      ${grid}
     </section>
     <section class="day-panel" id="day-panel">${dayPanel()}</section>`;
+}
+
+// Предложенный вес: как в прошлый раз, и +2,5 кг, если тогда во всех подходах дошёл до верха диапазона.
+function suggestSets(name, sets, reps) {
+  const top = parseInt(String(reps).split("–").pop()) || null, low = parseInt(reps) || null;
+  const last = lastFor(name, S.day + "~");
+  const ws = (last?.sets || []).map(s => +s.w).filter(Boolean), lw = ws.length ? Math.max(...ws) : null;
+  const hit = last && top && last.sets.length && last.sets.every(s => (+s.r || 0) >= top);
+  const w = lw ? (hit ? lw + 2.5 : lw) : null;
+  return { sets: Array.from({ length: sets }, () => ({ w, r: low, done: false })), up: !!hit, last };
+}
+
+function planPanel(p, d) {
+  const items = p.ex.map(e => {
+    const s = suggestSets(e.name, e.sets, e.reps);
+    return `<li><div class="pl-main"><b>${esc(e.name)}</b><span>${s.last ? `${shortDay(s.last.day)}: ${esc(setsText(s.last.sets))}${s.up ? " · можно добавить вес" : ""}` : esc(e.tip || "")}</span></div><span class="pl-sets mono">${e.sets} × ${e.reps}</span></li>`;
+  }).join("");
+  return `
+    <div class="plan">
+      <div class="plan-head"><h2>${esc(p.title)}</h2><p class="muted">${esc(p.focus)} · неделя ${p.week}</p></div>
+      <ol class="plan-list">${items}</ol>
+      <div class="row"><button class="btn" data-act="start-plan">Начать тренировку</button><button class="btn quiet" data-act="new-w">Своя тренировка</button></div>
+    </div>`;
+}
+function nextSession(from) {
+  for (let i = 1; i <= 14; i++) { const d = addDays(from, i), p = sessionOn(d); if (p) return { d, p }; }
+  return null;
 }
 
 function dayPanel() {
   const d = S.day, w = workoutOn(d);
   const head = `<div class="eyebrow"><span>${longDay(d)}</span>${d === today() ? "<span>Сегодня</span>" : ""}</div>`;
-  if (!w) return `${head}
+  if (!w) {
+    const p = sessionOn(d);
+    if (p) return head + planPanel(p, d);
+    const nx = S.profile?.program_id && nextSession(d);
+    return `${head}
     <div class="empty-day">
-      <p class="muted">На этот день ничего не запланировано.</p>
+      <p class="muted">${S.profile?.program_id ? `День отдыха.${nx ? ` Следующая тренировка — ${WD_FULL[(parse(nx.d).getDay() + 6) % 7].toLowerCase()}, ${shortDay(nx.d)}: ${esc(nx.p.title)}.` : ""}` : `На этот день ничего не запланировано. <a href="#/program">Выберите программу</a> — и каждый день будет понятно, что тренировать.`}</p>
       <div class="row">
-        <button class="btn" data-act="new-w">${I.plus}Запланировать</button>
-        ${S.templates.length || S.workouts.length ? `<button class="btn ghost" data-act="from-tpl">Из шаблона или прошлой</button>` : ""}
+        <button class="btn ${S.profile?.program_id ? "ghost" : ""}" data-act="new-w">${I.plus}Своя тренировка</button>
+        ${S.templates.length || S.workouts.length ? `<button class="btn quiet" data-act="from-tpl">Из шаблона или прошлой</button>` : ""}
       </div>
     </div>`;
+  }
   const ex = exercisesOf(w.id), done = ex.filter(e => e.done).length;
   const names = [...new Set(S.exercises.map(e => e.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
   const feel = ["Тяжело", "Так себе", "Норм", "Хорошо", "Отлично"];
@@ -269,6 +334,49 @@ function dayPanel() {
     </div>`;
 }
 
+/* ---------- program ---------- */
+function programView() {
+  const p = S.profile, cur = programById(p.program_id);
+  const cards = PROGRAMS.map(pr => `
+    <button class="prog-card" data-act="pick-prog" data-v="${pr.id}" aria-pressed="${pr.id === p.program_id}">
+      <span class="pc-top"><b>${esc(pr.title)}</b><span class="mono">${pr.days} ${plural(pr.days, "день", "дня", "дней")} в неделю</span></span>
+      <span class="muted">${esc(pr.about)}</span>
+    </button>`).join("");
+  let setup = "";
+  if (cur) {
+    const days = (p.program_days?.length === cur.days ? p.program_days : cur.defaultDays);
+    const wk = Math.max(0, Math.round((parse(monday(today())) - parse(monday(p.program_start))) / (7 * 864e5)));
+    const block = cur.sessionsFor ? 0 : Math.floor(wk / 3) % 2;
+    const list = cur.sessionsFor ? cur.sessionsFor(wk) : cur.sessions;
+    setup = `
+    <section class="block">
+      <h2>Дни тренировок</h2>
+      <p class="hint">Выберите ${cur.days} ${plural(cur.days, "день", "дня", "дней")}. Между тренировками одной группы мышц лучше оставлять хотя бы день.</p>
+      <div class="wd-pick" role="group" aria-label="Дни недели">${WD.map((w, i) => `<button data-act="prog-day" data-v="${i}" aria-pressed="${days.includes(i)}">${w}</button>`).join("")}</div>
+    </section>
+    <section class="block">
+      <h2>Тренировки</h2>
+      <p class="hint">${cur.sessionsFor ? `Неделя ${(wk % cur.length) + 1} из ${cur.length}. Подходы и повторы меняются каждую неделю — в календаре всегда актуальные. Упражнения с пометкой «суперсет» делаются парой без отдыха. <a href="${cur.source}" target="_blank" rel="noopener">Источник</a>` : `Сейчас ${block ? "вторые" : "первые"} варианты упражнений; через 3 недели они сменятся сами.`}</p>
+      <div class="sessions">${list.map(s => `
+        <div class="card sess"><div class="sess-head"><b>${esc(s.title)}</b><span class="muted">${esc(s.focus)}</span></div>
+          <ol class="plan-list">${s.ex.map(e => `<li><div class="pl-main"><b>${esc(e.n[block] || e.n[0])}</b>${e.tip ? `<span>${esc(e.tip)}</span>` : ""}</div><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`).join("")}</ol>
+        </div>`).join("")}</div>
+    </section>
+    <section class="block"><div><button class="btn quiet" data-act="prog-off">Отключить программу</button></div></section>`;
+  }
+  const cw = cur ? Math.max(0, Math.round((parse(monday(today())) - parse(monday(p.program_start))) / (7 * 864e5))) : 0;
+  return `
+    <section class="hero"><div class="kicker">Программа${cur?.length ? ` · неделя ${(cw % cur.length) + 1} из ${cur.length}` : ""}</div><h1>${cur ? esc(cur.title) : "Выберите программу"}</h1>
+      ${cur ? `<p class="lead">Идёт с ${shortDay(p.program_start)}. Открой календарь — на каждый тренировочный день уже расписано, что делать.</p>` : `<p class="lead">После выбора в календаре на каждый тренировочный день появится план с подходами и весами.</p>`}</section>
+    <section class="block"><div class="prog-cards">${cards}</div></section>
+    ${setup}
+    <section class="block" style="margin-bottom:12px">
+      <h2>Принципы</h2>
+      <p class="hint">Из книги Андрея Скоромного «О силовых тренировках». Готового расписания в книге нет — программы выше собраны по этим правилам.</p>
+      <dl class="principles">${PRINCIPLES.map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${esc(b)}</dd></div>`).join("")}</dl>
+    </section>`;
+}
+
 function exCard(e, day, isNew) {
   const last = lastFor(e.name, day);
   return `<li class="ex ${e.done ? "done" : ""} ${isNew ? "is-new" : ""}" data-ex="${e.id}">
@@ -277,7 +385,7 @@ function exCard(e, day, isNew) {
       <input class="ex-name" data-field="ex-name" value="${esc(e.name)}" placeholder="Упражнение" aria-label="Упражнение" maxlength="80">
       <button class="icon-btn bare del" data-act="ex-del" aria-label="Удалить упражнение">${I.trash}</button>
     </div>
-    ${last && setsText(last.sets) ? `<p class="ex-last">${shortDay(last.day)}: ${esc(setsText(last.sets))}</p>` : ""}
+    ${e.plan || (last && setsText(last.sets)) ? `<p class="ex-last">${e.plan ? `<b class="mono">${esc(e.plan)}</b>${last && setsText(last.sets) ? " · " : ""}` : ""}${last && setsText(last.sets) ? `${shortDay(last.day)}: ${esc(setsText(last.sets))}` : ""}</p>` : ""}
     <div class="sets">${(e.sets || []).map((s, i) => `
       <div class="set ${s.done ? "done" : ""}" data-i="${i}">
         <span class="n">${i + 1}</span>
@@ -315,7 +423,7 @@ async function createWorkout(day, title = "", items = []) {
   const w = await q(sb.from("gym_workouts").insert({ day, title }).select().single());
   S.workouts.push(w);
   if (items.length) {
-    const rows = items.map((it, i) => ({ workout_id: w.id, position: i, name: it.name, sets: (it.sets || []).map(s => ({ w: s.w ?? null, r: s.r ?? null, done: false })) }));
+    const rows = items.map((it, i) => ({ workout_id: w.id, position: i, name: it.name, plan: it.plan || null, sets: (it.sets || []).map(s => ({ w: s.w ?? null, r: s.r ?? null, done: false })) }));
     S.exercises.push(...await q(sb.from("gym_exercises").insert(rows).select()));
   }
   return w;
@@ -542,7 +650,34 @@ document.addEventListener("click", async ev => {
   const w = workoutOn(S.day);
   switch (act) {
     case "pick-day": S.day = b.dataset.day; rerender(); break;
-    case "shift": S.day = addDays(S.day, +b.dataset.n); rerender(); break;
+    case "shift": { const n = +b.dataset.n;
+      if (getCalMode() === "month") { const d0 = parse(S.day), d = new Date(d0.getFullYear(), d0.getMonth() + n, 1); S.day = iso(d).slice(0, 7) === today().slice(0, 7) ? today() : iso(d); }
+      else S.day = addDays(S.day, n * 7);
+      rerender(); break; }
+    case "cal-mode": try { localStorage.setItem("gym-cal", b.dataset.v); } catch {} rerender(); break;
+    case "start-plan": {
+      const p = sessionOn(S.day); b.classList.add("loading"); b.disabled = true;
+      const items = p.ex.map(e => ({ name: e.name, plan: `${e.sets} × ${e.reps}`, sets: suggestSets(e.name, e.sets, e.reps).sets }));
+      await createWorkout(S.day, p.title, items).catch(() => {}); rerender(); break;
+    }
+    case "pick-prog": {
+      const pr = programById(b.dataset.v), p = S.profile; if (p.program_id === pr.id) return;
+      p.program_id = pr.id; p.program_days = pr.defaultDays; p.program_start = monday(today());
+      saveProfile(); rerender(); toast(`Программа «${pr.title}» — уже в календаре`); break;
+    }
+    case "prog-day": {
+      const p = S.profile, pr = programById(p.program_id), v = +b.dataset.v;
+      let days = [...(p.program_days?.length === pr.days ? p.program_days : pr.defaultDays)];
+      if (days.includes(v)) { toast("Выберите другой день вместо этого — нажмите на свободный"); return; }
+      // заменяем ближайший выбранный день, чтобы число дней не менялось
+      const near = days.reduce((a, c) => Math.abs(c - v) < Math.abs(a - v) ? c : a);
+      days = days.map(x => x === near ? v : x).sort((a, c) => a - c);
+      p.program_days = days; saveProfile(); rerender(); break;
+    }
+    case "prog-off": {
+      if (!await confirmSheet("Отключить программу?", "План пропадёт из календаря. Уже проведённые тренировки останутся.", "Отключить")) return;
+      Object.assign(S.profile, { program_id: null, program_start: null, program_days: null }); saveProfile(); rerender(); break;
+    }
     case "today": S.day = today(); rerender(); break;
     case "new-w": { b.classList.add("loading"); await createWorkout(S.day).catch(() => {}); rerender(); document.querySelector(".title-inp")?.focus(); break; }
     case "from-tpl": templatePicker(); break;
