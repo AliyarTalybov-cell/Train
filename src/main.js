@@ -177,7 +177,7 @@ function rerender() { // перерисовать экран без анимац
 function skeleton() {
   return `<div style="display:grid;gap:12px;padding-top:28px"><div class="skel" style="height:14px;width:40%"></div><div class="skel" style="height:68px"></div><div class="skel" style="height:40px;width:60%"></div><div class="skel" style="height:140px"></div><div class="skel" style="height:140px"></div></div>`;
 }
-window.addEventListener("hashchange", () => { render(); scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => { S.moving = null; render(); scrollTo({ top: 0 }); });
 
 /* ---------- login ---------- */
 const FN_SIGNUP = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-signup";
@@ -284,7 +284,24 @@ function programBand() {
   </a>`;
 }
 
+function moveView() {
+  const from = S.moving, wk = S.moveWeek, s0 = dayStatus(from);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(wk, i));
+  return `<section class="hero move">
+    <div class="kicker">Перенос</div>
+    <h1>${s0.title ? `Куда перенести «${esc(s0.title)}»?` : "Какую тренировку поставить сюда?"}</h1>
+    <p class="lead">Нажми на день — тренировки поменяются местами.</p>
+    <div class="cal-top"><div class="cal-title">${parse(days[0]).getMonth() === parse(days[6]).getMonth() ? parse(days[0]).getDate() : shortDay(days[0])} – ${shortDay(days[6])}</div>
+      <div class="row"><button class="icon-btn bare" data-act="move-week" data-n="-7" aria-label="Прошлая неделя">${I.left}</button><button class="icon-btn bare" data-act="move-week" data-n="7" aria-label="Следующая неделя">${I.right}</button></div></div>
+    <div class="move-list">${days.map(d => { const s = dayStatus(d); return `<button data-act="move-to" data-day="${d}" class="${d === from ? "from" : ""}" ${d === from ? "disabled" : ""}>
+      <span class="ml-d"><b>${WD[(parse(d).getDay() + 6) % 7]}</b><span>${parse(d).getDate()}</span></span>
+      <span class="ml-t"><b>${s.title ? esc(s.title) : "Отдых"}</b><span>${d === from ? "переносим отсюда" : d === today() ? "сегодня" : s.st === "done" ? "сделано" : s.st === "partial" ? "начато" : ""}</span></span>
+      ${d === from ? "" : `<span class="ml-go">Сюда</span>`}</button>`; }).join("")}</div>
+    <div><button class="btn quiet" data-act="move-cancel">Отмена</button></div>
+  </section>`;
+}
 function weekView() {
+  if (S.moving) return moveView();
   const mode = getCalMode(), t = today();
   let head, grid;
   if (mode === "month") {
@@ -330,10 +347,9 @@ const ring = (part, total) => {
   const r = 26, c = 2 * Math.PI * r, f = total ? part / total : 0;
   return `<svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="${r}" class="rg-bg"/><circle cx="32" cy="32" r="${r}" class="rg-fg" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - f)}"/></svg><span class="ring-n mono">${part}<small>/${total}</small></span>`;
 };
-function thumb(name) {
+function thumb(name, act) {
   const m = media(name);
-  return m ? `<button class="ex-thumb" data-act="ex-photo" aria-label="Как делать: ${esc(name)}"><img src="${m.img}" alt="" loading="lazy" decoding="async"></button>`
-    : `<span class="ex-thumb none" aria-hidden="true">${esc((name || "?").trim()[0] || "?")}</span>`;
+  return `<button class="ex-thumb" data-act="${act}" aria-label="Как делать: ${esc(name)}">${m ? `<img src="${m.img}" alt="" loading="lazy" decoding="async">` : esc((name || "?").trim()[0] || "?")}</button>`;
 }
 
 // Строка упражнения. it — настоящее упражнение или пункт плана ещё не начатой тренировки (plan: true).
@@ -347,23 +363,26 @@ function exRow(it, i, d) {
     !it.isPlan && doneSets && !it.done ? `${doneSets} из ${sets.length} подходов` : "",
   ].filter(Boolean).join(" · ");
   const lastLine = last && setsText(last.sets) ? `Прошлый раз ${shortDay(last.day)}: ${setsText(last.sets)}${it.up ? " — добавь вес" : ""}` : "";
-  return `<li class="ex ${it.done ? "done" : ""} ${open ? "open" : ""}" ${it.isPlan ? `data-plan="${i}"` : `data-ex="${it.id}"`}>
+  const act = it.isPlan ? "ex-info" : "ex-open";
+  return `<li class="ex ${it.done ? "done" : ""} ${open ? "open" : ""} ${it.isPlan ? "ex-preview" : ""}" ${it.isPlan ? `data-plan="${i}"` : `data-ex="${it.id}"`} data-name="${esc(it.name)}">
     <div class="ex-row">
-      ${thumb(it.name)}
-      <button class="ex-main" data-act="ex-open" aria-expanded="${open}">
+      ${thumb(it.name, act)}
+      <button class="ex-main" data-act="${act}" ${it.isPlan ? "" : `aria-expanded="${open}"`}>
         <span class="ex-title">${esc(it.name || "Без названия")}</span>
         <span class="ex-meta">${meta}</span>
         ${lastLine ? `<span class="ex-prev">${esc(lastLine)}</span>` : ""}
       </button>
-      <button class="check" data-act="ex-done" aria-pressed="${!!it.done}" aria-label="Выполнено: ${esc(it.name)}"><i>${I.check}</i></button>
+      ${it.isPlan ? `<span class="ex-chev" aria-hidden="true">${I.right}</span>` : `<button class="check" data-act="ex-done" aria-pressed="${!!it.done}" aria-label="Выполнено: ${esc(it.name)}"><i>${I.check}</i></button>`}
     </div>
     ${open ? exBody(it) : ""}
   </li>`;
 }
 function exBody(e) {
-  const tip = tipFor(e.name);
+  const tip = tipFor(e.name), m = media(e.name);
   return `<div class="ex-body">
+    ${m ? `<button class="photo" data-act="ex-photo" aria-label="Открыть фото крупно"><img src="${m.img}" alt="Начало движения"><img src="${m.img2}" alt="Конец движения" class="b"></button>` : ""}
     ${tip ? `<p class="ex-tip">${esc(tip)}</p>` : ""}
+    <p class="ex-tip">Отмечай кружком каждый сделанный подход. Вес и повторы можно поправить.</p>
     <div class="sets">${(e.sets || []).map((s, i) => `
       <div class="set ${s.done ? "done" : ""}" data-i="${i}">
         <span class="n">${i + 1}</span>
@@ -418,7 +437,7 @@ function dayPanel() {
       <section class="hero-card rest">
         <div class="hc-text"><h2>${S.profile?.program_id ? "День отдыха" : "Свободный день"}</h2>
         <p class="hc-sub">${S.profile?.program_id ? (nx ? `Следующая — ${WD_FULL[(parse(nx.d).getDay() + 6) % 7].toLowerCase()}, ${shortDay(nx.d)}: ${esc(nx.p.title)}. Мышцы растут как раз во время отдыха.` : "") : `Выберите <a href="#/program">программу</a> — и на каждый день будет готовый план.`}</p></div>
-        <div class="row"><button class="btn ${S.profile?.program_id ? "quiet" : ""}" data-act="new-w">${I.plus}Своя тренировка</button>
+        <div class="row">${S.profile?.program_id ? `<button class="btn quiet" data-act="move">Поставить сюда тренировку</button>` : ""}<button class="btn ${S.profile?.program_id ? "quiet" : ""}" data-act="new-w">${I.plus}Своя тренировка</button>
         ${S.templates.length || S.workouts.length ? `<button class="btn quiet" data-act="from-tpl">Из шаблона</button>` : ""}</div>
       </section>
       ${tiles}`;
@@ -433,10 +452,14 @@ function dayPanel() {
       <div class="hc-text">
         <div class="kicker">${esc(kick)}</div>
         ${w ? `<input class="title-inp" data-field="w-title" value="${esc(w.title)}" placeholder="Название тренировки" aria-label="Название тренировки" maxlength="80">` : `<h2 class="title-inp">${esc(p.title)}</h2>`}
-        <button class="hc-move" data-act="move">Перенести на другой день</button>
-        <p class="hc-sub" id="hc-sub">${done === items.length && items.length ? "Тренировка выполнена" : `${items.length - done} ${plural(items.length - done, "упражнение", "упражнения", "упражнений")} осталось`}${ton ? ` · поднято ${tons(ton)}` : ""}</p>
+        ${w ? `<p class="hc-sub" id="hc-sub">${done === items.length && items.length ? "Тренировка выполнена" : `${items.length - done} ${plural(items.length - done, "упражнение", "упражнения", "упражнений")} осталось`}${ton ? ` · поднято ${tons(ton)}` : ""}</p>`
+          : `<p class="hc-sub">${items.length} ${plural(items.length, "упражнение", "упражнения", "упражнений")}. Нажми на упражнение, чтобы посмотреть, как его делать.</p>`}
       </div>
-      <div class="ring-wrap" id="hc-ring">${ring(done, items.length)}</div>
+      ${w ? `<div class="ring-wrap" id="hc-ring">${ring(done, items.length)}</div>` : ""}
+      <div class="hc-actions">
+        ${w ? "" : `<button class="btn big" data-act="start">${d < today() ? "Отметить выполненное" : "Начать тренировку"}</button>`}
+        <button class="btn ${w ? "quiet small" : "quiet"}" data-act="move">Перенести</button>
+      </div>
     </section>
     <ol class="ex-list" id="ex-list">${items.map((e, i) => exRow(e, i, d)).join("")}</ol>
     <form class="add-ex" data-form="add-ex">
@@ -491,6 +514,7 @@ function ensureWorkout() {
 
 async function exAction(b, act) {
   const li = b.closest("[data-ex],[data-plan]"); if (!li) return;
+  if (act === "ex-info" || act === "ex-photo") return photoSheet(li.dataset.name);
   let e;
   if (li.dataset.ex) e = S.exercises.find(x => x.id === li.dataset.ex);
   else {
@@ -520,29 +544,17 @@ async function exAction(b, act) {
   }
 }
 function photoSheet(name) {
-  const m = media(name); if (!m) return;
-  const p = sessionOn(S.day)?.ex.find(e => norm(e.name) === norm(name));
-  sheet(name, `<div class="photo"><img src="${m.img}" alt="Начало движения"><img src="${m.img2}" alt="Конец движения" class="b"></div>
-    <p class="muted" style="font-size:14px">${esc(m.group)}${p ? ` · ${p.sets} × ${p.reps}` : ""}${p?.tip ? ` · ${esc(p.tip)}` : ""}</p>
-    <p class="hint">Кадры показывают начало и конец движения. Фото — открытая база free-exercise-db.</p>`);
+  const m = media(name), p = sessionOn(S.day)?.ex.find(e => norm(e.name) === norm(name)), last = lastFor(name, S.day);
+  sheet(name, `${m ? `<div class="photo"><img src="${m.img}" alt="Начало движения"><img src="${m.img2}" alt="Конец движения" class="b"></div>` : ""}
+    <dl class="info">
+      ${p ? `<div><dt>Сегодня</dt><dd class="mono">${p.sets} × ${p.reps}</dd></div>` : ""}
+      ${m ? `<div><dt>Мышцы</dt><dd>${esc(m.group)}</dd></div>` : ""}
+      ${last && setsText(last.sets) ? `<div><dt>Прошлый раз</dt><dd>${shortDay(last.day)}: ${esc(setsText(last.sets))}</dd></div>` : ""}
+      ${p?.tip ? `<div><dt>Совет</dt><dd>${esc(p.tip)}</dd></div>` : ""}
+    </dl>
+    ${m ? `<p class="hint">Кадры показывают начало и конец движения.</p>` : ""}`);
 }
 
-// Перенос: тренировка этого дня и выбранного меняются местами (вместе с планом программы).
-function moveSheet() {
-  const from = S.day, start = monday(from);
-  const list = Array.from({ length: 14 }, (_, i) => addDays(start, i)).filter(d => d !== from);
-  const row = d => { const s = dayStatus(d); return `<button data-to="${d}"><b>${WD[(parse(d).getDay() + 6) % 7]}, ${shortDay(d)}${d === today() ? " · сегодня" : ""}</b><span>${s.title ? esc(s.title) : "Отдых"}${s.w && s.done ? ` · сделано ${s.done} из ${s.ex.length}` : ""}</span></button>`; };
-  sheet("Перенести на…", `<p class="hint">Тренировки поменяются местами. Если выбрать день отдыха — этот день станет отдыхом.</p>
-    <div class="eyebrow">Эта неделя</div><div class="pick">${list.filter(d => d < addDays(start, 7)).map(row).join("")}</div>
-    <div class="eyebrow" style="margin-top:8px">Следующая</div><div class="pick">${list.filter(d => d >= addDays(start, 7)).map(row).join("")}</div>`, (el, close) => {
-    el.addEventListener("click", async ev => {
-      const b = ev.target.closest("[data-to]"); if (!b) return;
-      el.querySelectorAll("[data-to]").forEach(x => x.disabled = true);
-      try { await swapDays(from, b.dataset.to); close(); rerender(); toast(`Перенесено на ${WD_FULL[(parse(b.dataset.to).getDay() + 6) % 7].toLowerCase()}, ${shortDay(b.dataset.to)}`); }
-      catch { el.querySelectorAll("[data-to]").forEach(x => x.disabled = false); }
-    });
-  });
-}
 async function swapDays(a, b) {
   const wa = workoutOn(a), wb = workoutOn(b);
   if (wa && wb) {
@@ -593,82 +605,48 @@ function templatePicker() {
 }
 
 /* ---------- program ---------- */
-function directionChart(cycles, cur) {
-  // Два ряда (повторы тяжёлых и умеренных недель) по 6 циклам; одна ось — повторы.
-  const W = 600, H = 190, padL = 30, padR = 92, top = 14, bot = 28;
-  const max = Math.max(...cycles.flatMap(c => [c.heavy, c.mod])) * 1.1;
-  const x = i => padL + i * (W - padL - padR) / (cycles.length - 1), y = v => top + (1 - v / max) * (H - top - bot);
-  const line = k => cycles.map((c, i) => `${x(i)},${y(c[k])}`).join(" ");
-  const grid = [0, 10, 20, 30].filter(v => v < max).map(v => `<line class="gl" x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
-  const pts = k => cycles.map((c, i) => `<circle class="pt ${k}" cx="${x(i)}" cy="${y(c[k])}" r="4"><title>Цикл ${i + 1}: ~${c[k]} повторов</title></circle>`).join("");
-  return `<svg class="chart dir" viewBox="0 0 ${W} ${H}" role="img" aria-label="Повторы по циклам: в тяжёлые недели уменьшаются, в умеренные растут">
-    ${grid}
-    <rect class="now" x="${x(cur) - 14}" y="${top - 6}" width="28" height="${H - top - bot + 6}" rx="6"/>
-    <polyline class="ln mod" points="${line("mod")}"/><polyline class="ln heavy" points="${line("heavy")}"/>
-    ${pts("mod")}${pts("heavy")}
-    <text class="lbl" x="${x(cycles.length - 1) + 10}" y="${y(cycles.at(-1).mod) + 4}">умеренные</text>
-    <text class="lbl strong" x="${x(cycles.length - 1) + 10}" y="${y(cycles.at(-1).heavy) + 4}">тяжёлые</text>
-    ${cycles.map((c, i) => `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" class="${i === cur ? "cur" : ""}">${i * 2 + 1}–${i * 2 + 2}</text>`).join("")}
-  </svg>`;
-}
 function programView() {
   const p = S.profile, cur = programById(p.program_id), ps = cur && programStats();
   const cards = PROGRAMS.map(pr => `
     <button class="prog-card" data-act="pick-prog" data-v="${pr.id}" aria-pressed="${pr.id === p.program_id}">
       <span class="pc-top"><b>${esc(pr.title)}</b><span class="mono">${pr.days} ${plural(pr.days, "день", "дня", "дней")} в неделю</span></span>
       <span class="muted">${esc(pr.about)}</span>
+      ${pr.id === p.program_id ? `<span class="pc-on">Выбрана</span>` : ""}
     </button>`).join("");
-  let body = "";
-  if (cur) {
-    const plan = ps.plan, days = (p.program_days?.length === cur.days ? p.program_days : cur.defaultDays);
-    const wk = ps.cur, block = cur.sessionsFor ? 0 : Math.floor(wk / 3) % 2;
-    const list = cur.sessionsFor ? cur.sessionsFor(wk) : cur.sessions;
-    const phaseNow = plan.phases.findIndex(f => ps.local + 1 >= f.weeks[0] && ps.local + 1 <= f.weeks[1]);
-    // главные упражнения программы: первые веса с начала программы и последние
-    const keyNames = [...new Set(list.map(s => (s.ex[0].n?.[block] || s.ex[0].n?.[0])))];
-    const lifts = keyNames.map(n => {
-      const hist = S.exercises.filter(e => norm(e.name) === norm(n)).map(e => ({ d: dayOfWorkout(e.workout_id), w: Math.max(0, ...(e.sets || []).filter(s => s.done || e.done).map(s => +s.w || 0)) }))
-        .filter(h => h.d && h.d >= p.program_start && h.w).sort((a, b) => a.d.localeCompare(b.d));
-      return { n, first: hist[0]?.w, last: hist.at(-1)?.w, count: hist.length };
-    });
-    body = `
+  if (!cur) return `
+    <section class="hero"><div class="kicker">Программа</div><h1>Выбери программу</h1>
+      <p class="lead">После выбора в календаре на каждый тренировочный день появится готовая тренировка с подходами, весами и фото упражнений.</p></section>
+    <section class="block" style="margin-bottom:12px"><div class="prog-cards">${cards}</div></section>`;
+  const plan = ps.plan, days = (p.program_days?.length === cur.days ? p.program_days : cur.defaultDays);
+  const wk = ps.cur, block = cur.sessionsFor ? 0 : Math.floor(wk / 3) % 2;
+  const list = cur.sessionsFor ? cur.sessionsFor(wk) : cur.sessions;
+  const phaseNow = plan.phases.findIndex(f => ps.local + 1 >= f.weeks[0] && ps.local + 1 <= f.weeks[1]);
+  return `
+    <section class="hero"><div class="kicker">Программа</div><h1>${esc(cur.title)}</h1>
+      <p class="lead">Неделя <b>${ps.local + 1}</b> из ${ps.L}${ps.planned ? ` · сделано ${ps.done} из ${ps.planned} ${plural(ps.planned, "тренировки", "тренировок", "тренировок")}` : ""}.</p></section>
     <section class="block">
-      <h2>Куда идёт программа</h2>
-      <p>${esc(plan.goal)}</p>
-      ${plan.cycles ? `<div class="card">${directionChart(plan.cycles, Math.floor(ps.local / 2))}<p class="hint" style="margin-top:6px">Средние повторы в подходе по циклам (недели 1–12). Подсвечен текущий цикл: меньше повторов — значит, больше вес.</p></div>` : ""}
-      <ol class="phases">${plan.phases.map((f, i) => `<li class="${i < phaseNow ? "past" : i === phaseNow ? "now" : ""}"><span class="ph-w mono">Нед. ${f.weeks[0]}–${f.weeks[1]}</span><b>${esc(f.title)}${i === phaseNow ? " · сейчас" : ""}</b><span>${esc(f.text)}</span></li>`).join("")}</ol>
-    </section>
-    <section class="block">
-      <h2>Как идёт</h2>
-      <div class="weeks-bars">${ps.weeks.map((w, i) => `<div class="wb ${i === ps.local ? "cur" : i > ps.local ? "future" : ""}" title="Неделя ${i + 1}: ${w.cm} из ${w.pl}"><span class="wb-bar"><i style="height:${w.pl ? Math.max(6, w.cm / w.pl * 100) : 0}%"></i></span><span class="mono">${i + 1}</span></div>`).join("")}</div>
-      <p class="hint">${ps.planned ? `Сделано ${ps.done} из ${ps.planned} запланированных тренировок (${Math.round(ps.done / ps.planned * 100)}%).` : "Здесь появятся недели, когда начнёшь тренироваться."} Высота столбика — доля сделанных тренировок за неделю.</p>
-      ${lifts.some(l => l.count) ? `<ul class="list">${lifts.filter(l => l.count).map(l => `<li><div class="main"><b>${esc(l.n)}</b><span class="sub">${l.count} ${plural(l.count, "тренировка", "тренировки", "тренировок")} с начала программы</span></div><span class="mono">${fmt(l.first, 1)} → <b>${fmt(l.last, 1)} кг</b></span></li>`).join("")}</ul>` : ""}
-    </section>
-    <section class="block">
-      <h2>Дни тренировок</h2>
-      <p class="hint">Нажмите на свободный день, чтобы перенести на него ближайшую тренировку.</p>
-      <div class="wd-pick" role="group" aria-label="Дни недели">${WD.map((w, i) => `<button data-act="prog-day" data-v="${i}" aria-pressed="${days.includes(i)}">${w}</button>`).join("")}</div>
+      <h2>Куда ведёт</h2>
+      <p class="muted">${esc(plan.goal)}</p>
+      <ol class="phases">${plan.phases.map((f, i) => `<li class="${i < phaseNow ? "past" : i === phaseNow ? "now" : ""}"><span class="ph-w mono">Недели ${f.weeks[0]}–${f.weeks[1]}${i === phaseNow ? " · ты здесь" : ""}</span><b>${esc(f.title)}</b><span>${esc(f.text)}</span></li>`).join("")}</ol>
     </section>
     <section class="block">
       <h2>Тренировки этой недели</h2>
-      <p class="hint">${cur.sessionsFor ? `Подходы и повторы меняются каждую неделю — в календаре всегда актуальные. «Суперсет» — пара упражнений без отдыха между ними. <a href="${cur.source}" target="_blank" rel="noopener">Источник</a>` : `Сейчас ${block ? "вторые" : "первые"} варианты упражнений; через 3 недели они сменятся сами.`}</p>
+      ${cur.sessionsFor ? `<p class="hint">«Суперсет» — два упражнения подряд без отдыха. <a href="${cur.source}" target="_blank" rel="noopener">Источник программы</a></p>` : ""}
       <div class="sessions">${list.map(s => `
         <div class="card sess"><div class="sess-head"><b>${esc(s.title)}</b><span class="muted">${esc(s.focus)}</span></div>
           <ol class="plan-list">${s.ex.map(e => { const n = e.n[block] || e.n[0], m = media(n); return `<li>${m ? `<img class="pl-img" src="${m.img}" alt="" loading="lazy">` : `<span class="pl-img none"></span>`}<div class="pl-main"><b>${esc(n)}</b>${e.tip ? `<span>${esc(e.tip)}</span>` : ""}</div><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`; }).join("")}</ol>
         </div>`).join("")}</div>
     </section>
-    <section class="block"><div><button class="btn quiet" data-act="prog-off">Отключить программу</button></div></section>`;
-  }
-  return `
-    <section class="hero"><div class="kicker">Программа${ps ? ` · неделя ${ps.local + 1} из ${ps.L}` : ""}</div><h1>${cur ? esc(cur.title) : "Выберите программу"}</h1>
-      ${cur ? `<p class="lead">Идёт с ${shortDay(p.program_start)}. В календаре на каждый тренировочный день уже расписано, что делать.</p>` : `<p class="lead">После выбора в календаре на каждый тренировочный день появится план с подходами, весами и фото упражнений.</p>`}</section>
-    <section class="block"><div class="prog-cards">${cards}</div></section>
-    ${body}
-    <section class="block" style="margin-bottom:12px">
-      <h2>Принципы</h2>
-      <p class="hint">Из книги Андрея Скоромного «О силовых тренировках».</p>
-      <dl class="principles">${PRINCIPLES.map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${esc(b)}</dd></div>`).join("")}</dl>
-    </section>`;
+    <section class="block">
+      <h2>В какие дни</h2>
+      <p class="hint">Нажми на свободный день — на него переедет ближайшая тренировка. Перенести одну тренировку можно прямо в календаре.</p>
+      <div class="wd-pick" role="group" aria-label="Дни недели">${WD.map((w, i) => `<button data-act="prog-day" data-v="${i}" aria-pressed="${days.includes(i)}">${w}</button>`).join("")}</div>
+    </section>
+    <details class="block fold"><summary>Сменить программу</summary><div class="prog-cards" style="margin-top:12px">${cards}</div>
+      <div style="margin-top:12px"><button class="btn quiet" data-act="prog-off">Отключить программу</button></div></details>
+    <details class="block fold" style="margin-bottom:12px"><summary>Принципы тренировок</summary>
+      <p class="hint" style="margin-top:8px">Из книги Андрея Скоромного «О силовых тренировках».</p>
+      <dl class="principles" style="margin-top:12px">${PRINCIPLES.map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${esc(b)}</dd></div>`).join("")}</dl></details>`;
 }
 
 /* ---------- food ---------- */
@@ -769,8 +747,22 @@ function mealSheet() {
 }
 
 /* ---------- stats ---------- */
-const PERIODS = { 7: "Неделя", 30: "Месяц", 90: "3 месяца" };
-const getPeriod = () => { try { return +localStorage.getItem("gym-per") || 30; } catch { return 30; } };
+const PERIODS = { 7: "Неделя", 30: "Месяц", 90: "3 мес.", 365: "Год", 0: "Всё время" };
+const getPeriod = () => { try { const v = localStorage.getItem("gym-per"); return v != null && v in PERIODS ? +v : 30; } catch { return 30; } };
+function firstDay() {
+  const c = [S.workouts[0]?.day, S.body[0]?.day, S.days[0]?.day, S.profile?.program_start].filter(Boolean).sort();
+  return c[0] && c[0] < today() ? c[0] : addDays(today(), -29);
+}
+// для длинных периодов — среднее по неделям, чтобы столбики читались
+function series(days, fn) {
+  if (days.length <= 92) return { days, vals: days.map(fn), weekly: false };
+  const out = { days: [], vals: [], weekly: true };
+  for (let i = 0; i < days.length; i += 7) {
+    const chunk = days.slice(i, i + 7), v = chunk.map(fn).filter(x => x != null);
+    out.days.push(chunk[0]); out.vals.push(v.length ? v.reduce((a, x) => a + x, 0) / v.length : null);
+  }
+  return out;
+}
 let rangeLoading = null;
 async function ensureMealsRange(from, to) {
   const days = []; for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
@@ -795,21 +787,22 @@ function lineChart(points, { h = 160, unit = "" } = {}) {
   </svg>`;
 }
 // Столбики по дням с линией цели. Дни без данных — пустые.
-function barChart(days, vals, { goal, unit, fmtV = v => fmt(v) }) {
+function barChart({ days, vals, weekly }, { goal, unit, fmtV = v => fmt(v) }) {
   const W = 600, H = 150, top = 12, bot = 22, n = days.length, gap = n > 40 ? 1 : 2;
   const max = Math.max(goal || 0, ...vals.filter(v => v != null)) * 1.12 || 1;
   const bw = (W - gap * (n - 1)) / n, y = v => top + (1 - v / max) * (H - top - bot);
-  const bars = vals.map((v, i) => v == null ? "" : `<rect class="bc ${goal && v < goal * 0.9 ? "low" : ""}" x="${(i * (bw + gap)).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - bot - y(v)).toFixed(1)}" rx="${Math.min(4, bw / 2)}"><title>${shortDay(days[i])}: ${fmtV(v)} ${unit}</title></rect>`).join("");
-  const step = n > 40 ? 15 : n > 10 ? 7 : 1;
-  const labels = days.map((d, i) => i % step === 0 || i === n - 1 ? `<text x="${(i * (bw + gap) + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${n > 10 ? parse(d).getDate() : WD[(parse(d).getDay() + 6) % 7]}</text>` : "").join("");
+  const bars = vals.map((v, i) => v == null ? "" : `<rect class="bc ${goal && v < goal * 0.9 ? "low" : ""}" x="${(i * (bw + gap)).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - bot - y(v)).toFixed(1)}" rx="${Math.min(4, bw / 2)}"><title>${weekly ? "Неделя с " : ""}${shortDay(days[i])}: ${fmtV(v)} ${unit}${weekly ? " в среднем" : ""}</title></rect>`).join("");
+  const step = weekly ? Math.ceil(n / 6) : n > 40 ? 15 : n > 10 ? 7 : 1;
+  const labels = days.map((d, i) => i % step === 0 || i === n - 1 ? `<text x="${(i * (bw + gap) + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${weekly ? `${parse(d).getDate()}.${String(parse(d).getMonth() + 1).padStart(2, "0")}` : n > 10 ? parse(d).getDate() : WD[(parse(d).getDay() + 6) % 7]}</text>` : "").join("");
   return `<svg class="chart bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="По дням, цель ${fmtV(goal)} ${unit}">
     ${bars}${goal ? `<line class="goal" x1="0" x2="${W}" y1="${y(goal)}" y2="${y(goal)}"/><text class="goal-t" x="2" y="${y(goal) - 5}">цель ${fmtV(goal)}</text>` : ""}${labels}
   </svg>`;
 }
 
 function progressView() {
-  const n = getPeriod(), t = today(), from = addDays(t, -(n - 1));
+  const per = getPeriod(), t = today(), from = per ? addDays(t, -(per - 1)) : firstDay();
   const days = []; for (let d = from; d <= t; d = addDays(d, 1)) days.push(d);
+  const n = days.length;
   ensureMealsRange(from, t);
   const g = goals(), loaded = days.every(d => S.meals[d]);
 
@@ -862,8 +855,8 @@ function progressView() {
 
   const tile = (k, v, sub, cls = "") => `<div class="st-tile ${cls}"><span class="t-k">${k}</span><b class="mono">${v}</b><span class="t-sub">${sub}</span></div>`;
   return `
-    <section class="hero"><div class="kicker">Итоги</div><h1>${n === 7 ? "За неделю" : n === 30 ? "За месяц" : "За 3 месяца"}</h1>
-      <div class="seg" role="radiogroup" aria-label="Период">${Object.entries(PERIODS).map(([k, l]) => `<button role="radio" data-act="per" data-v="${k}" aria-checked="${+k === n}">${l}</button>`).join("")}</div>
+    <section class="hero"><div class="kicker">Итоги</div><h1>${{ 7: "За неделю", 30: "За месяц", 90: "За 3 месяца", 365: "За год", 0: "За всё время" }[per]}</h1>
+      <div class="seg" role="radiogroup" aria-label="Период">${Object.entries(PERIODS).map(([k, l]) => `<button role="radio" data-act="per" data-v="${k}" aria-checked="${+k === per}">${l}</button>`).join("")}</div>
     </section>
     <section class="block">
       <div class="st-grid">
@@ -881,14 +874,14 @@ function progressView() {
     </section>
     <section class="block">
       <h2>Белок по дням</h2>
-      ${loaded ? `<div class="card">${barChart(days, days.map(d => S.meals[d]?.length ? daySum(d).P : null), { goal: g.P, unit: "г белка" })}</div>` : `<div class="skel" style="height:150px"></div>`}
+      ${loaded ? `<div class="card">${barChart(series(days, d => S.meals[d]?.length ? daySum(d).P : null), { goal: g.P, unit: "г белка" })}</div>` : `<div class="skel" style="height:150px"></div>`}
       <h2 style="margin-top:12px">Калории по дням</h2>
-      ${loaded ? `<div class="card">${barChart(days, days.map(d => S.meals[d]?.length ? daySum(d).kcal : null), { goal: g.kcal, unit: "ккал" })}</div>` : `<div class="skel" style="height:150px"></div>`}
+      ${loaded ? `<div class="card">${barChart(series(days, d => S.meals[d]?.length ? daySum(d).kcal : null), { goal: g.kcal, unit: "ккал" })}</div>` : `<div class="skel" style="height:150px"></div>`}
       <p class="hint">Приглушённые столбики — меньше 90% цели. Наведи или нажми на столбик, чтобы увидеть число.</p>
     </section>
     <section class="block">
       <h2>Сон</h2>
-      ${sl.length ? `<div class="card">${barChart(days, days.map(d => { const x = S.days.find(s => s.day === d); return x?.sleep_h != null ? +x.sleep_h : null; }), { goal: 7, unit: "ч", fmtV: v => fmt(v, 1) })}</div>` : `<p class="hint">Отмечай сон на экране дня кнопками «−» и «+».</p>`}
+      ${sl.length ? `<div class="card">${barChart(series(days, d => { const x = S.days.find(s => s.day === d); return x?.sleep_h != null ? +x.sleep_h : null; }), { goal: 7, unit: "ч", fmtV: v => fmt(v, 1) })}</div>` : `<p class="hint">Отмечай сон на экране дня кнопками «−» и «+».</p>`}
     </section>
     ${Object.keys(groups).length ? `<section class="block">
       <h2>Подходы по мышцам</h2>
@@ -924,47 +917,54 @@ function liftsBlock() {
 const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? b : c; };
 
 /* ---------- profile ---------- */
+const PRESETS = { mass: ["Набор массы", 35, 2, 1], keep: ["Поддержание", 31, 1.8, 1], cut: ["Сушка", 26, 2.2, 0.8] };
+const presetOf = p => Object.keys(PRESETS).find(k => { const [, kc, pr, ft] = PRESETS[k], w = +p.weight_kg; return w && p.goal_mode !== "percent" && +p.kcal === Math.round(w * kc / 50) * 50 && +p.protein === pr && +p.fat === ft; });
 function profileView() {
-  const p = S.profile, g = goals(), perkg = p.goal_mode !== "percent", th = getTheme();
+  const p = S.profile, g = goals(), perkg = p.goal_mode !== "percent", th = getTheme(), pre = presetOf(p);
   return `
-    <section class="hero"><div class="kicker">${esc(S.user.email)}</div><h1>${esc(p.name || "Профиль")}</h1></section>
-    <section class="block">
-      <div class="grid2">
-        <label class="field"><span>Имя</span><input class="inp" data-field="p-name" value="${esc(p.name)}" maxlength="40" style="text-align:left;font-family:var(--body)"></label>
-        <label class="field"><span>Вес, кг</span><input class="inp" data-field="p-weight_kg" inputmode="decimal" value="${p.weight_kg ?? ""}"></label>
+    <section class="hero"><div class="kicker">Профиль</div><h1>${esc(p.name || "Без имени")}</h1><p class="muted">${esc(S.user.email)}</p></section>
+    <section class="block card pf">
+      <h2>Обо мне</h2>
+      <div class="grid2 pf-fields">
+        <label class="field"><span>Имя</span><input class="inp" data-field="p-name" value="${esc(p.name)}" maxlength="40"></label>
+        <label class="field"><span>Вес, кг</span><input class="inp" data-field="p-weight_kg" inputmode="decimal" value="${p.weight_kg ?? ""}" placeholder="например, 78"></label>
       </div>
     </section>
-    <section class="block">
+    <section class="block card pf">
       <h2>Цель по питанию</h2>
-      <label class="field"><span>Калорий в день</span><input class="inp" data-field="p-kcal" inputmode="numeric" value="${p.kcal ?? ""}"></label>
-      <div class="seg full" role="radiogroup" aria-label="Как задать белки и жиры">
-        <button role="radio" data-act="goal-mode" data-v="perkg" aria-checked="${perkg}">Граммы на кг веса</button>
-        <button role="radio" data-act="goal-mode" data-v="percent" aria-checked="${!perkg}">Проценты калорий</button>
-      </div>
-      <div class="grid2">
-        <label class="field"><span>Белки, ${perkg ? "г на кг" : "%"}</span><input class="inp" data-field="p-protein" inputmode="decimal" value="${p.protein ?? ""}"></label>
-        <label class="field"><span>Жиры, ${perkg ? "г на кг" : "%"}</span><input class="inp" data-field="p-fat" inputmode="decimal" value="${p.fat ?? ""}"></label>
-      </div>
-      <p class="goals-out" id="goals-out">${goalsLine(g)}</p>
-      <p class="hint">Углеводы — всё, что остаётся от калорий. Обычно белка берут 1,6–2,2 г на кг веса, жиров — 0,8–1 г на кг.</p>
+      <p class="hint">Выбери цель — калории и белок посчитаются от твоего веса.</p>
+      <div class="presets">${Object.entries(PRESETS).map(([k, [l]]) => `<button data-act="preset" data-v="${k}" aria-pressed="${pre === k}">${l}</button>`).join("")}</div>
+      <div class="macro-row" id="goals-out">${goalsLine(g)}</div>
+      <details class="fold"><summary>Настроить вручную</summary>
+        <div class="manual">
+          <label class="field"><span>Калорий в день</span><input class="inp" data-field="p-kcal" inputmode="numeric" value="${p.kcal ?? ""}"></label>
+          <div class="seg full" role="radiogroup" aria-label="Как задать белки и жиры">
+            <button role="radio" data-act="goal-mode" data-v="perkg" aria-checked="${perkg}">г на кг веса</button>
+            <button role="radio" data-act="goal-mode" data-v="percent" aria-checked="${!perkg}">% калорий</button>
+          </div>
+          <div class="grid2">
+            <label class="field"><span>Белки, ${perkg ? "г на кг" : "%"}</span><input class="inp" data-field="p-protein" inputmode="decimal" value="${p.protein ?? ""}"></label>
+            <label class="field"><span>Жиры, ${perkg ? "г на кг" : "%"}</span><input class="inp" data-field="p-fat" inputmode="decimal" value="${p.fat ?? ""}"></label>
+          </div>
+          <p class="hint">Углеводы — всё, что остаётся от калорий.</p>
+        </div>
+      </details>
     </section>
-    <section class="block">
+    <section class="block card pf">
       <h2>Тема</h2>
-      <div class="seg" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div>
+      <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div>
     </section>
-    <section class="block">
-      <h2>Шаблоны тренировок</h2>
-      ${S.templates.length ? `<ul class="list">${S.templates.map(t => `<li data-tpl="${t.id}"><div class="main"><b>${esc(t.title)}</b><span class="sub">${t.exercises.map(e => esc(e.name)).join(", ")}</span></div><button class="icon-btn bare del" data-act="tpl-del" aria-label="Удалить шаблон">${I.trash}</button></li>`).join("")}</ul>`
-        : `<p class="hint">Соберите тренировку на любом дне и нажмите «Сохранить как шаблон».</p>`}
-    </section>
-    <section class="block">
-      <h2>Мои продукты</h2>
+    <details class="block card pf fold"><summary>Мои продукты <span class="muted">${S.foods.length || ""}</span></summary>
       ${S.foods.length ? `<ul class="list">${S.foods.map(x => `<li data-food="${x.id}"><div class="main"><b>${esc(x.name)}</b><span class="sub">на 100 г: ${fmt(x.kcal)} ккал · Б ${fmt(x.protein, 1)} · Ж ${fmt(x.fat, 1)} · У ${fmt(x.carb, 1)}</span></div><button class="icon-btn bare del" data-act="food-del" aria-label="Удалить продукт">${I.trash}</button></li>`).join("")}</ul>`
-        : `<p class="hint">Продукты сохраняются сами, когда вы добавляете еду с отметкой «Запомнить продукт».</p>`}
-    </section>
-    <section class="block" style="margin-bottom:12px"><div><button class="btn quiet" data-act="logout">Выйти</button></div></section>`;
+        : `<p class="hint">Продукты запоминаются сами, когда добавляешь еду.</p>`}
+    </details>
+    <details class="block card pf fold"><summary>Шаблоны тренировок <span class="muted">${S.templates.length || ""}</span></summary>
+      ${S.templates.length ? `<ul class="list">${S.templates.map(t => `<li data-tpl="${t.id}"><div class="main"><b>${esc(t.title)}</b><span class="sub">${t.exercises.map(e => esc(e.name)).join(", ")}</span></div><button class="icon-btn bare del" data-act="tpl-del" aria-label="Удалить шаблон">${I.trash}</button></li>`).join("")}</ul>`
+        : `<p class="hint">Сохраняются из тренировки: кнопка «Ещё» → «Сохранить как шаблон».</p>`}
+    </details>
+    <section class="block" style="margin-bottom:12px"><div><button class="btn quiet" data-act="logout">Выйти из аккаунта</button></div></section>`;
 }
-const goalsLine = g => `${fmt(g.kcal)} ккал · Б ${fmt(g.P)} г · Ж ${fmt(g.F)} г · У ${fmt(g.C)} г`;
+const goalsLine = g => [["Калории", fmt(g.kcal), "ккал"], ["Белки", fmt(g.P), "г"], ["Жиры", fmt(g.F), "г"], ["Углеводы", fmt(g.C), "г"]].map(([k, v, u]) => `<div><span>${k}</span><b class="mono">${v}</b><small>${u}</small></div>`).join("");
 const saveProfile = () => later("profile", () => { const { user_id, updated_at, ...rest } = S.profile; q(sb.from("gym_profile").update({ ...rest, updated_at: new Date().toISOString() }).eq("user_id", S.user.id)); });
 
 /* ---------- events ---------- */
@@ -973,7 +973,7 @@ document.addEventListener("click", ev => {
   run(b, b.dataset.act);
 });
 async function run(b, act) {
-  if (["ex-done", "ex-open", "ex-photo", "set-done", "set-add", "set-del", "ex-del", "ex-rename"].includes(act)) return exAction(b, act);
+  if (["ex-done", "ex-open", "ex-photo", "ex-info", "set-done", "set-add", "set-del", "ex-del", "ex-rename"].includes(act)) return exAction(b, act);
   const w = workoutOn(S.day);
   switch (act) {
     case "pick-day": S.day = b.dataset.day; rerender(); break;
@@ -991,7 +991,21 @@ async function run(b, act) {
       b.closest(".tile").querySelector(".t-v b").textContent = fmt(row.sleep_h, 1);
       later("sleep" + d, () => q(sb.from("gym_days").upsert({ day: d, sleep_h: row.sleep_h })), 500); break;
     }
-    case "move": moveSheet(); break;
+    case "move": S.moving = S.day; S.moveWeek = monday(S.day); rerender(); scrollTo({ top: 0, behavior: "smooth" }); break;
+    case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); rerender(); break;
+    case "move-cancel": S.moving = null; rerender(); break;
+    case "move-to": {
+      const from = S.moving, to = b.dataset.day; b.classList.add("loading");
+      try { await swapDays(from, to); S.moving = null; S.day = to; rerender(); toast(`Готово: ${WD_FULL[(parse(to).getDay() + 6) % 7].toLowerCase()}, ${shortDay(to)}`); }
+      catch { b.classList.remove("loading"); }
+      break;
+    }
+    case "start": {
+      b.classList.add("loading"); b.disabled = true;
+      const w = await ensureWorkout().catch(() => null); if (!w) { b.classList.remove("loading"); b.disabled = false; return; }
+      const first = exercisesOf(w.id)[0]; if (first) S.open.add(first.id);
+      rerender(); document.getElementById("ex-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); break;
+    }
     case "more": moreSheet(); break;
     case "pick-prog": {
       const pr = programById(b.dataset.v), p = S.profile; if (p.program_id === pr.id) return;
@@ -1047,6 +1061,12 @@ async function run(b, act) {
       toast(`«${m.name}» удалено`, { label: "Вернуть", run: () => { clearTimeout(t); list.push(m); list.sort((a, c) => a.created_at.localeCompare(c.created_at)); rerender(); } });
       break;
     }
+    case "preset": {
+      const p = S.profile, w = +p.weight_kg, [label, kc, pr, ft] = PRESETS[b.dataset.v];
+      if (!w) { toast("Сначала укажи свой вес"); document.querySelector('[data-field="p-weight_kg"]')?.focus(); return; }
+      Object.assign(p, { goal_mode: "perkg", kcal: Math.round(w * kc / 50) * 50, protein: pr, fat: ft });
+      saveProfile(); rerender(); toast(`Цель: ${label.toLowerCase()}`); break;
+    }
     case "goal-mode": {
       const p = S.profile, v = b.dataset.v; if (p.goal_mode === v) return;
       const g = goals(); p.goal_mode = v; // пересчитываем в новые единицы, чтобы граммы не прыгнули
@@ -1078,7 +1098,8 @@ document.addEventListener("input", ev => {
   else if (f.startsWith("p-")) {
     const k = f.slice(2); S.profile[k] = k === "name" ? el.value : num(el.value);
     const out = document.getElementById("goals-out"); if (out) out.innerHTML = goalsLine(goals());
-    if (k === "name") document.querySelector(".hero h1").textContent = el.value || "Профиль";
+    if (k === "name") document.querySelector(".hero h1").textContent = el.value || "Без имени";
+    if (k === "weight_kg" || k === "kcal" || k === "protein" || k === "fat") document.querySelectorAll("[data-act=preset]").forEach(x => x.setAttribute("aria-pressed", presetOf(S.profile) === x.dataset.v));
     saveProfile();
   }
 });

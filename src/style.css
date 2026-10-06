@@ -493,3 +493,59 @@ button.tile{cursor:pointer;transition:border-color var(--t2) ease}
 .groups li{display:grid;grid-template-columns:90px 1fr 40px;align-items:center;gap:10px;font-size:14px}
 .groups .bar{height:8px;border-radius:4px}
 .groups .mono{text-align:right}
+
+/* ===== v4: проще и удобнее ===== */
+.hero-card{flex-wrap:wrap}
+.hc-actions{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.hc-actions .btn{flex:1 1 auto}
+.btn.big{min-height:54px;font-size:17px;padding-inline:22px;flex:2 1 220px!important;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 30%,transparent)}
+.btn.small{min-height:36px;font-size:14px;padding:4px 12px;flex:0 0 auto!important}
+.hero-card .btn.quiet{background:color-mix(in srgb,var(--surface) 70%,transparent)}
+.ex.ex-preview .ex-row{cursor:pointer}
+.ex-chev{flex:none;display:grid;place-items:center;width:40px;color:var(--muted)}
+.ex-chev svg{width:20px;height:20px}
+.ex-body .photo{display:block;width:100%;padding:0;border:0;margin-top:10px;aspect-ratio:16/9;cursor:zoom-in}
+button.ex-thumb{cursor:pointer}
+.info{margin:0;display:grid;gap:10px}
+.info div{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:baseline}
+.info dt{font-size:13px;color:var(--muted)}
+.info dd{margin:0;font-weight:500}
+.info dd.mono{color:var(--accent);font-weight:700;font-size:17px}
+/* перенос */
+.hero.move{gap:12px}
+.hero.move h1{font-size:clamp(24px,6.5vw,34px)}
+.move-list{display:grid;gap:8px}
+.move-list button{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);text-align:left;transition:border-color var(--t2) ease,background-color var(--t2) ease,transform var(--t1) ease}
+.move-list button:active:not(:disabled){transform:scale(.98)}
+@media (hover:hover){.move-list button:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}}
+.move-list button.from{opacity:1;border-style:dashed;border-color:var(--accent);background:var(--accent-soft);cursor:default}
+.ml-d{flex:none;width:44px;display:grid;justify-items:center;line-height:1.1}
+.ml-d b{font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase}
+.ml-d span{font-family:var(--display);font-size:20px;font-weight:600}
+.ml-t{flex:1;min-width:0;display:grid}
+.ml-t span{font-size:13px;color:var(--muted)}
+.ml-go{flex:none;font-weight:600;font-size:14px;color:var(--accent);padding:6px 12px;border-radius:999px;background:var(--accent-soft)}
+.move-list button.loading{color:inherit!important;opacity:.6}
+.move-list button.loading::after{display:none}
+/* сворачиваемые блоки */
+details.fold summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;font-family:var(--display);font-weight:500;font-size:clamp(17px,4.4vw,20px)}
+details.fold summary::-webkit-details-marker{display:none}
+details.fold summary::after{content:"";width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-3px);transition:transform var(--t2) ease;margin-right:4px}
+details.fold[open] summary::after{transform:rotate(225deg)}
+details.fold summary .muted{font-family:var(--mono);font-size:13px;margin-left:auto;margin-right:12px}
+.card details.fold summary{font-size:15px;font-family:var(--body);font-weight:600;color:var(--accent)}
+.pc-on{justify-self:start;font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--accent);padding:2px 10px;border-radius:999px}
+/* профиль */
+.card.pf{gap:12px}
+.card.pf h2{font-size:18px}
+.pf-fields .inp{text-align:left;font-family:var(--body)}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.presets button{min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-weight:600;font-size:14px;padding:4px;transition:background-color var(--t2) ease,border-color var(--t2) ease,color var(--t2) ease}
+.presets button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.macro-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.macro-row div{display:grid;gap:0;padding:10px 8px;border-radius:12px;background:var(--bg);text-align:center}
+.macro-row span{font-size:11px;color:var(--muted)}
+.macro-row b{font-family:var(--display);font-size:clamp(16px,4.6vw,20px);font-weight:600}
+.macro-row small{font-size:11px;color:var(--muted)}
+.manual{display:grid;gap:12px;padding-top:8px}
+.manual .grid2 .inp{text-align:center}
