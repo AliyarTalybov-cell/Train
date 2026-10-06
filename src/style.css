@@ -549,3 +549,4 @@ details.fold summary .muted{font-family:var(--mono);font-size:13px;margin-left:a
 .macro-row small{font-size:11px;color:var(--muted)}
 .manual{display:grid;gap:12px;padding-top:8px}
 .manual .grid2 .inp{text-align:center}
+details.card.pf{display:block}details.card.pf[open] summary{margin-bottom:8px}.macro-row{overflow:hidden}
