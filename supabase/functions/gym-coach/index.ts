@@ -28,73 +28,42 @@ Deno.serve(async (req) => {
   const me = await fetch(`${GYM}/auth/v1/user`, { headers: h });
   if (!me.ok) return json({ error: "auth" }, 401);
 
-  let body: { mode?: string; question?: string; today?: string; plan?: unknown; program?: unknown; calendar?: unknown; known?: string[]; messages?: { role: string; content: string }[] };
+  let body: { question?: string; today?: string; plan?: unknown; program?: unknown; history?: { role: string; content: string }[] };
   try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const question = String(body.question || "").slice(0, 600);
 
   const get = (path: string) => fetch(`${GYM}/rest/v1/${path}`, { headers: h }).then(r => r.ok ? r.json() : []);
-  const [profile, ex, meals, days, bodyW] = await Promise.all([
-    get("gym_profile?select=name,weight_kg,kcal,goal_mode,protein,fat"),
-    get(`gym_exercises?select=name,sets,done,plan,gym_workouts!inner(day,title,feeling,note)&gym_workouts.day=gte.${daysAgo(42)}`),
-    get(`gym_meals?select=day,kcal,protein&day=gte.${daysAgo(14)}`),
-    get(`gym_days?select=day,sleep_h&day=gte.${daysAgo(14)}`),
-    get("gym_body?select=day,weight_kg&order=day.desc&limit=8"),
-  ]);
+  const ex = await get(`gym_exercises?select=name,sets,done,plan,gym_workouts!inner(day,title)&gym_workouts.day=gte.${daysAgo(42)}`);
 
   // Короткая выжимка вместо сырых таблиц: по дням — тренировка, упражнения с подходами.
-  const byDay: Record<string, { title: string; feeling?: number; note?: string; items: string[] }> = {};
+  const byDay: Record<string, { title: string; items: string[] }> = {};
   for (const e of ex as any[]) {
     const w = e.gym_workouts, d = w.day;
-    byDay[d] ||= { title: w.title || "Тренировка", feeling: w.feeling, note: w.note, items: [] };
+    byDay[d] ||= { title: w.title || "Тренировка", items: [] };
     const sets = (e.sets || []).map((s: any) => `${s.w ?? "?"}×${s.r ?? "?"}${s.done || e.done ? "" : "(не сделан)"}`).join(", ");
     byDay[d].items.push(`${e.name}${e.plan ? ` [план ${e.plan}]` : ""}: ${sets || "без подходов"}`);
   }
-  const food: Record<string, { k: number; p: number }> = {};
-  for (const m of meals as any[]) { food[m.day] ||= { k: 0, p: 0 }; food[m.day].k += +m.kcal; food[m.day].p += +m.protein; }
   const ctx = [
-    `Сегодня: ${body.today}, ${WDN[new Date(String(body.today) + "T12:00:00Z").getUTCDay()]}.`,
-    `Профиль: ${JSON.stringify((profile as any[])[0] || {})} (protein/fat — г на кг веса при goal_mode=perkg, иначе % калорий).`,
+    `Сегодня: ${body.today}, ${WDN[new Date(String(body.today) + "T12:00:00Z").getUTCDay()]}. Даты в таблице: ${dateTable(String(body.today))}`,
     `Программа: ${JSON.stringify(body.program || "не выбрана")}.`,
-    `План на сегодня: ${JSON.stringify(body.plan || "день отдыха")}.`,
+    `Тренировка на этот день: ${JSON.stringify(body.plan || "ничего не запланировано")}.`,
     "Тренировки за 6 недель:",
-    ...Object.keys(byDay).sort().map(d => `${d} ${byDay[d].title}${byDay[d].feeling ? ` (самочувствие ${byDay[d].feeling}/5)` : ""}${byDay[d].note ? ` — «${byDay[d].note}»` : ""}: ${byDay[d].items.join("; ")}`),
-    `Питание за 14 дней (ккал/белок): ${Object.keys(food).sort().map(d => `${d}: ${Math.round(food[d].k)}/${Math.round(food[d].p)}г`).join("; ") || "не записано"}.`,
-    `Сон: ${(days as any[]).filter(x => x.sleep_h != null).map(x => `${x.day}: ${x.sleep_h}ч`).join("; ") || "не отмечен"}.`,
-    `Вес тела: ${(bodyW as any[]).map(x => `${x.day}: ${x.weight_kg}`).join("; ") || "не записан"}.`,
-    ...(body.mode === "chat" ? [
-      `Таблица дат (бери даты ТОЛЬКО отсюда, день недели не вычисляй сам): ${dateTable(String(body.today))}`,
-      `Календарь (неделя назад и 4 недели вперёд; st: done — сделано, partial — начато, planned — по плану, missed — пропущено, rest — отдых): ${JSON.stringify(body.calendar || []).slice(0, 9000)}`,
-      `Упражнения, для которых есть фото (называй упражнения именно так, если подходит): ${(body.known || []).slice(0, 120).join("; ")}`,
-    ] : []),
+    ...(Object.keys(byDay).length ? Object.keys(byDay).sort().map(d => `${d} ${byDay[d].title}: ${byDay[d].items.join("; ")}`) : ["пока ничего не записано"]),
   ].join("\n");
+  const history = (body.history || []).slice(-6).map(m => `${m.role === "assistant" ? "Тренер" : "Пользователь"}: ${String(m.content).slice(0, 500)}`).join("\n");
 
-  const system = `Ты — внимательный тренер по силовым тренировкам в дневнике двух друзей. Пиши по-русски, коротко и по делу, на «ты».
-Смотри на данные: что человек делал, как восстановился (сон, самочувствие, когда последний раз грузил эту группу мышц), хватает ли белка и калорий, растут ли рабочие веса.
-Опирайся на принципы: каждая мышца 2 раза в неделю, отдых группе 48–72 часа, прогрессия веса (сделал верх диапазона во всех подходах — добавь 2,5 кг), при недосыпе или плохом самочувствии — снизить объём, а не пропускать.
-Не выдумывай данных, которых нет. Если данных мало, так и скажи и дай общий совет.
+  const system = `Ты — внимательный тренер по силовым тренировкам в дневнике двух друзей. Пиши по-русски, коротко и по делу, на «ты», живым языком.
+Ты только читаешь дневник и советуешь, сам ничего не меняешь.
+Смотри на данные: что человек делал, когда последний раз грузил каждую группу мышц, растут ли рабочие веса, не пропускает ли.
+Опирайся на принципы: каждая мышца 2 раза в неделю, отдых группе 48–72 часа, прогрессия веса (сделал верх диапазона во всех подходах — добавь 2,5 кг), при усталости — снизить объём, а не пропускать.
+Не выдумывай данных, которых нет. Если данных мало, так и скажи и дай общий совет. Даты пиши словами («в четверг»), без ГГГГ-ММ-ДД.
 Верни только JSON:
-{"headline": "одна фраза — главное на сегодня",
- "today": "2–4 предложения: что качать сегодня и почему (если день отдыха — отдыхать или что лёгкое сделать)",
- "changes": [{"name": "точное название упражнения из плана на сегодня", "weight": число кг или null, "sets": число или null, "reps": "например 8–10" или null, "why": "коротко почему"}],
- "tips": ["1–3 коротких совета по питанию, сну или технике по данным"],
- "answer": "ответ на вопрос пользователя, если он был, иначе пустая строка"}
-changes — только для упражнений из плана на сегодня и только если правда стоит что-то поменять; можно пустой список.`;
-
-  const chat = body.mode === "chat";
-  const systemChat = `Ты — тренер в дневнике тренировок и умеешь сам менять календарь пользователя. Пиши по-русски, коротко, на «ты».
-Пользователь просит расписать неделю, смиксовать тренировки, перенести, удалить, отметить выполненным, поменять веса — ты отвечаешь и возвращаешь список действий.
-Правила тренировок: каждая мышца 2 раза в неделю, одной группе 48–72 часа отдыха, базовые упражнения в начале, 4–7 упражнений в тренировке. Учитывай историю, сон, самочувствие и рабочие веса из данных; вес подставляй из истории (последний рабочий), если знаешь, иначе null.
-Даты — только формат ГГГГ-ММ-ДД и только из «Таблицы дат»: найди в ней нужный день недели. «Следующая неделя» — с ближайшего понедельника после сегодняшнего дня. Не трогай дни, о которых не просили. Если просьба неясна — задай вопрос и верни пустой actions.
-Верни только JSON:
-{"reply": "что ты сделал/предлагаешь, 1–4 предложения живым языком: даты пиши как «в четверг, 8 октября», без ГГГГ-ММ-ДД, без слов null и JSON",
- "actions": [
-  {"type": "create", "day": "ГГГГ-ММ-ДД", "title": "Ноги и икры", "exercises": [{"name": "Приседания со штангой", "sets": 4, "reps": "8–10", "weight": 80}]},
-  {"type": "delete", "day": "ГГГГ-ММ-ДД"},
-  {"type": "move", "from": "ГГГГ-ММ-ДД", "to": "ГГГГ-ММ-ДД"},
-  {"type": "done", "day": "ГГГГ-ММ-ДД", "exercises": ["названия"] или [] — значит все},
-  {"type": "edit", "day": "ГГГГ-ММ-ДД", "name": "упражнение", "sets": 4, "reps": "6–8", "weight": 82.5}
- ]}
-create заменяет то, что было в этот день. delete делает день отдыхом. move меняет два дня местами.`;
+{"headline": "одна фраза — главное на этот день",
+ "today": "2–4 предложения: что лучше сделать в этот день и почему (если тренировки нет — отдохнуть или что лучше потренировать)",
+ "changes": [{"name": "упражнение из тренировки на этот день", "weight": число кг или null, "sets": число или null, "reps": "например 8–10" или null, "why": "коротко почему"}],
+ "tips": ["0–2 коротких совета по технике или распределению нагрузки"],
+ "answer": "ответ на вопрос пользователя, если он был, 1–5 предложений, иначе пустая строка"}
+changes — только если правда стоит поменять вес или подходы; можно пустой список. Если есть вопрос, главное — answer.`;
   const key = Deno.env.get("OPENROUTER_API_KEY");
   if (!key) return json({ error: "no_key" }, 503);
   let last = "";
@@ -104,35 +73,15 @@ create заменяет то, что было в этот день. delete де�
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://training-diary-azure.vercel.app", "X-Title": "Gym diary" },
         body: JSON.stringify({
-          model, max_tokens: chat ? 3000 : 1200, temperature: 0.4, response_format: { type: "json_object" }, reasoning: { enabled: false },
-          messages: chat
-            ? [{ role: "system", content: systemChat }, { role: "user", content: `Данные:\n${ctx}` }, { role: "assistant", content: '{"reply":"Данные вижу. Что сделать?","actions":[]}' },
-               ...(body.messages || []).slice(-8).map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content).slice(0, 1500) }))]
-            : [{ role: "system", content: system }, { role: "user", content: ctx + (question ? `\n\nВопрос пользователя: ${question}` : "") }],
+          model, max_tokens: 1200, temperature: 0.4, response_format: { type: "json_object" }, reasoning: { enabled: false },
+          messages: [{ role: "system", content: system }, { role: "user", content: ctx + (history ? `\n\nРазговор до этого:\n${history}` : "") + (question ? `\n\nВопрос пользователя: ${question}` : "") }],
         }),
-        signal: AbortSignal.timeout(chat ? 60000 : 30000),
+        signal: AbortSignal.timeout(30000),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { last = `${model} ${r.status}`; continue; }
       const text = String(data.choices?.[0]?.message?.content || "").replace(/^```(json)?|```$/g, "").trim();
       const out = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-      if (chat) {
-        if (!out.reply) { last = `${model} empty`; continue; }
-        const D = /^\d{4}-\d{2}-\d{2}$/, ok = (d: unknown) => typeof d === "string" && D.test(d) && Math.abs(Date.parse(d) - Date.now()) < 120 * 864e5;
-        const num = (v: unknown) => v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v;
-        const ex = (e: any) => ({ name: String(e?.name || "").slice(0, 80), sets: Math.max(1, Math.min(10, Math.round(num(e?.sets) ?? 3))), reps: e?.reps ? String(e.reps).slice(0, 12) : null, weight: num(e?.weight) });
-        const actions = (Array.isArray(out.actions) ? out.actions : []).slice(0, 40).map((a: any) => {
-          switch (a?.type) {
-            case "create": return ok(a.day) && Array.isArray(a.exercises) ? { type: "create", day: a.day, title: String(a.title || "Тренировка").slice(0, 80), exercises: a.exercises.slice(0, 12).map(ex).filter((e: any) => e.name) } : null;
-            case "delete": return ok(a.day) ? { type: "delete", day: a.day } : null;
-            case "move": return ok(a.from) && ok(a.to) && a.from !== a.to ? { type: "move", from: a.from, to: a.to } : null;
-            case "done": return ok(a.day) ? { type: "done", day: a.day, exercises: Array.isArray(a.exercises) ? a.exercises.map(String).slice(0, 12) : [] } : null;
-            case "edit": return ok(a.day) && a.name ? { type: "edit", day: a.day, ...ex(a), sets: num(a.sets) } : null;
-          }
-          return null;
-        }).filter(Boolean);
-        return json({ reply: String(out.reply), actions });
-      }
       if (!out.today && !out.answer) { last = `${model} empty`; continue; }
       return json({
         headline: String(out.headline || ""), today: String(out.today || ""), answer: String(out.answer || ""),
