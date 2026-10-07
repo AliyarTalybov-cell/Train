@@ -368,3 +368,7 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
   html.chat-open .topbar,html.chat-open main.wrap{margin-left:max(16px,calc((100vw - 452px - var(--col)) / 2));margin-right:452px}
 }
 @media (min-width:760px) and (max-width:1199px){html.chat-open .topbar,html.chat-open main.wrap{margin-left:0}}
+/* профиль */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.btn.danger-soft{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 35%,transparent);color:var(--bad);--spin:var(--bad)}
+@media (hover:hover){.btn.danger-soft:hover:not(:disabled){filter:none;background:color-mix(in srgb,var(--bad) 14%,var(--surface))}}

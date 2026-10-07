@@ -720,12 +720,17 @@ function profileView() {
     <section class="hero"><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p></section>
     <section class="block">
       <label class="field"><span>Имя</span><input class="inp" data-field="p-name" value="${esc(p.name)}" maxlength="40"></label>
+      <div class="grid2">
+        <label class="field"><span>Вес, кг</span><input class="inp" data-field="p-weight_kg" inputmode="decimal" value="${p.weight_kg ?? ""}" placeholder="например, 78"></label>
+        <label class="field"><span>Рост, см</span><input class="inp" data-field="p-height_cm" inputmode="decimal" value="${p.height_cm ?? ""}" placeholder="например, 180"></label>
+      </div>
+      <p class="hint">Тренер учитывает вес и рост, когда подбирает нагрузку.</p>
     </section>
     <section class="block">
       <div class="field"><span>Тема</span>
       <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div></div>
     </section>
-    <section class="block"><div><button class="btn quiet" data-act="logout">Выйти из аккаунта</button></div></section>`;
+    <section class="block"><div><button class="btn danger-soft" data-act="logout">Выйти из аккаунта</button></div></section>`;
 }
 
 /* ---------- events ---------- */
@@ -802,7 +807,9 @@ async function run(b, act) {
       Object.assign(S.profile, { program_id: null, program_start: null, program_days: null, program_moves: {} }); saveProfile(); rerender(); break;
     }
     case "theme": setTheme(b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b)); break;
-    case "logout": await sb.auth.signOut(); break;
+    case "logout":
+      if (await confirmSheet("Выйти из аккаунта?", "Тренировки сохранены — увидишь их снова, когда войдёшь с этой почтой.", "Выйти")) await sb.auth.signOut();
+      break;
   }
 }
 
@@ -812,6 +819,7 @@ document.addEventListener("input", ev => {
   if (f === "w-title") { w.title = el.value; refreshDayBits(); later("wt", () => q(sb.from("gym_workouts").update({ title: w.title.trim() }).eq("id", w.id))); }
   else if (f === "set-w" || f === "set-r") { const i = +el.closest(".set").dataset.i; e.sets[i][f === "set-w" ? "w" : "r"] = num(el.value); saveEx(e); }
   else if (f === "p-name") { S.profile.name = el.value; document.querySelector(".hero h1").textContent = el.value || "Профиль"; saveProfile(); }
+  else if (f === "p-weight_kg" || f === "p-height_cm") { const v = num(el.value), k = f.slice(2); S.profile[k] = v != null && v > 0 && v < 400 ? v : null; saveProfile(); }
 });
 
 document.addEventListener("submit", async ev => {

@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
   const question = String(body.question || "").slice(0, 600);
 
   const get = (path: string) => fetch(`${GYM}/rest/v1/${path}`, { headers: h }).then(r => r.ok ? r.json() : []);
+  const [prof] = await get("gym_profile?select=weight_kg,height_cm") as any[];
   const ex = await get(`gym_exercises?select=name,sets,done,plan,gym_workouts!inner(day,title)&gym_workouts.day=gte.${daysAgo(42)}`);
 
   // Короткая выжимка вместо сырых таблиц: по дням — тренировка, упражнения с подходами.
@@ -45,6 +46,7 @@ Deno.serve(async (req) => {
   }
   const ctx = [
     `Сегодня: ${body.today}, ${WDN[new Date(String(body.today) + "T12:00:00Z").getUTCDay()]}. Даты в таблице: ${dateTable(String(body.today))}`,
+    `Человек: вес ${prof?.weight_kg ?? "не указан"} кг, рост ${prof?.height_cm ?? "не указан"} см.`,
     `Программа: ${JSON.stringify(body.program || "не выбрана")}.`,
     `Тренировка на этот день: ${JSON.stringify(body.plan || "ничего не запланировано")}.`,
     "Тренировки за 6 недель:",
