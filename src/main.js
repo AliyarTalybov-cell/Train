@@ -147,11 +147,13 @@ const route = () => ROUTES.find(r => r.path === location.hash.replace(/^#\/?/, "
 function render() {
   if (!S.user) return loginView();
   const r = route();
+  queueMicrotask(() => { if (S.loaded) S.fabShown = true; }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
     <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
-    <nav class="tabbar" aria-label="Разделы">${links()}</nav>`;
+    <nav class="tabbar" aria-label="Разделы">${links()}</nav>
+    ${S.loaded ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
   const main = document.getElementById("main"); if (!main) return render();
@@ -347,13 +349,12 @@ function dayPanel() {
       <button class="btn" data-act="new-w">${I.plus}Записать тренировку</button>
       <button class="btn quiet" data-act="from-example">${S.workouts.some(w => w.day < d) ? "Повторить или взять из программ" : "Взять из программ"}</button>
     </div>
-    ${coachLine()}`;
+`;
   if (!s.w) {
     const items = s.plan.ex.map(e => ({ isPlan: true, name: e.name, plan: `${e.sets} × ${e.reps}` }));
     return `${head}
       <h2 class="day-title">${esc(s.plan.title)}</h2>
       <p class="day-sub">${progLine(d)}</p>
-      ${coachLine()}
       <ol class="ex-list">${items.map((e, i) => exRow(e, i, d)).join("")}</ol>
       <div class="row actions">
         <button class="btn" data-act="start">${d < today() ? "Отметить как сделанную" : "Начать тренировку"}</button>
@@ -363,7 +364,6 @@ function dayPanel() {
   return `${head}
     <input class="day-title title-inp" data-field="w-title" value="${esc(s.w.title)}" placeholder="Название тренировки" aria-label="Название тренировки" maxlength="80">
     <p class="day-sub"><span id="day-sub">${subLine(s)}</span>${sessionOn(d) ? ` · ${progLine(d)}` : ""}</p>
-    ${coachLine()}
     <ol class="ex-list" id="ex-list">${s.ex.map((e, i) => exRow(e, i, d)).join("")}</ol>
     ${addForm()}
     ${s.ex.length && s.done < s.ex.length ? `<div class="row actions"><button class="btn" data-act="finish">${I.check}Отметить всё</button></div>` : ""}
@@ -540,10 +540,6 @@ function examplePicker() {
 const FN_COACH = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-coach";
 const coachKey = d => `gym-coach2-${S.user?.id}-${d}`;
 const coachCached = d => { try { return JSON.parse(localStorage.getItem(coachKey(d)) || "null"); } catch { return null; } };
-function coachLine() {
-  const c = coachCached(S.day);
-  return `<button class="coach" data-act="coach"><span class="co-dot" aria-hidden="true"></span><span class="co-text">${c?.headline ? esc(c.headline) : "Совет тренера"}</span><span class="co-go" aria-hidden="true">${I.right}</span></button>`;
-}
 function planForCoach(d) {
   const w = workoutOn(d), p = sessionOn(d);
   if (w) return { title: w.title, ex: exercisesOf(w.id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) };
@@ -650,7 +646,6 @@ function coachChat() {
   if (!cached) askCoach("").then(c => {
     try { localStorage.setItem(coachKey(day), JSON.stringify(c)); } catch {}
     first.innerHTML = adviceHTML(c);
-    const line = document.querySelector(".coach .co-text"); if (line && c.headline && S.day === day) line.textContent = c.headline;
   }).catch(e => { first.innerHTML = `<p class="muted">${failText(e)}</p>`; });
   for (const m of msgs) bubble(m.role, `<p>${esc(m.text)}</p>`);
 
