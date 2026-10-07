@@ -338,3 +338,8 @@ html.chat-open,html.chat-open body{overflow:hidden}
 .rest button{min-height:40px;padding:4px 12px;border:0;border-radius:999px;background:none;font-size:14px;font-weight:600;color:var(--accent)}
 .rest button:last-child{color:var(--muted);font-weight:500}
 @media (min-width:760px){.rest{bottom:24px}}
+.co-done{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;padding-top:8px;border-top:1px solid var(--line);font-size:14px;font-weight:600;color:var(--accent)}
+.co-done>svg{width:16px;height:16px;flex:none}
+.co-done .linkbtn{min-height:32px;padding:0;margin-left:auto}
+.co-done .co-wait{font-weight:500}
+.co-done>span:not(.muted){flex:1;min-width:0}

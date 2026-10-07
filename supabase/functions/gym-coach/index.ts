@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   const me = await fetch(`${GYM}/auth/v1/user`, { headers: h });
   if (!me.ok) return json({ error: "auth" }, 401);
 
-  let body: { question?: string; today?: string; plan?: unknown; program?: unknown; history?: { role: string; content: string }[] };
+  let body: { question?: string; today?: string; plan?: unknown; program?: unknown; calendar?: unknown; known?: string[]; history?: { role: string; content: string }[] };
   try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const question = String(body.question || "").slice(0, 600);
 
@@ -49,6 +49,10 @@ Deno.serve(async (req) => {
     `Тренировка на этот день: ${JSON.stringify(body.plan || "ничего не запланировано")}.`,
     "Тренировки за 6 недель:",
     ...(Object.keys(byDay).length ? Object.keys(byDay).sort().map(d => `${d} ${byDay[d].title}: ${byDay[d].items.join("; ")}`) : ["пока ничего не записано"]),
+    ...(question ? [
+      `Календарь на 4 недели вперёд (st: done — сделано, planned — запланировано, rest — пусто): ${JSON.stringify(body.calendar || []).slice(0, 6000)}`,
+      `Упражнения, для которых есть фото (если подходит, называй именно так): ${(body.known || []).slice(0, 120).join("; ")}`,
+    ] : []),
   ].join("\n");
   const history = (body.history || []).slice(-6).map(m => `${m.role === "assistant" ? "Тренер" : "Пользователь"}: ${String(m.content).slice(0, 500)}`).join("\n");
 
@@ -64,6 +68,21 @@ Deno.serve(async (req) => {
  "tips": ["0–2 коротких совета по технике или распределению нагрузки"],
  "answer": "ответ на вопрос пользователя, если он был, 1–5 предложений, иначе пустая строка"}
 changes — только если правда стоит поменять вес или подходы; можно пустой список. Если есть вопрос, главное — answer.`;
+  // Разговор: тренер отвечает и может сам расписать тренировки в календаре.
+  const systemChat = `Ты — тренер по силовым тренировкам в дневнике двух друзей. Пиши по-русски, коротко, на «ты», живым языком.
+Ты можешь сам ставить тренировки в календарь пользователя. Если он просит план, программу, расписать неделю, поставить или убрать тренировку — сразу делай это через actions, не переспрашивай по мелочам: выбери разумные значения сам.
+Составляй тренировки сам, не обязательно из готовых программ. Правила: каждая мышца 2 раза в неделю, одной группе 48–72 часа отдыха, базовые упражнения в начале, 5–7 упражнений в тренировке, у приоритетных мышц больше подходов и упражнений. Подходы и повторы конкретные (например 4 и "8–10"). Вес бери из истории (последний рабочий); если не знаешь — null.
+Если просят план без срока — ставь на 4 недели. Начало плана — ближайший понедельник после сегодняшнего дня, если не сказали иначе (можно и с сегодня, если просят «с сегодня»).
+Даты — только формат ГГГГ-ММ-ДД и только из таблицы дат. Дни недели в плане: 0 — понедельник … 6 — воскресенье.
+Если просьба — просто вопрос, actions пустой.
+Верни только JSON:
+{"reply": "1–4 предложения: что сделал или ответ; даты словами («с понедельника, 12 октября»), без ГГГГ-ММ-ДД и без слов JSON/null",
+ "actions": [
+  {"type": "plan", "start": "ГГГГ-ММ-ДД", "weeks": 4, "days": [{"wd": 0, "title": "Верх: спина и руки", "exercises": [{"name": "Подтягивания", "sets": 4, "reps": "8–10", "weight": null}]}]},
+  {"type": "create", "day": "ГГГГ-ММ-ДД", "title": "...", "exercises": [ ... как выше ]},
+  {"type": "delete", "day": "ГГГГ-ММ-ДД"}
+ ]}
+plan — повторяющаяся неделя на weeks недель (она заменяет программу в календаре). create — одна тренировка на день (заменяет то, что там стоит). delete — сделать день пустым.`;
   const key = Deno.env.get("OPENROUTER_API_KEY");
   if (!key) return json({ error: "no_key" }, 503);
   let last = "";
@@ -73,15 +92,34 @@ changes — только если правда стоит поменять ве�
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://training-diary-azure.vercel.app", "X-Title": "Gym diary" },
         body: JSON.stringify({
-          model, max_tokens: 1200, temperature: 0.4, response_format: { type: "json_object" }, reasoning: { enabled: false },
-          messages: [{ role: "system", content: system }, { role: "user", content: ctx + (history ? `\n\nРазговор до этого:\n${history}` : "") + (question ? `\n\nВопрос пользователя: ${question}` : "") }],
+          model, max_tokens: question ? 4000 : 1200, temperature: 0.4, response_format: { type: "json_object" }, reasoning: { enabled: false },
+          messages: [{ role: "system", content: question ? systemChat : system }, { role: "user", content: ctx + (history ? `\n\nРазговор до этого:\n${history}` : "") + (question ? `\n\nВопрос пользователя: ${question}` : "") }],
         }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(question ? 60000 : 30000),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { last = `${model} ${r.status}`; continue; }
       const text = String(data.choices?.[0]?.message?.content || "").replace(/^```(json)?|```$/g, "").trim();
       const out = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+      if (question) {
+        if (!out.reply) { last = `${model} empty`; continue; }
+        const D = /^\d{4}-\d{2}-\d{2}$/, ok = (d: unknown) => typeof d === "string" && D.test(d) && Math.abs(Date.parse(d) - Date.now()) < 120 * 864e5;
+        const num = (v: unknown) => v === null || v === undefined || v === "" || !Number.isFinite(+(v as number)) ? null : +(v as number);
+        const exs = (a: unknown) => (Array.isArray(a) ? a : []).slice(0, 10).map((e: any) => ({ name: String(e?.name || "").slice(0, 80), sets: Math.max(1, Math.min(8, Math.round(num(e?.sets) ?? 3))), reps: e?.reps ? String(e.reps).slice(0, 12) : null, weight: num(e?.weight) })).filter(e => e.name);
+        const actions = (Array.isArray(out.actions) ? out.actions : []).slice(0, 30).map((a: any) => {
+          switch (a?.type) {
+            case "plan": {
+              const days = (Array.isArray(a.days) ? a.days : []).slice(0, 7).map((d: any) => ({ wd: Math.round(num(d?.wd) ?? -1), title: String(d?.title || "Тренировка").slice(0, 80), exercises: exs(d?.exercises) }))
+                .filter((d: any) => d.wd >= 0 && d.wd <= 6 && d.exercises.length);
+              return ok(a.start) && days.length ? { type: "plan", start: a.start, weeks: Math.max(1, Math.min(12, Math.round(num(a.weeks) ?? 4))), days } : null;
+            }
+            case "create": { const e = exs(a.exercises); return ok(a.day) && e.length ? { type: "create", day: a.day, title: String(a.title || "Тренировка").slice(0, 80), exercises: e } : null; }
+            case "delete": return ok(a.day) ? { type: "delete", day: a.day } : null;
+          }
+          return null;
+        }).filter(Boolean);
+        return json({ reply: String(out.reply), actions });
+      }
       if (!out.today && !out.answer) { last = `${model} empty`; continue; }
       return json({
         headline: String(out.headline || ""), today: String(out.today || ""), answer: String(out.answer || ""),

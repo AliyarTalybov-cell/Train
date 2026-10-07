@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import "./fonts.css";
 import { PROGRAMS, programById, sessionFor as programSession } from "./programs.js";
-import { media } from "./exercise-media.js";
+import { media, NAMES as KNOWN_NAMES } from "./exercise-media.js";
 import "./style.css";
 
 // Та же база, что у рассрочки (проект RassP); дневник живёт в своих таблицах gym_*, каждая строка видна только владельцу.
@@ -367,7 +367,7 @@ function dayPanel() {
     <ol class="ex-list" id="ex-list">${s.ex.map((e, i) => exRow(e, i, d)).join("")}</ol>
     ${addForm()}
     ${s.ex.length && s.done < s.ex.length ? `<div class="row actions"><button class="btn" data-act="finish">${I.check}Отметить всё</button></div>` : ""}
-    <div class="row links">${S.profile?.program_id ? `<button class="linkbtn muted-link" data-act="move">Перенести на другой день</button>` : ""}<button class="linkbtn muted-link" data-act="del-w">Удалить тренировку</button></div>`;
+    <div class="row links"><button class="linkbtn muted-link" data-act="move">Перенести на другой день</button><button class="linkbtn muted-link" data-act="del-w">Удалить тренировку</button></div>`;
 }
 // «Джей Катлер · неделя 3 из 12 · тяжёлая неделя, отдых 3–4 мин»
 function progLine(d) {
@@ -554,12 +554,65 @@ async function askCoach(question, history = []) {
   const prog = programById(S.profile?.program_id);
   const r = await fetch(FN_COACH, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
-    body: JSON.stringify({ question, history, today: S.day, plan: planForCoach(S.day), program: prog ? { title: prog.title, since: S.profile.program_start } : null }),
+    body: JSON.stringify({
+      question, history, today: question ? today() : S.day,
+      plan: question ? (planForCoach(S.day) ? { day: S.day, ...planForCoach(S.day) } : null) : planForCoach(S.day),
+      program: prog ? { title: prog.title, since: S.profile.program_start } : null,
+      ...(question ? { calendar: calendarForCoach(), known: KNOWN_NAMES } : {}),
+    }),
   });
   const out = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(out.error || "failed");
   return out;
 }
+// Что стоит в календаре на 4 недели вперёд — чтобы тренер видел, что уже запланировано.
+function calendarForCoach() {
+  const out = [];
+  for (let i = 0; i < 28; i++) { const d = addDays(today(), i), s = dayStatus(d); if (s.st !== "rest") out.push({ day: d, st: s.st, title: s.title }); }
+  return out;
+}
+
+// Действия тренера сразу меняют календарь; всё запоминается, чтобы одной кнопкой вернуть как было.
+const started = w => exercisesOf(w.id).some(e => e.done || e.sets?.some(x => x.done));
+const coachItems = list => list.map(e => ({ name: e.name, plan: `${e.sets} × ${e.reps || "—"}`, sets: Array.from({ length: e.sets }, () => ({ w: e.weight ?? lastWeight(e.name), r: parseInt(e.reps) || null })) }));
+const lastWeight = name => { const l = lastFor(name, "9999-12-31"); const ws = (l?.sets || []).map(x => +x.w).filter(Boolean); return ws.length ? Math.max(...ws) : null; };
+async function applyActions(actions) {
+  const undo = { created: [], removed: [], profile: null }, p = S.profile;
+  const keepProfile = () => { undo.profile ||= { program_id: p.program_id, program_start: p.program_start, program_days: p.program_days, program_moves: { ...(p.program_moves || {}) } }; };
+  const clearDay = async d => { // убрать то, что ещё не начато; начатое и сделанное не трогаем
+    const w = workoutOn(d);
+    if (w) {
+      if (started(w)) return false;
+      undo.removed.push({ day: w.day, title: w.title, items: exercisesOf(w.id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) });
+      await q(sb.from("gym_workouts").delete().eq("id", w.id));
+      S.workouts = S.workouts.filter(x => x !== w); S.exercises = S.exercises.filter(x => x.workout_id !== w.id);
+    }
+    if (sessionOn(d)) { keepProfile(); setRest(d); }
+    return true;
+  };
+  const put = async (d, title, list) => { if (d < today() || !await clearDay(d)) return; undo.created.push((await createWorkout(d, title, coachItems(list))).id); };
+  for (const a of actions) {
+    if (a.type === "plan") {
+      if (p.program_id) { keepProfile(); Object.assign(p, { program_id: null, program_start: null, program_days: null, program_moves: {} }); saveProfile(); }
+      const m0 = monday(a.start);
+      for (let k = 0; k < a.weeks; k++) for (const day of a.days) { const d = addDays(m0, k * 7 + day.wd); if (d >= a.start) await put(d, day.title, day.exercises); }
+    } else if (a.type === "create") await put(a.day, a.title, a.exercises);
+    else if (a.type === "delete" && a.day >= today()) await clearDay(a.day);
+  }
+  return undo;
+}
+async function undoActions(undo) {
+  if (undo.created.length) await q(sb.from("gym_workouts").delete().in("id", undo.created));
+  S.workouts = S.workouts.filter(w => !undo.created.includes(w.id)); S.exercises = S.exercises.filter(e => !undo.created.includes(e.workout_id));
+  for (const r of undo.removed) await createWorkout(r.day, r.title, r.items);
+  if (undo.profile) { Object.assign(S.profile, undo.profile); saveProfile(); }
+}
+const actionsSummary = (undo, actions) => {
+  const days = S.workouts.filter(w => undo.created.includes(w.id)).map(w => w.day).sort();
+  if (!days.length) return actions.some(a => a.type === "delete") ? "Календарь обновлён" : "";
+  return `В календаре: ${days.length} ${plural(days.length, "тренировка", "тренировки", "тренировок")}${days.length > 1 ? `, с ${shortDay(days[0])} по ${shortDay(days.at(-1))}` : `, ${shortDay(days[0])}`}`;
+};
+
 const adviceHTML = c => `${c.headline ? `<p class="co-head">${esc(c.headline)}</p>` : ""}${c.today ? `<p>${esc(c.today)}</p>` : ""}
   ${c.changes?.length ? `<ul class="co-list">${c.changes.map(x => `<li><b>${esc(x.name)}</b> — ${[x.weight != null ? `${fmt(x.weight, 1)} кг` : "", x.sets ? `${x.sets} × ${x.reps || "—"}` : x.reps ? `${esc(x.reps)} повт.` : ""].filter(Boolean).join(", ")}${x.why ? `. ${esc(x.why)}` : ""}</li>`).join("")}</ul>` : ""}
   ${c.tips?.length ? `<ul class="co-list">${c.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}${c.answer ? `<p>${esc(c.answer)}</p>` : ""}`;
@@ -567,13 +620,13 @@ const adviceHTML = c => `${c.headline ? `<p class="co-head">${esc(c.headline)}</
 function coachChat() {
   const day = S.day, cached = coachCached(day), chatKey = `gym-chat2-${S.user?.id}-${day}`;
   let msgs = []; try { msgs = JSON.parse(localStorage.getItem(chatKey) || "[]").slice(-12); } catch {}
-  const chips = ["Какой вес поставить?", "Что облегчить, если устал?", "Что я давно не тренировал?"];
+  const chips = ["Составь мне план на 4 недели", "Какой вес поставить?", "Что я давно не тренировал?"];
   const el = document.createElement("div");
   el.className = "chat"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Тренер");
   el.innerHTML = `
     <header class="chat-head">
       <button class="icon-btn bare" data-x aria-label="Закрыть">${I.left}</button>
-      <div><b>Тренер</b><span>${longDay(day)} · видит твои тренировки</span></div>
+      <div><b>Тренер</b><span>видит твои тренировки и может расписать план</span></div>
     </header>
     <div class="chat-feed" id="co-feed"></div>
     <footer class="chat-foot">
@@ -609,9 +662,17 @@ function coachChat() {
     const wait = bubble("assistant", waitHTML("Думаю…"));
     try {
       const out = await askCoach(text, history);
-      const reply = out.answer || out.today || "";
-      wait.innerHTML = out.answer ? `<p>${esc(out.answer)}</p>` : adviceHTML(out);
-      msgs.push({ role: "assistant", text: reply }); save();
+      wait.innerHTML = `<p>${esc(out.reply)}</p>`;
+      msgs.push({ role: "assistant", text: out.reply }); save();
+      if (out.actions?.length) {
+        wait.insertAdjacentHTML("beforeend", `<div class="co-done">${waitHTML("Ставлю в календарь…")}</div>`);
+        const line = wait.querySelector(".co-done");
+        try {
+          const undo = await applyActions(out.actions); rerender();
+          line.innerHTML = `${I.check}<span>${esc(actionsSummary(undo, out.actions) || "Готово")}</span><button class="linkbtn muted-link" type="button">Отменить</button>`;
+          line.querySelector("button").onclick = async ev => { ev.target.disabled = true; await undoActions(undo).catch(() => {}); rerender(); line.innerHTML = `<span class="muted">Отменено — календарь как был</span>`; };
+        } catch { line.innerHTML = `<span class="muted">Не всё получилось поставить — попробуй ещё раз</span>`; rerender(); }
+      }
       requestAnimationFrame(() => feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" }));
     } catch (e) { wait.innerHTML = `<p class="muted">${failText(e)}</p>`; msgs.pop(); save(); }
   };
