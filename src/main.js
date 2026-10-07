@@ -613,7 +613,11 @@ const adviceHTML = c => `${c.headline ? `<p class="co-head">${esc(c.headline)}</
   ${c.changes?.length ? `<ul class="co-list">${c.changes.map(x => `<li><b>${esc(x.name)}</b> — ${[x.weight != null ? `${fmt(x.weight, 1)} кг` : "", x.sets ? `${x.sets} × ${x.reps || "—"}` : x.reps ? `${esc(x.reps)} повт.` : ""].filter(Boolean).join(", ")}${x.why ? `. ${esc(x.why)}` : ""}</li>`).join("")}</ul>` : ""}
   ${c.tips?.length ? `<ul class="co-list">${c.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}${c.answer ? `<p>${esc(c.answer)}</p>` : ""}`;
 
+// Чат живёт, пока открыта вкладка: закрытие только сворачивает его, переписка и «Отменить» остаются.
+let chatEl = null;
+const openChat = () => { document.body.append(chatEl); document.documentElement.classList.add("chat-open"); requestAnimationFrame(() => chatEl.classList.add("open")); };
 function coachChat() {
+  if (chatEl) return openChat();
   const day = S.day, cached = coachCached(day), chatKey = `gym-chat2-${S.user?.id}-${day}`;
   let msgs = []; try { msgs = JSON.parse(localStorage.getItem(chatKey) || "[]").slice(-12); } catch {}
   const chips = ["Составь мне план на 4 недели", "Какой вес поставить?", "Что я давно не тренировал?"];
@@ -629,11 +633,9 @@ function coachChat() {
       <div class="co-chips">${chips.map(c => `<button type="button" data-chip>${c}</button>`).join("")}</div>
       <form id="cq" class="co-input"><textarea class="inp" name="q" rows="1" placeholder="Спроси тренера…" maxlength="600"></textarea><button class="btn send" type="submit" aria-label="Отправить">${I.up}</button></form>
     </footer>`;
-  document.body.append(el); document.documentElement.classList.add("chat-open");
-  requestAnimationFrame(() => el.classList.add("open"));
-  const close = () => { el.classList.remove("open"); document.documentElement.classList.remove("chat-open"); document.removeEventListener("keydown", onKey); setTimeout(() => el.remove(), 320); };
-  const onKey = e => { if (e.key === "Escape") close(); };
-  document.addEventListener("keydown", onKey);
+  chatEl = el; openChat();
+  const close = () => { el.classList.remove("open"); document.documentElement.classList.remove("chat-open"); };
+  el.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   el.querySelector("[data-x]").onclick = close;
   const feed = el.querySelector("#co-feed"), f = el.querySelector("#cq");
   const save = () => { try { localStorage.setItem(chatKey, JSON.stringify(msgs.slice(-12))); } catch {} };
@@ -838,6 +840,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
   S.started = true;
   S.user = u; S.loaded = false;
+  chatEl?.remove(); chatEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
   if (u) loadAll().then(render).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
 });
