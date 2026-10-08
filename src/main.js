@@ -43,6 +43,11 @@ const I = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 6v12a1 1 0 0 1-1.5.86L9.5 13.7a2 2 0 0 1 0-3.4l9-5.16A1 1 0 0 1 20 6z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 6v12a1 1 0 0 0 1.5.86l9-5.16a2 2 0 0 0 0-3.4l-9-5.16A1 1 0 0 0 4 6z"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
 
@@ -145,12 +150,13 @@ const setsText = sets => sets.filter(s => s.w != null).map(s => `${s.w != null ?
 const ROUTES = [
   { path: "", label: "Календарь", icon: I.cal, view: calendarView },
   { path: "programs", label: "Программы", icon: I.book, view: programsView },
+  { path: "music", label: "Музыка", icon: I.note, view: musicView },
   { path: "me", label: "Профиль", icon: I.user, view: profileView },
 ];
 const route = () => {
   const h = location.hash.replace(/^#\/?/, "");
-  if (h.startsWith("u/")) return { path: h, view: friendView, parent: ROUTES[2] }; // страница друга живёт внутри «Профиля»
-  if (h === "help") return { path: h, view: helpView, parent: ROUTES[2] };
+  if (h.startsWith("u/")) return { path: h, view: friendView, parent: ROUTES[3] }; // страница друга живёт внутри «Профиля»
+  if (h === "help") return { path: h, view: helpView, parent: ROUTES[3] };
   return ROUTES.find(r => r.path === h) || ROUTES[0];
 };
 
@@ -160,7 +166,7 @@ function render() {
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
-    <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><div class="top-r"><nav class="nav" aria-label="Разделы">${links()}</nav>${S.loaded ? `<button class="music-btn ${musicEl?.classList.contains("open") ? "on" : ""}" data-act="music" aria-label="Музыка">${I.note}<span>Музыка</span></button>` : ""}</div></header>
+    <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
@@ -919,54 +925,131 @@ function friendView() {
 }
 
 /* ---------- music ---------- */
-// Плеер Яндекс Музыки. Панель живёт вне страниц, поэтому музыка не прерывается при переходах и отметках.
-function musicSrc(raw) {
-  const t = String(raw || "").trim(), src = t.match(/src=["']([^"']+)["']/)?.[1] || t;
-  let u; try { u = new URL(src); } catch { return null; }
-  if (!/^music\.yandex\.(ru|com|by|kz|uz)$/.test(u.hostname)) return null;
-  const path = u.pathname.replace(/\/$/, "");
-  let m;
-  if (/^\/iframe\//.test(path)) return { src: `https://music.yandex.ru${path}`, tall: !/\/track\//.test(path) };
-  if ((m = path.match(/^\/album\/(\d+)\/track\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/album/${m[1]}/track/${m[2]}`, tall: false };
-  if ((m = path.match(/^\/album\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/album/${m[1]}`, tall: true };
-  if ((m = path.match(/^\/users\/([^/]+)\/playlists\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/playlist/${m[1]}/${m[2]}`, tall: true };
-  return { link: `https://music.yandex.ru${path}` }; // другой вид ссылки — хотя бы открыть в Яндекс Музыке
+// Треки лежат в закрытом хранилище gym-music/tracks (слушать могут только вошедшие), список — в таблице gym_tracks.
+// Загружать новые может только владелец сайта.
+const OWNER = "63719d65-7465-436c-b3e0-0fd943771228";
+// Плеер живёт вне страниц: музыка не прерывается при переходах и отметках подходов.
+const M = { tracks: null, i: -1, urls: {}, shuffle: false, audio: new Audio(), bar: null, loading: null };
+M.audio.preload = "metadata";
+const mmss = sec => sec == null || !isFinite(sec) ? "" : `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+function loadTracks() {
+  M.loading ||= (async () => {
+    const cur = M.tracks?.[M.i]?.file;
+    M.tracks = await q(sb.from("gym_tracks").select("*").order("created_at").order("title"), { silent: true });
+    const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(M.tracks.map(t => "tracks/" + t.file), 6 * 3600);
+    for (const u of urls || []) if (u.signedUrl) M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
+    M.tracks = M.tracks.filter(t => M.urls[t.file]);
+    if (cur) M.i = M.tracks.findIndex(t => t.file === cur);
+  })().catch(e => { M.loading = null; throw e; });
+  return M.loading;
 }
-let musicEl = null;
-function musicHTML(editing) {
-  const m = musicSrc(S.profile.music);
-  const form = `<form class="music-form" data-form="music">
-      <label class="field"><span>Ссылка на трек, альбом или плейлист в Яндекс Музыке — или код плеера («Поделиться → HTML-код»)</span>
-      <input class="inp" name="url" value="${esc(S.profile.music)}" placeholder="https://music.yandex.ru/album/…" autocomplete="off"></label>
-      <p class="err" role="alert"></p>
-      <div class="row"><button class="btn sm" type="submit">Сохранить</button>${m ? `<button class="btn quiet sm" type="button" data-m="cancel">Отмена</button>` : ""}</div></form>`;
-  return `<div class="music-head"><b>Музыка</b><span class="row">${m && !editing ? `<button class="linkbtn muted-link" data-m="edit">Сменить</button>` : ""}<button class="icon-btn bare" data-m="close" aria-label="Свернуть">${I.x}</button></span></div>
-    ${editing || !m ? form : m.src ? `<iframe src="${esc(m.src)}" class="${m.tall ? "tall" : ""}" allow="clipboard-write; autoplay" title="Плеер Яндекс Музыки"></iframe>`
-      : `<p class="hint">Эту ссылку не получается встроить. <a href="${esc(m.link)}" target="_blank" rel="noopener">Открыть в Яндекс Музыке</a></p>`}`;
-}
-function drawMusic(editing = false) {
-  musicEl.innerHTML = musicHTML(editing);
-  musicEl.querySelector('[name="url"]')?.focus();
-}
-function toggleMusic() {
-  if (!musicEl) {
-    musicEl = document.createElement("section"); musicEl.className = "music"; musicEl.setAttribute("aria-label", "Музыка");
-    document.body.append(musicEl); drawMusic();
-    musicEl.addEventListener("click", ev => {
-      const b = ev.target.closest("[data-m]"); if (!b) return;
-      if (b.dataset.m === "close") toggleMusic(); else if (b.dataset.m === "edit") drawMusic(true); else drawMusic();
-    });
-    musicEl.addEventListener("submit", ev => {
-      ev.preventDefault(); ev.stopPropagation();
-      const v = ev.target.url.value.trim(), m = musicSrc(v);
-      if (v && !m) { ev.target.querySelector(".err").textContent = "Нужна ссылка с music.yandex.ru"; return; }
-      S.profile.music = m?.src || m?.link || ""; saveProfile(); drawMusic();
-    });
+function musicView() {
+  if (!M.tracks) {
+    loadTracks().then(() => { if (route().path === "music") rerender(); })
+      .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
+    return skeleton();
   }
-  // скрытая панель остаётся на странице — музыка продолжает играть
-  const open = musicEl.classList.toggle("open");
-  document.querySelector(".music-btn")?.classList.toggle("on", open);
+  const total = M.tracks.reduce((a, t) => a + (t.sec || 0), 0), playing = !M.audio.paused;
+  return `
+    <section class="hero"><h1>Музыка</h1><p class="lead">${M.tracks.length} ${plural(M.tracks.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин. Музыка играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p>
+      <div class="row"><button class="btn" data-act="mu-all">${I.play}Слушать всё</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button></div></section>
+    ${S.user.id === OWNER ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки с компьютера</b><span class="hint" id="mu-st">mp3, можно несколько сразу или перетащить файлы на страницу. Название берётся из имени файла «Исполнитель - Трек».</span></span></label>` : ""}
+    <ol class="tracks">${M.tracks.map((t, i) => `<li><button class="track ${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-act="mu-play" data-i="${i}">
+      <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : i + 1}</span>
+      <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
+      <span class="tr-d mono">${mmss(t.sec)}</span></button></li>`).join("")}</ol>`;
 }
+// Загрузка: файл → хранилище, строка → gym_tracks. Длительность читается в браузере.
+const slugify = s => s.normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "track";
+const durationOf = f => new Promise(res => { const a = new Audio(), u = URL.createObjectURL(f); a.preload = "metadata"; a.src = u;
+  a.onloadedmetadata = () => { res(isFinite(a.duration) ? Math.round(a.duration) : null); URL.revokeObjectURL(u); }; a.onerror = () => { res(null); URL.revokeObjectURL(u); }; });
+async function uploadTracks(files) {
+  files = [...files].filter(f => /\.mp3$/i.test(f.name) || f.type === "audio/mpeg");
+  if (!files.length) return toast("Нужны файлы mp3");
+  const st = () => document.getElementById("mu-st"), have = new Set((M.tracks || []).map(t => t.file));
+  let ok = 0, fail = 0;
+  for (const [k, f] of files.entries()) {
+    if (st()) st().textContent = `Загружаю ${k + 1} из ${files.length}: ${f.name}`;
+    const base = f.name.replace(/\.mp3$/i, ""), [artist, title] = base.includes(" - ") ? [base.slice(0, base.indexOf(" - ")), base.slice(base.indexOf(" - ") + 3)] : ["", base];
+    let file = slugify(base) + ".mp3"; if (have.has(file)) file = slugify(base) + "-" + Date.now().toString(36) + ".mp3";
+    try {
+      const sec = await durationOf(f);
+      const { error } = await sb.storage.from("gym-music").upload("tracks/" + file, f, { contentType: "audio/mpeg" });
+      if (error) throw error;
+      await q(sb.from("gym_tracks").insert({ file, artist: artist.trim(), title: title.trim() || base, sec }), { silent: true });
+      have.add(file); ok++;
+    } catch (e) { console.error(e); fail++; }
+  }
+  M.loading = null; await loadTracks().catch(() => {});
+  if (route().path === "music") rerender();
+  toast(fail ? `Загружено ${ok}, не получилось ${fail}` : `Загружено: ${ok}`);
+}
+document.addEventListener("change", ev => { if (ev.target.dataset?.field === "mu-files") { uploadTracks(ev.target.files); ev.target.value = ""; } });
+document.addEventListener("dragover", ev => { if (route().path === "music" && S.user?.id === OWNER && ev.dataTransfer?.types.includes("Files")) { ev.preventDefault(); document.documentElement.classList.add("mu-drop"); } });
+document.addEventListener("dragleave", ev => { if (!ev.relatedTarget) document.documentElement.classList.remove("mu-drop"); });
+document.addEventListener("drop", ev => { if (route().path !== "music" || S.user?.id !== OWNER || !ev.dataTransfer?.files.length) return; ev.preventDefault(); document.documentElement.classList.remove("mu-drop"); uploadTracks(ev.dataTransfer.files); });
+
+function playAt(i) {
+  const t = M.tracks[i]; if (!t) return;
+  M.i = i; M.audio.src = M.urls[t.file]; M.audio.play().catch(() => {});
+  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: "Дневник" });
+  drawBar(); refreshTracks();
+}
+const nextIndex = dir => {
+  const n = M.tracks.length;
+  if (M.shuffle && n > 1) { let k; do k = Math.floor(Math.random() * n); while (k === M.i); return k; }
+  return (M.i + dir + n) % n;
+};
+function refreshTracks() {
+  if (route().path !== "music") return;
+  const playing = !M.audio.paused;
+  document.querySelectorAll(".track").forEach(b => {
+    const i = +b.dataset.i, cur = i === M.i;
+    b.classList.toggle("cur", cur); b.classList.toggle("playing", cur && playing);
+    b.querySelector(".tr-n").innerHTML = cur ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : i + 1;
+  });
+}
+function drawBar() {
+  const t = M.tracks?.[M.i]; if (!t) return;
+  if (!M.bar) {
+    M.bar = document.createElement("div"); M.bar.className = "player"; M.bar.setAttribute("aria-label", "Плеер");
+    M.bar.innerHTML = `<div class="pl-prog"><i></i><input type="range" min="0" max="1000" value="0" aria-label="Перемотка"></div>
+      <div class="pl-row"><button class="pl-info" data-p="go"><b></b><span></span></button>
+      <button class="icon-btn bare" data-p="prev" aria-label="Предыдущий">${I.prev}</button>
+      <button class="pl-play" data-p="toggle" aria-label="Пауза"></button>
+      <button class="icon-btn bare" data-p="next" aria-label="Следующий">${I.next}</button></div>`;
+    M.bar.addEventListener("click", ev => {
+      const b = ev.target.closest("[data-p]"); if (!b) return;
+      ({ go: () => { location.hash = "#/music"; }, prev: () => playAt(M.audio.currentTime > 5 ? M.i : nextIndex(-1)), next: () => playAt(nextIndex(1)),
+        toggle: () => { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); } })[b.dataset.p]();
+    });
+    M.bar.querySelector("input").addEventListener("input", e => { if (M.audio.duration) M.audio.currentTime = e.target.value / 1000 * M.audio.duration; });
+    document.body.append(M.bar); document.documentElement.classList.add("has-player");
+    requestAnimationFrame(() => M.bar.classList.add("on"));
+  }
+  M.bar.querySelector(".pl-info b").textContent = t.title;
+  M.bar.querySelector(".pl-info span").textContent = t.artist;
+  const paused = M.audio.paused, play = M.bar.querySelector(".pl-play");
+  play.innerHTML = paused ? I.play : I.pause; play.setAttribute("aria-label", paused ? "Играть" : "Пауза");
+}
+M.audio.addEventListener("ended", () => playAt(nextIndex(1)));
+M.audio.addEventListener("play", () => { drawBar(); refreshTracks(); });
+M.audio.addEventListener("pause", () => { drawBar(); refreshTracks(); });
+M.audio.addEventListener("timeupdate", () => {
+  if (!M.bar || !M.audio.duration) return;
+  const k = M.audio.currentTime / M.audio.duration;
+  M.bar.querySelector(".pl-prog i").style.width = k * 100 + "%";
+  if (document.activeElement !== M.bar.querySelector("input")) M.bar.querySelector("input").value = Math.round(k * 1000);
+});
+M.audio.addEventListener("error", () => { // ссылка истекла — получить новые и продолжить
+  if (!M.tracks || M.retry) return; M.retry = true; M.loading = null;
+  loadTracks().then(() => { const at = M.audio.currentTime; playAt(M.i); M.audio.currentTime = at; }).catch(() => toast("Трек не загрузился — проверь интернет")).finally(() => setTimeout(() => { M.retry = false; }, 5000));
+});
+if ("mediaSession" in navigator) {
+  navigator.mediaSession.setActionHandler("nexttrack", () => playAt(nextIndex(1)));
+  navigator.mediaSession.setActionHandler("previoustrack", () => playAt(nextIndex(-1)));
+}
+function stopMusic() { M.audio.pause(); M.audio.removeAttribute("src"); M.bar?.remove(); M.bar = null; M.i = -1; M.tracks = null; M.urls = {}; M.loading = null; document.documentElement.classList.remove("has-player"); }
 
 /* ---------- help ---------- */
 // Подсказка новичку: пока нет ни одной тренировки и её не закрыли.
@@ -1007,8 +1090,8 @@ const HELP = [
     "Друзья видят твоё имя, программу и тренировки, но не почту.",
   ]],
   ["Музыка", [
-    "Кнопка «Музыка» вверху открывает плеер Яндекс Музыки. Вставь ссылку на трек, альбом или плейлист — или код плеера из «Поделиться → HTML-код».",
-    "Свернул панель — музыка продолжает играть, пока открыт сайт. «Сменить» — поставить другую ссылку.",
+    "Вкладка «Музыка» — наши треки. Нажми на трек или «Слушать всё»; «Вперемешку» перемешивает порядок.",
+    "Внизу появится плеер: музыка играет, пока открыт сайт, — можно отмечать подходы и переходить между разделами.",
   ]],
   ["Профиль", [
     "Имя видят друзья. Вес и рост нужны тренеру, чтобы подбирать нагрузку. Всё сохраняется само.",
@@ -1171,7 +1254,9 @@ async function run(b, act) {
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
-    case "music": toggleMusic(); break;
+    case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else playAt(i); break; }
+    case "mu-all": playAt(M.shuffle ? nextIndex(1) : 0); break;
+    case "mu-shuffle": M.shuffle = !M.shuffle; b.setAttribute("aria-pressed", M.shuffle); break;
     case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
     case "send-p": sendProgramSheet(b.dataset.u); break;
@@ -1271,9 +1356,9 @@ sb.auth.onAuthStateChange((event, session) => {
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
   S.started = true;
   S.user = u; S.loaded = false;
-  chatEl?.remove(); chatDim.remove(); chatEl = null; musicEl?.remove(); musicEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
+  chatEl?.remove(); chatDim.remove(); chatEl = null; stopMusic(); document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
-  if (u) loadAll().then(render).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
+  if (u) loadAll().then(() => { render(); loadTracks().catch(() => {}); }).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
 });
 // на вкладке, открытой с вечера, «сегодня» должно сдвинуться
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.loaded) { const t = today(); if (S._t && S._t !== t) { S.day = t; render(); } S._t = t; } });
