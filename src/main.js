@@ -149,6 +149,7 @@ const ROUTES = [
 const route = () => {
   const h = location.hash.replace(/^#\/?/, "");
   if (h.startsWith("u/")) return { path: h, view: friendView, parent: ROUTES[2] }; // страница друга живёт внутри «Профиля»
+  if (h === "help") return { path: h, view: helpView, parent: ROUTES[2] };
   return ROUTES.find(r => r.path === h) || ROUTES[0];
 };
 
@@ -274,7 +275,7 @@ function calendarView() {
       <div class="legend" aria-hidden="true"><span><i class="mark m-done"></i>сделано</span><span><i class="mark m-plan"></i>запланировано</span><span><i class="mark m-miss"></i>пропущено</span></div>`;
   }
   const unit = view === "week" ? ["Прошлая неделя", "Следующая неделя"] : ["Прошлый месяц", "Следующий месяц"];
-  return `${inboxHTML()}
+  return `${inboxHTML()}${helpHintHTML()}
     <section class="cal">
       <div class="cal-top">
         <h1 class="cal-title">${title}</h1>
@@ -918,6 +919,60 @@ function friendView() {
     ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="hist-list">${sent.map(x => `<li><span>${x.kind === "program" ? `Программа «${esc(programById(x.payload?.program_id)?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`}</span><span class="share-st st-${x.status}">${stName[x.status]}</span></li>`).join("")}</ul></section>` : ""}`;
 }
 
+/* ---------- help ---------- */
+// Подсказка новичку: пока нет ни одной тренировки и её не закрыли.
+function helpHintHTML() {
+  let hidden = false; try { hidden = !!localStorage.getItem("gym-help-hidden"); } catch {}
+  if (hidden || S.workouts.length) return "";
+  return `<section class="inbox"><div class="inbox-card help-hint">
+    <div class="inbox-t"><b>Впервые здесь?</b><span class="muted">За минуту расскажем, как всё устроено.</span>
+      <div class="row"><a class="btn sm" href="#/help">Как пользоваться</a><button class="btn quiet sm" data-act="help-hide">Скрыть</button></div></div></div></section>`;
+}
+const HELP = [
+  ["С чего начать", [
+    "Открой «Программы» и нажми «Поставить в календарь» у подходящей программы — тренировки сами встанут на нужные дни недели.",
+    "Дни можно поменять там же: нажми на свободный день недели, и на него переедет ближайшая тренировка.",
+    "Не хочешь программу — открой день в календаре и нажми «Записать тренировку» или «Взять из программ».",
+  ]],
+  ["Календарь", [
+    "Переключатель «Неделя / Месяц» меняет вид, стрелки листают неделю или месяц, «Сегодня» возвращает к текущему дню.",
+    "Нажми на день — под календарём откроется его тренировка.",
+    "Точки: закрашенная — сделано, кружок — запланировано, серый кружок — пропущено.",
+  ]],
+  ["Тренировка", [
+    "Нажми «Начать тренировку» — веса подставятся из прошлого раза, а если тогда сделал все повторы, то на 2,5 кг больше.",
+    "Нажми на упражнение, чтобы раскрыть подходы: поправь вес и повторы, отметь подход галочкой — запустится таймер отдыха.",
+    "Галочка справа отмечает упражнение целиком, «Отметить всё» — всю тренировку.",
+    "Фото упражнения показывает, как его делать, и историю твоих весов.",
+    "«Перенести на другой день» меняет тренировки местами, «Убрать с этого дня» делает день отдыхом.",
+  ]],
+  ["Тренер", [
+    "Кнопка «Тренер» внизу справа. Первым сообщением он даёт совет на выбранный день.",
+    "Можно спросить что угодно: какой вес поставить, что давно не тренировал, как заменить упражнение.",
+    "Попроси «составь план на 4 недели» — тренер сам расставит тренировки в календаре. Не понравилось — «Отменить», и всё вернётся как было.",
+  ]],
+  ["Друзья", [
+    "В «Профиле» — список всех, кто пользуется сайтом. Нажми на человека, чтобы увидеть его неделю, рабочие веса и последние тренировки.",
+    "На его странице можно отправить тренировку на конкретный день или предложить целую программу.",
+    "Тебе тоже могут прислать — предложение появится карточкой над календарём: «Посмотреть», чтобы добавить, или «Отклонить».",
+    "Друзья видят твоё имя, программу и тренировки, но не почту.",
+  ]],
+  ["Профиль", [
+    "Имя видят друзья. Вес и рост нужны тренеру, чтобы подбирать нагрузку. Всё сохраняется само.",
+    "Там же тема оформления и выход из аккаунта.",
+  ]],
+  ["На телефоне как приложение", [
+    "iPhone: открой сайт в Safari → «Поделиться» → «На экран «Домой»».",
+    "Android: в Chrome меню ⋮ → «Добавить на главный экран».",
+  ]],
+];
+function helpView() {
+  return `
+    <div class="back"><a class="linkbtn muted-link" href="#/me">${I.left}Профиль</a></div>
+    <section class="hero"><h1>Как пользоваться</h1><p class="lead">Главное — открыть календарь, увидеть сегодняшнюю тренировку и отметить сделанное. Остальное по желанию.</p></section>
+    ${HELP.map(([t, items]) => `<section class="card"><h2 class="card-t">${t}</h2><ul class="help-list">${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></section>`).join("")}`;
+}
+
 /* ---------- profile ---------- */
 function profileView() {
   const p = S.profile, th = getTheme(), prog = programById(p.program_id), t = today();
@@ -933,6 +988,7 @@ function profileView() {
       <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
       <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
     </div>
+    <a class="card help-link" href="#/help"><span><b>Как пользоваться сайтом</b><span class="hint">Календарь, тренировки, программы, тренер и друзья — коротко</span></span>${I.right}</a>
     ${S.people.length ? `<section class="card">
       <h2 class="card-t">Друзья</h2>
       <div class="people">${S.people.map(u => `<a class="person" href="#/u/${u.user_id}">
@@ -995,6 +1051,7 @@ async function run(b, act) {
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
+    case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
     case "send-p": sendProgramSheet(b.dataset.u); break;
     case "share-open": acceptSheet(S.shares.find(x => x.id === b.dataset.id)); break;

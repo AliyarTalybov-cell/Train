@@ -466,3 +466,11 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 .card .week .wk-day{cursor:default}
 .recent li{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px}
 .recent .recent-t{text-align:left}
+/* инструкция */
+.help-list{margin:0;padding-left:18px;display:grid;gap:8px;font-size:15px;line-height:1.5}
+.help-list li::marker{color:var(--accent)}
+a.help-link{display:flex;align-items:center;gap:12px;color:var(--ink);text-decoration:none}
+.help-link>span{flex:1;display:grid;gap:2px}
+.help-link>svg{flex:none;width:18px;height:18px;color:var(--muted)}
+@media (hover:hover){a.help-link:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}}
+.help-hint a.btn{text-decoration:none}
