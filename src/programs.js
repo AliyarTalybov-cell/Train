@@ -130,16 +130,28 @@ export const PROGRAMS = [
 
 export const programById = id => PROGRAMS.find(p => p.id === id);
 
+// Раскладка недели: 7 элементов (0 — понедельник), в каждом номер тренировки или null — отдых.
+// Если раскладку ещё не задавали, она строится из старого списка дней program_days или дней по умолчанию.
+export function weekLayout(profile, prog) {
+  const w = profile?.program_week;
+  if (Array.isArray(w) && w.length === 7) return w.map(v => (v == null ? null : +v));
+  const days = [...(profile?.program_days?.length === prog.days ? profile.program_days : prog.defaultDays)].sort((a, b) => a - b);
+  const out = Array(7).fill(null);
+  days.forEach((d, i) => { out[d] = prog.alternate ? 0 : i % prog.sessions.length; });
+  return out;
+}
+export const defaultLayout = prog => weekLayout(null, prog);
+
 // Что по программе в этот день: null, если день не тренировочный.
-// start — понедельник недели старта; days — дни недели (0 — понедельник) по порядку.
 export function sessionFor(profile, day, { parse, monday }) {
   const prog = programById(profile?.program_id);
   if (!prog || !profile.program_start || day < profile.program_start) return null;
-  const days = [...(profile.program_days?.length === prog.days ? profile.program_days : prog.defaultDays)].sort((a, b) => a - b);
-  const d = parse(day), wd = (d.getDay() + 6) % 7, slot = days.indexOf(wd);
-  if (slot < 0) return null;
+  const layout = weekLayout(profile, prog), wd = (parse(day).getDay() + 6) % 7, v = layout[wd];
+  if (v == null) return null;
   const week = Math.floor((parse(monday(day)) - parse(monday(profile.program_start))) / (7 * 864e5)); // 0, 1, 2…
-  const idx = prog.alternate ? (week * prog.days + slot) % prog.sessions.length : slot % prog.sessions.length;
+  // «Всё тело» чередует А и Б по порядку тренировочных дней; в остальных программах у дня своя тренировка
+  const slot = layout.slice(0, wd).filter(x => x != null).length, count = layout.filter(x => x != null).length;
+  const idx = prog.alternate ? (week * count + slot) % prog.sessions.length : v % prog.sessions.length;
   const block = prog.sessionsFor ? 0 : Math.floor(week / 3) % 2;
   const s = (prog.sessionsFor ? prog.sessionsFor(week) : prog.sessions)[idx];
   return {

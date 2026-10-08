@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import "./fonts.css";
-import { PROGRAMS, programById, sessionFor as programSession } from "./programs.js";
+import { PROGRAMS, programById, sessionFor as programSession, weekLayout, defaultLayout } from "./programs.js";
 import { media, NAMES as KNOWN_NAMES } from "./exercise-media.js";
 import "./style.css";
 
@@ -115,7 +115,7 @@ async function loadAll() {
     q(sb.from("gym_profile").select("*").eq("user_id", me).maybeSingle(), { silent: true }),
     q(sb.from("gym_workouts").select("*").eq("user_id", me).order("day"), { silent: true }),
     q(sb.from("gym_exercises").select("*").eq("user_id", me).order("position"), { silent: true }),
-    q(sb.from("gym_profile").select("user_id,name,program_id,program_start,program_days,program_moves").neq("user_id", me), { silent: true }).catch(() => []),
+    q(sb.from("gym_profile").select("user_id,name,program_id,program_start,program_days,program_week,program_moves").neq("user_id", me), { silent: true }).catch(() => []),
     q(sb.from("gym_shares").select("*").order("created_at", { ascending: false }).limit(100), { silent: true }).catch(() => []),
   ]);
   Object.assign(S, { workouts, exercises, people: people.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")), shares, friends: {} });
@@ -172,7 +172,7 @@ function rerender() { // перерисовать экран без анимац
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
 }
-window.addEventListener("hashchange", () => { S.moving = null; S.friends = {}; render(); scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => { S.moving = null; S.friends = {}; S.wkSel = null; render(); scrollTo({ top: 0 }); });
 
 /* ---------- login ---------- */
 const FN_SIGNUP = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-signup";
@@ -608,7 +608,7 @@ const coachItems = list => list.map(e => ({ name: e.name, plan: `${e.sets} × ${
 const lastWeight = name => { const l = lastFor(name, "9999-12-31"); const ws = (l?.sets || []).map(x => +x.w).filter(Boolean); return ws.length ? Math.max(...ws) : null; };
 async function applyActions(actions) {
   const undo = { created: [], removed: [], profile: null }, p = S.profile;
-  const keepProfile = () => { undo.profile ||= { program_id: p.program_id, program_start: p.program_start, program_days: p.program_days, program_moves: { ...(p.program_moves || {}) } }; };
+  const keepProfile = () => { undo.profile ||= { program_id: p.program_id, program_start: p.program_start, program_days: p.program_days, program_week: p.program_week, program_moves: { ...(p.program_moves || {}) } }; };
   const clearDay = async d => { // убрать то, что ещё не начато; начатое и сделанное не трогаем
     const w = workoutOn(d);
     if (w) {
@@ -623,7 +623,7 @@ async function applyActions(actions) {
   const put = async (d, title, list) => { if (d < today() || !await clearDay(d)) return; undo.created.push((await createWorkout(d, title, coachItems(list))).id); };
   for (const a of actions) {
     if (a.type === "plan") {
-      if (p.program_id) { keepProfile(); Object.assign(p, { program_id: null, program_start: null, program_days: null, program_moves: {} }); saveProfile(); }
+      if (p.program_id) { keepProfile(); Object.assign(p, { program_id: null, program_start: null, program_days: null, program_week: null, program_moves: {} }); saveProfile(); }
       const m0 = monday(a.start);
       for (let k = 0; k < a.weeks; k++) for (const day of a.days) { const d = addDays(m0, k * 7 + day.wd); if (d >= a.start) await put(d, day.title, day.exercises); }
     } else if (a.type === "create") await put(a.day, a.title, a.exercises);
@@ -720,7 +720,6 @@ function programsView() {
   const p = S.profile, cur = programById(p.program_id);
   const card = pr => {
     const on = pr.id === p.program_id;
-    const days = on && p.program_days?.length === pr.days ? p.program_days : pr.defaultDays;
     return `<article class="prog ${on ? "on" : ""}">
       <div class="prog-head">
         <h2>${esc(pr.title)}</h2>
@@ -736,8 +735,7 @@ function programsView() {
         ${pr.source ? `<p class="hint"><a href="${pr.source}" target="_blank" rel="noopener">Источник программы</a></p>` : ""}
       </details>
       ${on ? `<div class="prog-on">
-          <p class="hint">Дни тренировок. Нажми на свободный — на него переедет ближайшая тренировка.</p>
-          <div class="wd-pick" role="group" aria-label="Дни недели">${WD.map((w, i) => `<button data-act="prog-day" data-v="${i}" aria-pressed="${days.includes(i)}">${w}</button>`).join("")}</div>
+          ${weekBoard(pr)}
           <div><button class="btn quiet" data-act="prog-off">Убрать из календаря</button></div>
         </div>`
         : `<div><button class="btn ${cur ? "quiet" : ""}" data-act="pick-prog" data-v="${pr.id}">Поставить в календарь</button></div>`}
@@ -785,7 +783,7 @@ function acceptSheet(sh) {
         const b = ev.currentTarget; b.classList.add("loading"); b.disabled = true;
         try {
           await answerShare(sh, "accepted");
-          Object.assign(S.profile, { program_id: pr.id, program_days: pr.defaultDays, program_start: today(), program_moves: {} }); saveProfile();
+          Object.assign(S.profile, { program_id: pr.id, program_days: pr.defaultDays, program_week: defaultLayout(pr), program_start: today(), program_moves: {} }); saveProfile();
           close(); S.day = today(); rerender(); toast(`«${pr.title}» — в календаре`);
         } catch { b.classList.remove("loading"); b.disabled = false; }
       };
@@ -931,7 +929,7 @@ function helpHintHTML() {
 const HELP = [
   ["С чего начать", [
     "Открой «Программы» и нажми «Поставить в календарь» у подходящей программы — тренировки сами встанут на нужные дни недели.",
-    "Дни можно поменять там же: нажми на свободный день недели, и на него переедет ближайшая тренировка.",
+    "Там же блок «Твоя неделя»: перетащи тренировку на другой день (или нажми на неё, а потом на день), «+» на дне отдыха добавляет тренировку, крестик делает день выходным.",
     "Не хочешь программу — открой день в календаре и нажми «Записать тренировку» или «Взять из программ».",
   ]],
   ["Календарь", [
@@ -973,12 +971,79 @@ function helpView() {
     ${HELP.map(([t, items]) => `<section class="card"><h2 class="card-t">${t}</h2><ul class="help-list">${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></section>`).join("")}`;
 }
 
+/* ---------- program week ---------- */
+// Неделя программы: у каждого дня своя тренировка или отдых. Тренировки перетаскиваются между днями
+// (палец или мышь), либо нажатием: сначала на тренировку, потом на день.
+function weekBoard(pr) {
+  const lay = weekLayout(S.profile, pr), list = sessionsOf(pr), sel = S.wkSel;
+  const label = v => pr.alternate ? "А / Б по очереди" : list[v]?.title || "Тренировка";
+  const n = lay.filter(x => x != null).length;
+  return `<div class="wk-board-head"><b>Твоя неделя</b><span class="muted">${n} ${plural(n, "тренировка", "тренировки", "тренировок")}</span></div>
+    <p class="hint">Перетащи тренировку на другой день — дни поменяются местами. На свободный день можно добавить любую тренировку программы.</p>
+    <ol class="wk-board ${sel != null ? "picking" : ""}">${lay.map((v, i) => `<li data-wd="${i}" class="${v == null ? "free" : ""} ${sel === i ? "sel" : ""}">
+      <span class="wkb-d">${WD[i]}</span>
+      ${v == null
+        ? `<button class="wkb-free" data-act="wk-drop">${sel != null ? "Сюда" : `${I.plus}<span>Отдых</span>`}</button>`
+        : `<button class="wkb-chip" data-act="wk-pick" aria-pressed="${sel === i}"><i class="grip" aria-hidden="true"></i><span>${esc(label(v))}</span></button>
+           <button class="wkb-x" data-act="wk-off" aria-label="Сделать ${WD_FULL[i].toLowerCase()} отдыхом">${I.x}</button>`}
+    </li>`).join("")}</ol>
+    <div class="row"><button class="linkbtn muted-link" data-act="wk-reset">Как в программе</button></div>`;
+}
+function setLayout(lay) {
+  const p = S.profile;
+  p.program_week = lay; p.program_days = lay.map((v, i) => v == null ? null : i).filter(x => x != null); p.program_moves = {};
+  S.wkSel = null; saveProfile(); rerender();
+  if (!lay.some(x => x != null)) toast("Неделя пустая — в календаре не будет тренировок");
+}
+function moveInWeek(from, to) {
+  const lay = weekLayout(S.profile, programById(S.profile.program_id));
+  [lay[from], lay[to]] = [lay[to], lay[from]];
+  setLayout(lay);
+}
+function addToDay(i) {
+  const pr = programById(S.profile.program_id), lay = weekLayout(S.profile, pr);
+  if (pr.alternate) { lay[i] = 0; return setLayout(lay); }
+  const used = new Set(lay.filter(x => x != null));
+  sheet(`${WD_FULL[i]}: какая тренировка`, `<div class="pick">${sessionsOf(pr).map((s, k) => `<button data-k="${k}"><b>${esc(s.title)}</b><span>${esc(s.focus || "")}${used.has(k) ? " · уже есть в неделе" : ""}</span></button>`).join("")}</div>`, (el, close) => {
+    el.addEventListener("click", ev => { const b = ev.target.closest("[data-k]"); if (!b) return; lay[i] = +b.dataset.k; close(); setLayout(lay); });
+  });
+}
+// Перетаскивание указателем: работает и пальцем на телефоне, и мышью. Короткое нажатие остаётся кликом.
+document.addEventListener("pointerdown", ev => {
+  const chip = ev.target.closest(".wkb-chip"); if (!chip || ev.button > 0) return;
+  const from = +chip.closest("[data-wd]").dataset.wd, x0 = ev.clientX, y0 = ev.clientY;
+  let ghost = null, over = null;
+  const move = e => {
+    if (!ghost) {
+      if (Math.hypot(e.clientX - x0, e.clientY - y0) < 8) return;
+      const r = chip.getBoundingClientRect();
+      ghost = chip.cloneNode(true); ghost.classList.add("wkb-ghost");
+      Object.assign(ghost.style, { width: r.width + "px", left: r.left + "px", top: r.top + "px" });
+      ghost.dataset.dx = x0 - r.left; ghost.dataset.dy = y0 - r.top;
+      document.body.append(ghost); chip.closest("li").classList.add("dragging");
+    }
+    e.preventDefault();
+    ghost.style.left = e.clientX - ghost.dataset.dx + "px"; ghost.style.top = e.clientY - ghost.dataset.dy + "px";
+    ghost.hidden = true; const li = document.elementFromPoint(e.clientX, e.clientY)?.closest(".wk-board li"); ghost.hidden = false;
+    if (li !== over) { over?.classList.remove("over"); over = li; over?.classList.add("over"); }
+  };
+  const up = () => {
+    removeEventListener("pointermove", move); removeEventListener("pointerup", up); removeEventListener("pointercancel", up);
+    if (!ghost) return;
+    ghost.remove(); document.querySelector(".wk-board li.dragging")?.classList.remove("dragging"); over?.classList.remove("over");
+    S.dragged = true; setTimeout(() => { S.dragged = false; }); // клик сразу после перетаскивания не считается
+    const to = over ? +over.dataset.wd : null;
+    if (to != null && to !== from) moveInWeek(from, to);
+  };
+  addEventListener("pointermove", move, { passive: false }); addEventListener("pointerup", up); addEventListener("pointercancel", up);
+});
+
 /* ---------- profile ---------- */
 function profileView() {
   const p = S.profile, th = getTheme(), prog = programById(p.program_id), t = today();
   const done = S.workouts.filter(w => w.day <= t && dayStatus(w.day).st === "done");
   const month = done.filter(w => w.day.slice(0, 7) === t.slice(0, 7)).length;
-  const days = prog ? [...(p.program_days?.length === prog.days ? p.program_days : prog.defaultDays)].sort((a, b) => a - b).map(i => WD[i].toLowerCase()).join(", ") : "";
+  const lay = prog ? weekLayout(p, prog) : [], days = WD.filter((_, i) => lay[i] != null).map(w => w.toLowerCase()).join(", ");
   return `
     <section class="hero me">
       <span class="me-ava" aria-hidden="true">${esc(initial(p.name || S.user.email))}</span>
@@ -997,7 +1062,7 @@ function profileView() {
     </section>` : ""}
     <section class="card">
       <h2 class="card-t">Программа</h2>
-      ${prog ? `<div class="card-p"><b>${esc(prog.title)}</b><p class="hint">${prog.days} ${plural(prog.days, "тренировка", "тренировки", "тренировок")} в неделю: ${days}</p></div>`
+      ${prog ? `<div class="card-p"><b>${esc(prog.title)}</b><p class="hint">${lay.filter(x => x != null).length} ${plural(lay.filter(x => x != null).length, "тренировка", "тренировки", "тренировок")} в неделю: ${days}</p></div>`
         : `<p class="hint">Программа не выбрана — тренировки записываются вручную.</p>`}
       <a class="linkbtn card-link" href="#/programs">${prog ? "Сменить или настроить дни" : "Выбрать программу"}${I.right}</a>
     </section>
@@ -1029,7 +1094,7 @@ document.addEventListener("click", ev => {
     if (!location.hash || location.hash === "#/") { ev.preventDefault(); render(); scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
-  const b = ev.target.closest("[data-act]"); if (!b || b.closest(".sheet")) return;
+  const b = ev.target.closest("[data-act]"); if (!b || b.closest(".sheet") || S.dragged) return;
   run(b, b.dataset.act);
 });
 async function run(b, act) {
@@ -1091,20 +1156,22 @@ async function run(b, act) {
     case "pick-prog": {
       const pr = programById(b.dataset.v), p = S.profile;
       if (p.program_id && !await confirmSheet("Сменить программу?", `Вместо «${programById(p.program_id).title}» в календаре будет «${pr.title}». Уже записанные тренировки останутся.`, "Сменить")) return;
-      p.program_id = pr.id; p.program_days = pr.defaultDays; p.program_start = today(); p.program_moves = {};
+      p.program_id = pr.id; p.program_days = pr.defaultDays; p.program_week = defaultLayout(pr); p.program_start = today(); p.program_moves = {};
       saveProfile(); rerender(); scrollTo({ top: 0, behavior: "smooth" }); toast(`«${pr.title}» — в календаре`); break;
     }
-    case "prog-day": {
-      const p = S.profile, pr = programById(p.program_id), v = +b.dataset.v;
-      let days = [...(p.program_days?.length === pr.days ? p.program_days : pr.defaultDays)];
-      if (days.includes(v)) { toast("Нажми на свободный день — на него переедет ближайшая тренировка"); return; }
-      const near = days.reduce((a, c) => Math.abs(c - v) < Math.abs(a - v) ? c : a);
-      days = days.map(x => x === near ? v : x).sort((a, c) => a - c);
-      p.program_days = days; p.program_moves = {}; saveProfile(); rerender(); break;
+    case "wk-pick": { // выбор без перетаскивания: нажал на тренировку, потом на день
+      const i = +b.closest("[data-wd]").dataset.wd;
+      if (S.wkSel == null) { S.wkSel = i; rerender(); }
+      else if (S.wkSel === i) { S.wkSel = null; rerender(); }
+      else moveInWeek(S.wkSel, i);
+      break;
     }
+    case "wk-drop": if (S.wkSel != null) moveInWeek(S.wkSel, +b.closest("[data-wd]").dataset.wd); else addToDay(+b.closest("[data-wd]").dataset.wd); break;
+    case "wk-off": { const i = +b.closest("[data-wd]").dataset.wd, lay = weekLayout(S.profile, programById(S.profile.program_id)); lay[i] = null; setLayout(lay); break; }
+    case "wk-reset": setLayout(defaultLayout(programById(S.profile.program_id))); break;
     case "prog-off": {
       if (!await confirmSheet("Убрать программу из календаря?", "Запланированные дни исчезнут. Уже записанные тренировки останутся.", "Убрать")) return;
-      Object.assign(S.profile, { program_id: null, program_start: null, program_days: null, program_moves: {} }); saveProfile(); rerender(); break;
+      Object.assign(S.profile, { program_id: null, program_start: null, program_days: null, program_week: null, program_moves: {} }); saveProfile(); rerender(); break;
     }
     case "theme": setTheme(b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b)); break;
     case "logout":

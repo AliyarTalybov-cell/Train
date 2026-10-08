@@ -474,3 +474,26 @@ a.help-link{display:flex;align-items:center;gap:12px;color:var(--ink);text-decor
 .help-link>svg{flex:none;width:18px;height:18px;color:var(--muted)}
 @media (hover:hover){a.help-link:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}}
 .help-hint a.btn{text-decoration:none}
+/* неделя программы: перетаскивание тренировок по дням */
+.wk-board-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.wk-board-head b{font-family:var(--display);font-weight:500;font-size:16px}
+.wk-board-head .muted{font-size:14px}
+.wk-board{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.wk-board li{display:flex;align-items:center;gap:8px;min-height:52px;padding:4px;border-radius:14px;border:1px solid transparent;transition:background-color var(--t2) ease,border-color var(--t2) ease}
+.wk-board li.over{border-color:var(--accent);background:var(--accent-soft)}
+.wk-board li.dragging .wkb-chip{opacity:.35}
+.wkb-d{flex:none;width:36px;text-align:center;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.wkb-chip{flex:1;min-width:0;display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);text-align:left;font-weight:600;font-size:15px;
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;transition:border-color var(--t2) ease,box-shadow var(--t2) ease}
+.wkb-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wkb-chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+@media (hover:hover){.wkb-chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}}
+.grip{flex:none;width:10px;height:16px;background:radial-gradient(circle,var(--muted) 1.4px,transparent 1.6px) 0 0/5px 5.33px;opacity:.7}
+.wkb-free{flex:1;display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px dashed var(--line);background:none;color:var(--muted);font-size:14px;text-align:left}
+.wkb-free svg{width:16px;height:16px}
+.wk-board.picking .wkb-free{border-color:var(--accent);color:var(--accent);font-weight:600}
+@media (hover:hover){.wkb-free:hover{border-color:var(--accent);color:var(--accent)}}
+.wkb-x{flex:none;display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:none;color:var(--muted)}
+.wkb-x svg{width:16px;height:16px}
+@media (hover:hover){.wkb-x:hover{background:var(--bad-soft);color:var(--bad)}}
+.wkb-ghost{position:fixed;z-index:100;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25);border-color:var(--accent);background:var(--surface);transform:rotate(-1.5deg)}
