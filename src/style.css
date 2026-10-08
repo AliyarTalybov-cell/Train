@@ -497,3 +497,22 @@ a.help-link{display:flex;align-items:center;gap:12px;color:var(--ink);text-decor
 .wkb-x svg{width:16px;height:16px}
 @media (hover:hover){.wkb-x:hover{background:var(--bad-soft);color:var(--bad)}}
 .wkb-ghost{position:fixed;z-index:100;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25);border-color:var(--accent);background:var(--surface);transform:rotate(-1.5deg)}
+/* музыка: кнопка в шапке и панель с плеером */
+.top-r{display:flex;align-items:center;gap:8px}
+.music-btn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:14px;font-weight:500;transition:color var(--t2) ease,border-color var(--t2) ease}
+.music-btn svg{width:17px;height:17px}
+.music-btn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+@media (hover:hover){.music-btn:hover{color:var(--ink)}}
+.music{position:fixed;z-index:50;left:12px;right:12px;top:calc(64px + env(safe-area-inset-top,0px));max-width:480px;margin-inline:auto;display:grid;gap:10px;padding:10px 12px 12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);
+  box-shadow:0 14px 40px rgba(0,0,0,.18);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out),visibility 0s linear var(--t2)}
+.music.open{opacity:1;visibility:visible;transform:none;transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
+@media (min-width:760px){.music{left:auto;right:max(16px,calc((100vw - var(--col)) / 2));width:420px;margin:0}}
+.music-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-left:4px}
+.music-head .row{gap:4px;flex-wrap:nowrap}
+.music-head .linkbtn{min-height:36px}
+.music iframe{display:block;width:100%;height:244px;border:0;border-radius:12px;background:var(--chip)}
+.music iframe.tall{height:400px;max-height:60dvh}
+.music-form{display:grid;gap:10px}
+.music-form .field>span{font-size:13px}
+.music .err{color:var(--bad);font-size:14px}
+.music .err:empty{display:none}

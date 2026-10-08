@@ -42,6 +42,7 @@ const I = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
 
@@ -159,7 +160,7 @@ function render() {
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
-    <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
+    <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><div class="top-r"><nav class="nav" aria-label="Разделы">${links()}</nav>${S.loaded ? `<button class="music-btn ${musicEl?.classList.contains("open") ? "on" : ""}" data-act="music" aria-label="Музыка">${I.note}<span>Музыка</span></button>` : ""}</div></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
@@ -917,6 +918,56 @@ function friendView() {
     ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="hist-list">${sent.map(x => `<li><span>${x.kind === "program" ? `Программа «${esc(programById(x.payload?.program_id)?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`}</span><span class="share-st st-${x.status}">${stName[x.status]}</span></li>`).join("")}</ul></section>` : ""}`;
 }
 
+/* ---------- music ---------- */
+// Плеер Яндекс Музыки. Панель живёт вне страниц, поэтому музыка не прерывается при переходах и отметках.
+function musicSrc(raw) {
+  const t = String(raw || "").trim(), src = t.match(/src=["']([^"']+)["']/)?.[1] || t;
+  let u; try { u = new URL(src); } catch { return null; }
+  if (!/^music\.yandex\.(ru|com|by|kz|uz)$/.test(u.hostname)) return null;
+  const path = u.pathname.replace(/\/$/, "");
+  let m;
+  if (/^\/iframe\//.test(path)) return { src: `https://music.yandex.ru${path}`, tall: !/\/track\//.test(path) };
+  if ((m = path.match(/^\/album\/(\d+)\/track\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/album/${m[1]}/track/${m[2]}`, tall: false };
+  if ((m = path.match(/^\/album\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/album/${m[1]}`, tall: true };
+  if ((m = path.match(/^\/users\/([^/]+)\/playlists\/(\d+)$/))) return { src: `https://music.yandex.ru/iframe/playlist/${m[1]}/${m[2]}`, tall: true };
+  return { link: `https://music.yandex.ru${path}` }; // другой вид ссылки — хотя бы открыть в Яндекс Музыке
+}
+let musicEl = null;
+function musicHTML(editing) {
+  const m = musicSrc(S.profile.music);
+  const form = `<form class="music-form" data-form="music">
+      <label class="field"><span>Ссылка на трек, альбом или плейлист в Яндекс Музыке — или код плеера («Поделиться → HTML-код»)</span>
+      <input class="inp" name="url" value="${esc(S.profile.music)}" placeholder="https://music.yandex.ru/album/…" autocomplete="off"></label>
+      <p class="err" role="alert"></p>
+      <div class="row"><button class="btn sm" type="submit">Сохранить</button>${m ? `<button class="btn quiet sm" type="button" data-m="cancel">Отмена</button>` : ""}</div></form>`;
+  return `<div class="music-head"><b>Музыка</b><span class="row">${m && !editing ? `<button class="linkbtn muted-link" data-m="edit">Сменить</button>` : ""}<button class="icon-btn bare" data-m="close" aria-label="Свернуть">${I.x}</button></span></div>
+    ${editing || !m ? form : m.src ? `<iframe src="${esc(m.src)}" class="${m.tall ? "tall" : ""}" allow="clipboard-write; autoplay" title="Плеер Яндекс Музыки"></iframe>`
+      : `<p class="hint">Эту ссылку не получается встроить. <a href="${esc(m.link)}" target="_blank" rel="noopener">Открыть в Яндекс Музыке</a></p>`}`;
+}
+function drawMusic(editing = false) {
+  musicEl.innerHTML = musicHTML(editing);
+  musicEl.querySelector('[name="url"]')?.focus();
+}
+function toggleMusic() {
+  if (!musicEl) {
+    musicEl = document.createElement("section"); musicEl.className = "music"; musicEl.setAttribute("aria-label", "Музыка");
+    document.body.append(musicEl); drawMusic();
+    musicEl.addEventListener("click", ev => {
+      const b = ev.target.closest("[data-m]"); if (!b) return;
+      if (b.dataset.m === "close") toggleMusic(); else if (b.dataset.m === "edit") drawMusic(true); else drawMusic();
+    });
+    musicEl.addEventListener("submit", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const v = ev.target.url.value.trim(), m = musicSrc(v);
+      if (v && !m) { ev.target.querySelector(".err").textContent = "Нужна ссылка с music.yandex.ru"; return; }
+      S.profile.music = m?.src || m?.link || ""; saveProfile(); drawMusic();
+    });
+  }
+  // скрытая панель остаётся на странице — музыка продолжает играть
+  const open = musicEl.classList.toggle("open");
+  document.querySelector(".music-btn")?.classList.toggle("on", open);
+}
+
 /* ---------- help ---------- */
 // Подсказка новичку: пока нет ни одной тренировки и её не закрыли.
 function helpHintHTML() {
@@ -954,6 +1005,10 @@ const HELP = [
     "На его странице можно отправить тренировку на конкретный день или предложить целую программу.",
     "Тебе тоже могут прислать — предложение появится карточкой над календарём: «Посмотреть», чтобы добавить, или «Отклонить».",
     "Друзья видят твоё имя, программу и тренировки, но не почту.",
+  ]],
+  ["Музыка", [
+    "Кнопка «Музыка» вверху открывает плеер Яндекс Музыки. Вставь ссылку на трек, альбом или плейлист — или код плеера из «Поделиться → HTML-код».",
+    "Свернул панель — музыка продолжает играть, пока открыт сайт. «Сменить» — поставить другую ссылку.",
   ]],
   ["Профиль", [
     "Имя видят друзья. Вес и рост нужны тренеру, чтобы подбирать нагрузку. Всё сохраняется само.",
@@ -1116,6 +1171,7 @@ async function run(b, act) {
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
+    case "music": toggleMusic(); break;
     case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
     case "send-p": sendProgramSheet(b.dataset.u); break;
@@ -1215,7 +1271,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
   S.started = true;
   S.user = u; S.loaded = false;
-  chatEl?.remove(); chatDim.remove(); chatEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
+  chatEl?.remove(); chatDim.remove(); chatEl = null; musicEl?.remove(); musicEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
   if (u) loadAll().then(render).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
 });
