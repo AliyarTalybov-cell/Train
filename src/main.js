@@ -235,24 +235,49 @@ function dayCell(d, outside) {
     <span class="dn">${parse(d).getDate()}</span><span class="dt">${esc(s.title)}</span><i class="mark"></i></button>`;
 }
 
+// Вид календаря — неделя или месяц; запоминается в браузере.
+const getCalView = () => { try { return localStorage.getItem("gym-cal-view") || "week"; } catch { return "week"; } };
+const ST_NAMES = { done: "сделано", partial: "начато", planned: "запланировано", missed: "пропущено", rest: "" };
+
+function weekRow(d) {
+  const s = dayStatus(d), n = s.w ? s.ex.length : s.plan?.ex.length || 0;
+  const sub = s.st === "rest" ? "" : s.st === "partial" ? `сделано ${s.done} из ${s.ex.length}` : [ST_NAMES[s.st], n ? `${n} ${exWord(n)}` : ""].filter(Boolean).join(" · ");
+  return `<button class="wk-day st-${s.st} ${d === today() ? "today" : ""}" data-act="pick-day" data-day="${d}" ${d === S.day ? 'aria-current="true"' : ""}>
+    <span class="wk-d"><b>${WD[wdOf(d)]}</b><span>${parse(d).getDate()}</span></span>
+    <span class="wk-t"><b>${s.title ? esc(s.title) : "Отдых"}</b>${sub ? `<span>${sub}</span>` : ""}</span>
+    <i class="mark" aria-hidden="true"></i></button>`;
+}
+
 function calendarView() {
   if (S.moving) return moveView();
-  const d0 = parse(S.day), first = iso(new Date(d0.getFullYear(), d0.getMonth(), 1)), start = monday(first);
-  const last = iso(new Date(d0.getFullYear(), d0.getMonth() + 1, 0)), end = addDays(monday(last), 6);
-  const cells = []; for (let d = start; d <= end; d = addDays(d, 1)) cells.push(dayCell(d, parse(d).getMonth() !== d0.getMonth()));
+  const view = getCalView(), d0 = parse(S.day);
+  let title, body;
+  if (view === "week") {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(monday(S.day), i)), a = parse(days[0]), b = parse(days[6]);
+    title = a.getMonth() === b.getMonth() ? `${a.getDate()} – ${shortDay(days[6])}` : `${shortDay(days[0])} – ${shortDay(days[6])}`;
+    body = `<nav class="week" aria-label="Дни недели">${days.map(weekRow).join("")}</nav>`;
+  } else {
+    const first = iso(new Date(d0.getFullYear(), d0.getMonth(), 1)), start = monday(first);
+    const last = iso(new Date(d0.getFullYear(), d0.getMonth() + 1, 0)), end = addDays(monday(last), 6);
+    const cells = []; for (let d = start; d <= end; d = addDays(d, 1)) cells.push(dayCell(d, parse(d).getMonth() !== d0.getMonth()));
+    title = `${MONTHS[d0.getMonth()]}${d0.getFullYear() !== new Date().getFullYear() ? ` ${d0.getFullYear()}` : ""}`;
+    body = `<div class="wd-row" aria-hidden="true">${WD.map(w => `<span>${w}</span>`).join("")}</div>
+      <nav class="days" aria-label="Дни месяца">${cells.join("")}</nav>
+      <div class="legend" aria-hidden="true"><span><i class="mark m-done"></i>сделано</span><span><i class="mark m-plan"></i>запланировано</span><span><i class="mark m-miss"></i>пропущено</span></div>`;
+  }
+  const unit = view === "week" ? ["Прошлая неделя", "Следующая неделя"] : ["Прошлый месяц", "Следующий месяц"];
   return `
     <section class="cal">
       <div class="cal-top">
-        <h1 class="cal-title">${MONTHS[d0.getMonth()]}${d0.getFullYear() !== new Date().getFullYear() ? ` ${d0.getFullYear()}` : ""}</h1>
+        <h1 class="cal-title">${title}</h1>
         <div class="row">
           ${S.day === today() ? "" : `<button class="linkbtn" data-act="today">Сегодня</button>`}
-          <button class="icon-btn bare" data-act="month" data-n="-1" aria-label="Прошлый месяц">${I.left}</button>
-          <button class="icon-btn bare" data-act="month" data-n="1" aria-label="Следующий месяц">${I.right}</button>
+          <button class="icon-btn bare" data-act="shift" data-n="-1" aria-label="${unit[0]}">${I.left}</button>
+          <button class="icon-btn bare" data-act="shift" data-n="1" aria-label="${unit[1]}">${I.right}</button>
         </div>
       </div>
-      <div class="wd-row" aria-hidden="true">${WD.map(w => `<span>${w}</span>`).join("")}</div>
-      <nav class="days" aria-label="Дни месяца">${cells.join("")}</nav>
-      <div class="legend" aria-hidden="true"><span><i class="mark m-done"></i>сделано</span><span><i class="mark m-plan"></i>запланировано</span><span><i class="mark m-miss"></i>пропущено</span></div>
+      <div class="seg cal-seg" role="radiogroup" aria-label="Вид календаря">${[["week", "Неделя"], ["month", "Месяц"]].map(([k, l]) => `<button role="radio" data-act="cal-view" data-v="${k}" aria-checked="${view === k}">${l}</button>`).join("")}</div>
+      ${body}
     </section>
     <section class="day-panel" id="day-panel">${dayPanel()}</section>`;
 }
@@ -381,8 +406,8 @@ const subLine = s => !s.ex.length ? "Добавь упражнения ниже"
 function refreshDayBits() { // подпись и отметка дня — без перерисовки полей ввода
   const s = dayStatus(S.day);
   const sub = document.getElementById("day-sub"); if (sub) sub.textContent = subLine(s);
-  const cell = document.querySelector(`.day[data-day="${S.day}"]`);
-  if (cell) { const tmp = document.createElement("div"); tmp.innerHTML = dayCell(S.day, cell.classList.contains("outside")); cell.replaceWith(tmp.firstElementChild); }
+  const cell = document.querySelector(`.day[data-day="${S.day}"],.wk-day[data-day="${S.day}"]`);
+  if (cell) { const tmp = document.createElement("div"); tmp.innerHTML = cell.classList.contains("wk-day") ? weekRow(S.day) : dayCell(S.day, cell.classList.contains("outside")); cell.replaceWith(tmp.firstElementChild); }
 }
 function replaceRow(e) {
   const li = document.querySelector(`[data-ex="${e.id}"]`);
@@ -615,7 +640,8 @@ const adviceHTML = c => `${c.headline ? `<p class="co-head">${esc(c.headline)}</
 
 // Чат живёт, пока открыта вкладка: закрытие только сворачивает его, переписка и «Отменить» остаются.
 let chatEl = null;
-const openChat = () => { document.body.append(chatEl); document.documentElement.classList.add("chat-open"); requestAnimationFrame(() => chatEl.classList.add("open")); };
+const chatDim = Object.assign(document.createElement("div"), { className: "chat-dim" });
+const openChat = () => { document.body.append(chatDim, chatEl); chatDim.onclick = () => chatEl.querySelector("[data-x]").click(); document.documentElement.classList.add("chat-open"); requestAnimationFrame(() => chatEl.classList.add("open")); };
 function coachChat() {
   if (chatEl) return openChat();
   const day = S.day, cached = coachCached(day), chatKey = `gym-chat2-${S.user?.id}-${day}`;
@@ -625,8 +651,9 @@ function coachChat() {
   el.className = "chat"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Тренер");
   el.innerHTML = `
     <header class="chat-head">
-      <button class="icon-btn bare" data-x aria-label="Закрыть">${I.left}</button>
-      <div><b>Тренер</b><span>видит твои тренировки и может расписать план</span></div>
+      <span class="chat-ava" aria-hidden="true"><span class="orb"></span></span>
+      <div><b>Тренер</b><span>видит твои тренировки, может расписать план</span></div>
+      <button class="icon-btn bare" data-x aria-label="Свернуть чат">${I.x}</button>
     </header>
     <div class="chat-feed" id="co-feed"></div>
     <footer class="chat-foot">
@@ -639,7 +666,7 @@ function coachChat() {
   el.querySelector("[data-x]").onclick = close;
   const feed = el.querySelector("#co-feed"), f = el.querySelector("#cq");
   const save = () => { try { localStorage.setItem(chatKey, JSON.stringify(msgs.slice(-12))); } catch {} };
-  const bubble = (role, html) => { const d = document.createElement("div"); d.className = `co-msg ${role}`; d.innerHTML = html; feed.append(d); requestAnimationFrame(() => feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" })); return d; };
+  const bubble = (role, html) => { if (role === "user") el.classList.add("talked"); const d = document.createElement("div"); d.className = `co-msg ${role}`; d.innerHTML = html; feed.append(d); requestAnimationFrame(() => feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" })); return d; };
   const waitHTML = t => `<p class="co-wait"><i></i><i></i><i></i><span>${t}</span></p>`;
   const failText = e => e.message === "no_key" ? "Тренер ещё не подключён." : "Тренер не ответил — попробуй ещё раз.";
 
@@ -715,22 +742,43 @@ function programsView() {
 
 /* ---------- profile ---------- */
 function profileView() {
-  const p = S.profile, th = getTheme();
+  const p = S.profile, th = getTheme(), prog = programById(p.program_id), t = today();
+  const done = S.workouts.filter(w => w.day <= t && dayStatus(w.day).st === "done");
+  const month = done.filter(w => w.day.slice(0, 7) === t.slice(0, 7)).length;
+  const days = prog ? [...(p.program_days?.length === prog.days ? p.program_days : prog.defaultDays)].sort((a, b) => a - b).map(i => WD[i].toLowerCase()).join(", ") : "";
   return `
-    <section class="hero"><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p></section>
-    <section class="block">
+    <section class="hero me">
+      <span class="me-ava" aria-hidden="true">${esc((p.name || S.user.email || "?").trim()[0].toUpperCase())}</span>
+      <div><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p></div>
+    </section>
+    <div class="stats">
+      <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
+      <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
+    </div>
+    <section class="card">
+      <h2 class="card-t">Программа</h2>
+      ${prog ? `<div class="card-p"><b>${esc(prog.title)}</b><p class="hint">${prog.days} ${plural(prog.days, "тренировка", "тренировки", "тренировок")} в неделю: ${days}</p></div>`
+        : `<p class="hint">Программа не выбрана — тренировки записываются вручную.</p>`}
+      <a class="linkbtn card-link" href="#/programs">${prog ? "Сменить или настроить дни" : "Выбрать программу"}${I.right}</a>
+    </section>
+    <section class="card">
+      <h2 class="card-t">О себе</h2>
       <label class="field"><span>Имя</span><input class="inp" data-field="p-name" value="${esc(p.name)}" maxlength="40"></label>
       <div class="grid2">
         <label class="field"><span>Вес, кг</span><input class="inp" data-field="p-weight_kg" inputmode="decimal" value="${p.weight_kg ?? ""}" placeholder="например, 78"></label>
         <label class="field"><span>Рост, см</span><input class="inp" data-field="p-height_cm" inputmode="decimal" value="${p.height_cm ?? ""}" placeholder="например, 180"></label>
       </div>
-      <p class="hint">Тренер учитывает вес и рост, когда подбирает нагрузку.</p>
+      <p class="hint">Тренер учитывает вес и рост, когда подбирает нагрузку. Сохраняется само.</p>
     </section>
-    <section class="block">
-      <div class="field"><span>Тема</span>
-      <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div></div>
+    <section class="card">
+      <h2 class="card-t">Оформление</h2>
+      <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div>
     </section>
-    <section class="block"><div><button class="btn danger-soft" data-act="logout">Выйти из аккаунта</button></div></section>`;
+    <section class="card">
+      <h2 class="card-t">Аккаунт</h2>
+      <p class="hint">Вход по почте ${esc(S.user.email)}. Тренировки хранятся в аккаунте и видны на любом устройстве.</p>
+      <div><button class="btn danger-soft" data-act="logout">Выйти из аккаунта</button></div>
+    </section>`;
 }
 
 /* ---------- events ---------- */
@@ -753,7 +801,13 @@ async function run(b, act) {
       if (changed && innerWidth < 760) document.getElementById("day-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     }
-    case "month": { const d0 = parse(S.day), d = new Date(d0.getFullYear(), d0.getMonth() + +b.dataset.n, 1); S.day = iso(d).slice(0, 7) === today().slice(0, 7) ? today() : iso(d); rerender(); break; }
+    case "shift": {
+      const n = +b.dataset.n;
+      if (getCalView() === "week") { const d = addDays(S.day, 7 * n); S.day = monday(d) === monday(today()) ? today() : monday(d); }
+      else { const d0 = parse(S.day), d = new Date(d0.getFullYear(), d0.getMonth() + n, 1); S.day = iso(d).slice(0, 7) === today().slice(0, 7) ? today() : iso(d); }
+      rerender(); break;
+    }
+    case "cal-view": try { localStorage.setItem("gym-cal-view", b.dataset.v); } catch {} rerender(); break;
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
@@ -818,7 +872,7 @@ document.addEventListener("input", ev => {
   const w = workoutOn(S.day), li = el.closest("[data-ex]"), e = li && S.exercises.find(x => x.id === li.dataset.ex);
   if (f === "w-title") { w.title = el.value; refreshDayBits(); later("wt", () => q(sb.from("gym_workouts").update({ title: w.title.trim() }).eq("id", w.id))); }
   else if (f === "set-w" || f === "set-r") { const i = +el.closest(".set").dataset.i; e.sets[i][f === "set-w" ? "w" : "r"] = num(el.value); saveEx(e); }
-  else if (f === "p-name") { S.profile.name = el.value; document.querySelector(".hero h1").textContent = el.value || "Профиль"; saveProfile(); }
+  else if (f === "p-name") { S.profile.name = el.value; document.querySelector(".hero h1").textContent = el.value || "Профиль"; document.querySelector(".me-ava").textContent = (el.value || S.user.email || "?").trim()[0]?.toUpperCase() || "?"; saveProfile(); }
   else if (f === "p-weight_kg" || f === "p-height_cm") { const v = num(el.value), k = f.slice(2); S.profile[k] = v != null && v > 0 && v < 400 ? v : null; saveProfile(); }
 });
 
@@ -848,7 +902,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
   S.started = true;
   S.user = u; S.loaded = false;
-  chatEl?.remove(); chatEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
+  chatEl?.remove(); chatDim.remove(); chatEl = null; document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
   if (u) loadAll().then(render).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
 });
