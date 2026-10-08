@@ -10,7 +10,7 @@ const sb = createClient("https://qgdtzpsgzlwdhlqdqwex.supabase.co", "sb_publisha
 });
 
 const app = document.getElementById("app");
-const S = { user: null, profile: null, workouts: [], exercises: [], open: new Set(), day: iso(new Date()), loaded: false };
+const S = { user: null, profile: null, workouts: [], exercises: [], open: new Set(), day: iso(new Date()), loaded: false, people: [], shares: [], friends: {} };
 
 /* ---------- helpers ---------- */
 function iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -109,12 +109,16 @@ function setTheme(t) {
 
 /* ---------- data ---------- */
 async function loadAll() {
-  const [profile, workouts, exercises] = await Promise.all([
-    q(sb.from("gym_profile").select("*").maybeSingle(), { silent: true }),
-    q(sb.from("gym_workouts").select("*").order("day"), { silent: true }),
-    q(sb.from("gym_exercises").select("*").order("position"), { silent: true }),
+  // Чужие профили и тренировки тоже доступны на чтение (друзья), поэтому своё всегда берём по user_id.
+  const me = S.user.id;
+  const [profile, workouts, exercises, people, shares] = await Promise.all([
+    q(sb.from("gym_profile").select("*").eq("user_id", me).maybeSingle(), { silent: true }),
+    q(sb.from("gym_workouts").select("*").eq("user_id", me).order("day"), { silent: true }),
+    q(sb.from("gym_exercises").select("*").eq("user_id", me).order("position"), { silent: true }),
+    q(sb.from("gym_profile").select("user_id,name,program_id,program_start,program_days,program_moves").neq("user_id", me), { silent: true }).catch(() => []),
+    q(sb.from("gym_shares").select("*").order("created_at", { ascending: false }).limit(100), { silent: true }).catch(() => []),
   ]);
-  Object.assign(S, { workouts, exercises });
+  Object.assign(S, { workouts, exercises, people: people.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")), shares, friends: {} });
   S.profile = profile || await q(sb.from("gym_profile").insert({ name: (S.user.email || "").split("@")[0] }).select().single());
   S.loaded = true;
 }
@@ -142,13 +146,17 @@ const ROUTES = [
   { path: "programs", label: "Программы", icon: I.book, view: programsView },
   { path: "me", label: "Профиль", icon: I.user, view: profileView },
 ];
-const route = () => ROUTES.find(r => r.path === location.hash.replace(/^#\/?/, "")) || ROUTES[0];
+const route = () => {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h.startsWith("u/")) return { path: h, view: friendView, parent: ROUTES[2] }; // страница друга живёт внутри «Профиля»
+  return ROUTES.find(r => r.path === h) || ROUTES[0];
+};
 
 function render() {
   if (!S.user) return loginView();
   const r = route();
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; }); // кнопка тренера въезжает только при первом показе
-  const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
+  const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
     <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
@@ -163,7 +171,7 @@ function rerender() { // перерисовать экран без анимац
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
 }
-window.addEventListener("hashchange", () => { S.moving = null; render(); scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => { S.moving = null; S.friends = {}; render(); scrollTo({ top: 0 }); });
 
 /* ---------- login ---------- */
 const FN_SIGNUP = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-signup";
@@ -266,7 +274,7 @@ function calendarView() {
       <div class="legend" aria-hidden="true"><span><i class="mark m-done"></i>сделано</span><span><i class="mark m-plan"></i>запланировано</span><span><i class="mark m-miss"></i>пропущено</span></div>`;
   }
   const unit = view === "week" ? ["Прошлая неделя", "Следующая неделя"] : ["Прошлый месяц", "Следующий месяц"];
-  return `
+  return `${inboxHTML()}
     <section class="cal">
       <div class="cal-top">
         <h1 class="cal-title">${title}</h1>
@@ -740,6 +748,176 @@ function programsView() {
     <div class="progs">${[...PROGRAMS].sort((a, b) => (b.id === p.program_id) - (a.id === p.program_id)).map(card).join("")}</div>`;
 }
 
+/* ---------- friends ---------- */
+const initial = name => (String(name || "?").trim()[0] || "?").toUpperCase();
+const personName = id => S.people.find(u => u.user_id === id)?.name || "Друг";
+const repsOf = plan => String(plan || "").split("×")[1]?.trim() || "";
+
+// Входящие предложения — карточками над календарём.
+function inboxHTML() {
+  const inbox = S.shares.filter(x => x.to_user === S.user.id && x.status === "new");
+  if (!inbox.length) return "";
+  return `<section class="inbox">${inbox.map(x => {
+    const pr = x.kind === "program" && programById(x.payload?.program_id);
+    const what = x.kind === "program" ? `«${esc(pr?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`;
+    return `<div class="inbox-card">
+      <span class="me-ava sm" aria-hidden="true">${esc(initial(personName(x.from_user)))}</span>
+      <div class="inbox-t"><span class="eyebrow">${esc(personName(x.from_user))} · ${x.kind === "program" ? "программа" : "тренировка"}</span><b>${what}</b>${x.note ? `<span class="muted">${esc(x.note)}</span>` : ""}
+        <div class="row"><button class="btn sm" data-act="share-open" data-id="${x.id}">Посмотреть</button><button class="btn quiet sm" data-act="share-no" data-id="${x.id}">Отклонить</button></div></div>
+    </div>`;
+  }).join("")}</section>`;
+}
+async function answerShare(sh, status) {
+  await q(sb.from("gym_shares").update({ status }).eq("id", sh.id));
+  sh.status = status;
+}
+function acceptSheet(sh) {
+  if (!sh) return;
+  const from = esc(personName(sh.from_user));
+  if (sh.kind === "program") {
+    const pr = programById(sh.payload?.program_id); if (!pr) return;
+    return sheet(pr.title, `<p class="muted">${from} предлагает эту программу. ${esc(pr.about)}</p>
+      <div class="sessions">${sessionsOf(pr).map(s => `<div class="sess"><b>${esc(s.title)}</b><ol class="plan-list">${s.ex.map(e => `<li><span class="pl-name">${esc(e.n[0])}</span><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`).join("")}</ol></div>`).join("")}</div>
+      ${S.profile.program_id ? `<p class="hint">Вместо «${esc(programById(S.profile.program_id)?.title || "")}» в календаре будет эта программа. Уже записанные тренировки останутся.</p>` : ""}
+      <div class="sheet-actions"><button class="btn quiet" data-close>Позже</button><button class="btn" data-ok>Поставить в календарь</button></div>`, (el, close) => {
+      el.querySelector("[data-ok]").onclick = async ev => {
+        const b = ev.currentTarget; b.classList.add("loading"); b.disabled = true;
+        try {
+          await answerShare(sh, "accepted");
+          Object.assign(S.profile, { program_id: pr.id, program_days: pr.defaultDays, program_start: today(), program_moves: {} }); saveProfile();
+          close(); S.day = today(); rerender(); toast(`«${pr.title}» — в календаре`);
+        } catch { b.classList.remove("loading"); b.disabled = false; }
+      };
+    });
+  }
+  const items = sh.payload?.items || [], d0 = sh.day && sh.day >= today() ? sh.day : today();
+  sheet(sh.payload?.title || "Тренировка", `<p class="muted">От ${from}${sh.note ? ` — «${esc(sh.note)}»` : ""}</p>
+    <ol class="plan-list">${items.map(e => `<li><button class="pl-name" data-name="${esc(e.name)}">${esc(e.name)}</button><span class="pl-sets mono">${e.s} × ${esc(e.r || "—")}</span></li>`).join("")}</ol>
+    <label class="field"><span>На какой день</span><input class="inp" type="date" name="day" value="${d0}" min="${today()}"></label>
+    <p class="err" role="alert"></p>
+    <div class="sheet-actions"><button class="btn quiet" data-close>Позже</button><button class="btn" data-ok>Добавить в календарь</button></div>`, (el, close) => {
+    el.querySelectorAll("button.pl-name").forEach(b => b.onclick = () => photoSheet(b.dataset.name));
+    el.querySelector("[data-ok]").onclick = async ev => {
+      const b = ev.currentTarget, d = el.querySelector("[name=day]").value, err = el.querySelector(".err");
+      if (!d) return;
+      if (workoutOn(d)) { err.textContent = "На этот день уже записана тренировка — выбери другой"; return; }
+      b.classList.add("loading"); b.disabled = true;
+      try {
+        await createWorkout(d, sh.payload?.title || "", items.map(e => ({ name: e.name, plan: `${e.s} × ${e.r || "—"}`, sets: suggestSets(e.name, +e.s || 3, e.r || "", d) })));
+        await answerShare(sh, "accepted");
+        close(); S.day = d; rerender(); toast(`Добавлено на ${shortDay(d)}`);
+      } catch { b.classList.remove("loading"); b.disabled = false; }
+    };
+  });
+}
+
+// Отправка: одна тренировка (своя записанная или из программ) на день, либо целая программа.
+async function sendShare(to, row, b) {
+  b.classList.add("busy");
+  try {
+    const out = await q(sb.from("gym_shares").insert({ to_user: to, ...row }).select().single());
+    S.shares.unshift(out); return true;
+  } catch { b.classList.remove("busy"); return false; }
+}
+function sendWorkoutSheet(to) {
+  const seen = new Set(), mine = [...S.workouts].filter(w => exercisesOf(w.id).length).sort((a, b) => b.day.localeCompare(a.day))
+    .filter(w => { const k = norm(w.title) || w.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+  const mineHTML = mine.length ? `<div class="eyebrow">Мои тренировки</div><div class="pick">${mine.map(w => `<button data-w="${w.id}"><b>${esc(w.title || "Тренировка")}</b><span>${shortDay(w.day)} · ${esc(exercisesOf(w.id).map(e => e.name).join(", "))}</span></button>`).join("")}</div>` : "";
+  const progHTML = PROGRAMS.map(pr => `<div class="eyebrow">${esc(pr.title)}</div><div class="pick">${sessionsOf(pr).map((s, i) => `<button data-prog="${pr.id}" data-i="${i}"><b>${esc(s.title)}</b><span>${s.ex.length} ${exWord(s.ex.length)}: ${esc(s.ex.slice(0, 3).map(e => e.n[0]).join(", "))}…</span></button>`).join("")}</div>`).join("");
+  sheet(`Тренировка для: ${personName(to)}`, `
+    <div class="grid2"><label class="field"><span>На какой день</span><input class="inp" type="date" name="day" value="${addDays(today(), 1)}" min="${today()}"></label>
+    <label class="field"><span>Комментарий</span><input class="inp" name="note" maxlength="140" placeholder="необязательно"></label></div>
+    <p class="hint">Выбери тренировку — ${esc(personName(to))} увидит её и решит, добавлять ли в календарь.</p>
+    <div class="pick-groups">${mineHTML}${progHTML}</div>`, (el, close) => {
+    el.addEventListener("click", async ev => {
+      const b = ev.target.closest("[data-w],[data-prog]"); if (!b) return;
+      let title, items;
+      if (b.dataset.w) {
+        const w = S.workouts.find(x => x.id === b.dataset.w); title = w.title || "Тренировка";
+        items = exercisesOf(w.id).map(e => ({ name: e.name, s: e.sets?.length || 3, r: repsOf(e.plan) || String(e.sets?.[0]?.r ?? "") }));
+      } else {
+        const s = sessionsOf(programById(b.dataset.prog))[+b.dataset.i]; title = s.title;
+        items = s.ex.map(e => ({ name: e.n[0], s: e.s, r: e.r }));
+      }
+      const day = el.querySelector("[name=day]").value || null, note = el.querySelector("[name=note]").value.trim();
+      if (await sendShare(to, { kind: "workout", day, note, payload: { title, items } }, b)) { close(); rerender(); toast(`Отправлено: ${personName(to)}`); }
+    });
+  });
+}
+function sendProgramSheet(to) {
+  sheet(`Программа для: ${personName(to)}`, `<p class="hint">${esc(personName(to))} увидит предложение и решит, ставить ли программу в календарь.</p>
+    <div class="pick">${PROGRAMS.map(pr => `<button data-p="${pr.id}"><b>${esc(pr.title)}</b><span>${pr.days} ${plural(pr.days, "тренировка", "тренировки", "тренировок")} в неделю${pr.length ? ` · ${pr.length} недель` : ""}</span></button>`).join("")}</div>`, (el, close) => {
+    el.addEventListener("click", async ev => {
+      const b = ev.target.closest("[data-p]"); if (!b) return;
+      if (await sendShare(to, { kind: "program", payload: { program_id: b.dataset.p } }, b)) { close(); rerender(); toast(`Отправлено: ${personName(to)}`); }
+    });
+  });
+}
+
+// Страница друга: неделя, итоги, рабочие веса, последние тренировки. Только чтение.
+async function loadFriend(id) {
+  const [workouts, exercises] = await Promise.all([
+    q(sb.from("gym_workouts").select("*").eq("user_id", id).order("day"), { silent: true }),
+    q(sb.from("gym_exercises").select("*").eq("user_id", id).order("position"), { silent: true }),
+  ]);
+  S.friends[id] = { workouts, exercises };
+}
+function friendView() {
+  const id = route().path.slice(2), u = S.people.find(x => x.user_id === id);
+  if (!u) return `<section class="hero"><h1>Не найден</h1><p class="muted">Такого пользователя нет.</p><div><a class="linkbtn" href="#/me">← Профиль</a></div></section>`;
+  const f = S.friends[id];
+  if (!f) { loadFriend(id).catch(() => { S.friends[id] = { failed: true }; }).then(() => { if (route().path === "u/" + id) rerender(); }); return skeleton(); }
+  if (f.failed) { delete S.friends[id]; return `<section class="hero"><p class="muted">Не получилось загрузить — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; }
+  const t = today(), exOf = wid => f.exercises.filter(e => e.workout_id === wid);
+  const st = (d, w) => {
+    const ex = w ? exOf(w.id) : [], done = ex.filter(e => e.done).length, plan = w ? null : sessionFor(u, d, { parse, monday });
+    const s = w && ex.length && done === ex.length ? "done" : w && done ? "partial" : (w || plan) ? (d < t ? "missed" : "planned") : "rest";
+    return { st: s, title: w ? (w.title || "Тренировка") : plan?.title || "", n: w ? ex.length : plan?.ex.length || 0, done };
+  };
+  const doneW = f.workouts.filter(w => w.day <= t && st(w.day, w).st === "done");
+  const month = doneW.filter(w => w.day.slice(0, 7) === t.slice(0, 7)).length;
+  const week = Array.from({ length: 7 }, (_, i) => addDays(monday(t), i)).map(d => {
+    const s = st(d, f.workouts.find(w => w.day === d));
+    const sub = s.st === "rest" ? "" : s.st === "partial" ? `сделано ${s.done} из ${s.n}` : [ST_NAMES[s.st], s.n ? `${s.n} ${exWord(s.n)}` : ""].filter(Boolean).join(" · ");
+    return `<div class="wk-day st-${s.st} ${d === t ? "today" : ""}"><span class="wk-d"><b>${WD[wdOf(d)]}</b><span>${parse(d).getDate()}</span></span>
+      <span class="wk-t"><b>${s.title ? esc(s.title) : "Отдых"}</b>${sub ? `<span>${sub}</span>` : ""}</span><i class="mark" aria-hidden="true"></i></div>`;
+  }).join("");
+  // рабочие веса: по каждому упражнению лучший вес первой и последней тренировки
+  const by = new Map();
+  for (const e of f.exercises) {
+    const d = f.workouts.find(w => w.id === e.workout_id)?.day; if (!d || d > t) continue;
+    const ws = (e.sets || []).filter(x => (x.done || e.done) && x.w != null).map(x => +x.w); if (!ws.length) continue;
+    const k = norm(e.name), v = by.get(k) || { name: e.name, pts: [] }; v.pts.push({ d, w: Math.max(...ws) }); by.set(k, v);
+  }
+  const lifts = [...by.values()].map(v => { v.pts.sort((a, b) => a.d.localeCompare(b.d)); return { ...v, last: v.pts.at(-1), first: v.pts[0] }; })
+    .sort((a, b) => b.last.d.localeCompare(a.last.d) || b.pts.length - a.pts.length).slice(0, 8);
+  const recent = f.workouts.filter(w => w.day <= t && exOf(w.id).some(e => e.done || e.sets?.some(x => x.done))).sort((a, b) => b.day.localeCompare(a.day)).slice(0, 5);
+  const sent = S.shares.filter(x => x.from_user === S.user.id && x.to_user === id).slice(0, 5);
+  const stName = { new: "ждёт ответа", accepted: "принято", declined: "отклонено" };
+  const prog = programById(u.program_id);
+  return `
+    <div class="back"><a class="linkbtn muted-link" href="#/me">${I.left}Профиль</a></div>
+    <section class="hero me">
+      <span class="me-ava" aria-hidden="true">${esc(initial(u.name))}</span>
+      <div><h1>${esc(u.name || "Без имени")}</h1><p class="muted">${prog ? `Программа «${esc(prog.title)}»` : "Без программы"}</p></div>
+    </section>
+    <div class="row friend-acts"><button class="btn" data-act="send-w" data-u="${id}">${I.plus}Отправить тренировку</button><button class="btn quiet" data-act="send-p" data-u="${id}">Предложить программу</button></div>
+    <div class="stats">
+      <div><b>${doneW.length}</b><span>${plural(doneW.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
+      <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
+    </div>
+    <section class="card"><h2 class="card-t">Эта неделя</h2><div class="week">${week}</div></section>
+    <section class="card"><h2 class="card-t">Рабочие веса</h2>
+      ${lifts.length ? `<ul class="lifts">${lifts.map(l => { const dw = l.last.w - l.first.w; return `<li><span class="lift-n">${esc(l.name)}</span><span class="mono">${fmt(l.last.w, 1)} кг</span><span class="lift-d ${dw > 0 ? "up" : ""}">${l.pts.length > 1 ? (dw > 0 ? `+${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : dw < 0 ? `${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : "без изменений") : shortDay(l.last.d)}</span></li>`; }).join("")}</ul>`
+        : `<p class="hint">Пока нет отмеченных подходов с весом.</p>`}
+    </section>
+    <section class="card"><h2 class="card-t">Последние тренировки</h2>
+      ${recent.length ? `<ul class="hist-list recent">${recent.map(w => `<li><span>${shortDay(w.day)}</span><span class="recent-t"><b>${esc(w.title || "Тренировка")}</b> ${esc(exOf(w.id).map(e => e.name).join(", "))}</span></li>`).join("")}</ul>`
+        : `<p class="hint">Пока ничего не отмечено.</p>`}
+    </section>
+    ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="hist-list">${sent.map(x => `<li><span>${x.kind === "program" ? `Программа «${esc(programById(x.payload?.program_id)?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`}</span><span class="share-st st-${x.status}">${stName[x.status]}</span></li>`).join("")}</ul></section>` : ""}`;
+}
+
 /* ---------- profile ---------- */
 function profileView() {
   const p = S.profile, th = getTheme(), prog = programById(p.program_id), t = today();
@@ -748,13 +926,19 @@ function profileView() {
   const days = prog ? [...(p.program_days?.length === prog.days ? p.program_days : prog.defaultDays)].sort((a, b) => a - b).map(i => WD[i].toLowerCase()).join(", ") : "";
   return `
     <section class="hero me">
-      <span class="me-ava" aria-hidden="true">${esc((p.name || S.user.email || "?").trim()[0].toUpperCase())}</span>
+      <span class="me-ava" aria-hidden="true">${esc(initial(p.name || S.user.email))}</span>
       <div><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p></div>
     </section>
     <div class="stats">
       <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
       <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
     </div>
+    ${S.people.length ? `<section class="card">
+      <h2 class="card-t">Друзья</h2>
+      <div class="people">${S.people.map(u => `<a class="person" href="#/u/${u.user_id}">
+        <span class="me-ava sm" aria-hidden="true">${esc(initial(u.name))}</span>
+        <span class="person-t"><b>${esc(u.name || "Без имени")}</b><span>${esc(programById(u.program_id)?.title || "без программы")}</span></span>${I.right}</a>`).join("")}</div>
+    </section>` : ""}
     <section class="card">
       <h2 class="card-t">Программа</h2>
       ${prog ? `<div class="card-p"><b>${esc(prog.title)}</b><p class="hint">${prog.days} ${plural(prog.days, "тренировка", "тренировки", "тренировок")} в неделю: ${days}</p></div>`
@@ -811,6 +995,11 @@ async function run(b, act) {
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
+    case "send-w": sendWorkoutSheet(b.dataset.u); break;
+    case "send-p": sendProgramSheet(b.dataset.u); break;
+    case "share-open": acceptSheet(S.shares.find(x => x.id === b.dataset.id)); break;
+    case "share-no": { const sh = S.shares.find(x => x.id === b.dataset.id); b.classList.add("loading"); b.disabled = true;
+      try { await answerShare(sh, "declined"); rerender(); } catch { b.classList.remove("loading"); b.disabled = false; } break; }
     case "start": {
       b.classList.add("loading"); b.disabled = true;
       const nw = await ensureWorkout().catch(() => null); if (!nw) { b.classList.remove("loading"); b.disabled = false; return; }
