@@ -794,3 +794,15 @@ a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);wid
 .storm.calm .storm-flash,.storm.calm .bolt{display:none}
 .storm.calm .storm-sky,.storm.calm .storm-face{animation-duration:1.6s}
 @media (prefers-reduced-motion: reduce){.storm.calm .storm-sky,.storm.calm .storm-face{animation:none!important}.storm.calm .storm-face{opacity:1;transform:translate(-50%,-50%)}}
+/* обложка из двух фото */
+.prog-photo.duo{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.prog-photo.duo::after{display:none}
+.duo-half{position:relative;overflow:hidden;min-width:0}
+.duo-half img{width:100%;height:100%;object-fit:cover;display:block}
+.duo-half::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,rgba(0,0,0,.75) 100%)}
+.duo-half b{position:absolute;left:14px;right:10px;bottom:12px;z-index:1;color:#fff;font-family:var(--display);font-weight:600;font-size:15px;line-height:1.2;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.duo-half.r b{text-align:right;left:10px;right:14px}
+.duo-bolt{position:absolute;left:50%;top:0;width:34px;height:100%;margin-left:-17px;z-index:2;overflow:visible;filter:drop-shadow(0 0 4px #9FC3FF) drop-shadow(0 0 12px #6E9BFF)}
+.duo-bolt path{fill:none;stroke:#fff;stroke-width:3;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.prog-photo.duo .duo-bolt{animation:duoGlow 3.2s ease-in-out infinite}
+@keyframes duoGlow{0%,100%{opacity:.85}48%{opacity:.85}50%{opacity:.2}52%{opacity:1}}

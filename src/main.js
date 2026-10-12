@@ -756,7 +756,7 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}">
-      ${pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
+      ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
           <figcaption><b>${esc(pr.photo.caption)}</b>${pr.photo.credit ? `<a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a>` : ""}</figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
       <div class="prog-head">
@@ -1686,6 +1686,13 @@ document.addEventListener("pointerdown", ev => {
 });
 
 /* ---------- шуточная программа: молнии ---------- */
+// Обложка из двух фото: «Проснулся» → «Идти работат», между ними молния.
+function duoHTML(pr) {
+  const half = (ph, side) => { const src = ph.storage ? (S.fun[ph.storage] || (photoSrc(pr), "")) : ph.src;
+    return `<div class="duo-half ${side}">${src ? `<img src="${src}" alt="${esc(ph.caption)}" decoding="async" style="object-position:${ph.pos || "50% 40%"}">` : ""}<b>${esc(ph.caption)}</b></div>`; };
+  return `<figure class="prog-photo duo joke" data-act="storm" data-id="${pr.id}">${half(pr.photo, "l")}${half(pr.photo2, "r")}
+    <svg class="duo-bolt" viewBox="0 0 40 220" preserveAspectRatio="none" aria-hidden="true"><path d="M24 0 L12 70 L26 74 L10 150 L22 154 L14 220"/></svg></figure>`;
+}
 // Фото шуточной программы — из закрытого хранилища, подписанные ссылки кэшируются.
 S.fun = {};
 function photoSrc(pr) {
@@ -1696,7 +1703,7 @@ function photoSrc(pr) {
 }
 let funLoading = null;
 function loadFun() {
-  const paths = PROGRAMS.flatMap(p => [p.photo?.storage, p.flash]).filter(Boolean);
+  const paths = PROGRAMS.flatMap(p => [p.photo?.storage, p.photo2?.storage, p.flash]).filter(Boolean);
   funLoading ||= sb.storage.from("gym-avatars").createSignedUrls(paths, 6 * 3600).then(({ data }) => {
     for (const d of data || []) if (d.signedUrl) { S.fun[d.path] = d.signedUrl; new Image().src = d.signedUrl; } // заранее прогреть картинку для вспышки
   }).catch(() => { funLoading = null; });
