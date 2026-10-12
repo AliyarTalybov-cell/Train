@@ -217,10 +217,6 @@ details.fold summary{cursor:pointer;list-style:none;display:flex;align-items:cen
 details.fold summary::-webkit-details-marker{display:none}
 details.fold summary::after{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-3px);transition:transform var(--t2) ease;margin-left:4px}
 details.fold[open] summary::after{transform:rotate(225deg)}
-.sessions{display:grid;gap:18px;padding:6px 0 10px}
-@media (min-width:760px){.sessions{grid-template-columns:repeat(2,1fr);column-gap:28px}}
-.sess{display:grid;gap:4px}
-.sess>b{font-family:var(--display);font-weight:500;font-size:16px}
 .plan-list{list-style:none;margin:0;padding:0}
 .plan-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
 .plan-list li:last-child{border-bottom:0}
@@ -683,3 +679,35 @@ img.cov.ok{opacity:1}
 .prog-photo figcaption a{justify-self:start;font-size:11px;color:rgba(255,255,255,.75);text-decoration:none}
 @media (hover:hover){.prog-photo figcaption a:hover{color:#fff;text-decoration:underline}}
 @media (min-width:760px){.prog-photo{height:300px}.prog-photo img{object-position:30% 8%}}
+/* «Посмотреть тренировки»: карточки тренировок с ровными строками */
+.sessions{display:grid;gap:10px;padding:6px 0 10px;align-items:start}
+@media (min-width:760px){.sessions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sess{display:grid;gap:6px;padding:12px 12px 6px;border-radius:14px;background:var(--bg);border:1px solid var(--line);min-width:0}
+.sess-head{display:flex;align-items:flex-start;gap:10px;padding:0 2px 4px}
+.sess-n{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
+.sess-head>div{display:grid;gap:1px;min-width:0}
+.sess-head b{font-family:var(--display);font-weight:500;font-size:15.5px;line-height:1.3}
+.sess-head span{font-size:12.5px;color:var(--muted);line-height:1.35}
+.sess-list{list-style:none;margin:0;padding:0}
+.sess-list li+li{border-top:1px solid var(--line)}
+.sx{width:100%;display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:48px;padding:6px 2px;border:0;background:none;text-align:left}
+.sx-img{width:36px;height:36px;border-radius:8px;overflow:hidden;background:var(--chip)}
+.sx-img img{width:100%;height:100%;object-fit:cover;display:block}
+.sx-name{font-size:14.5px;line-height:1.3;overflow-wrap:anywhere}
+.sx-sets{justify-self:end;min-width:64px;text-align:right;font-size:12.5px;color:var(--muted);white-space:nowrap}
+@media (hover:hover){.sx:hover .sx-name{color:var(--accent)}}
+/* питание */
+.diet-in{display:grid;gap:16px;padding:4px 0 8px}
+.diet-block{display:grid;gap:8px}
+.diet-how{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14.5px;line-height:1.5}
+.diet-how li::marker{color:var(--accent)}
+.macros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.macros div{display:grid;gap:1px;padding:10px 8px;border-radius:12px;background:var(--bg);border:1px solid var(--line);text-align:center}
+.macros b{font-family:var(--display);font-weight:600;font-size:17px;line-height:1.2}
+.macros span{font-size:11.5px;color:var(--muted)}
+.diet-day{list-style:none;margin:0;padding:0;border-radius:14px;border:1px solid var(--line);background:var(--bg);overflow:hidden}
+.diet-day li{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;padding:10px 12px;font-size:14px;line-height:1.4}
+.diet-day li+li{border-top:1px solid var(--line)}
+.diet-day b{font-weight:600}
+.diet-day span{color:var(--muted)}
+@media (max-width:380px){.diet-day li{grid-template-columns:1fr;gap:2px}.macros b{font-size:15px}}

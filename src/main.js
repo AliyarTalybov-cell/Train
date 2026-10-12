@@ -750,7 +750,7 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}">
-      ${pr.photo ? `<figure class="prog-photo"><img src="${pr.photo.src}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async">
+      ${pr.photo ? `<figure class="prog-photo"><img src="${pr.photo.src}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">
           <figcaption><b>${esc(pr.photo.caption)}</b><a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a></figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
       <div class="prog-head">
@@ -759,13 +759,18 @@ function programsView() {
       </div>
       <p>${esc(pr.about)}</p>
       <details class="fold"><summary>Посмотреть тренировки</summary>
-        <div class="sessions">${sessionsOf(pr).map(s => `
-          <div class="sess"><b>${esc(s.title)}</b>
-            <ol class="plan-list">${s.ex.map(e => { const n = e.n[0]; return `<li><button class="pl-name" data-act="photo" data-name="${esc(n)}">${esc(n)}</button><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`; }).join("")}</ol>
-          </div>`).join("")}
+        <div class="sessions">${sessionsOf(pr).map((s, k) => `
+          <section class="sess">
+            <header class="sess-head"><span class="sess-n mono">${k + 1}</span><div><b>${esc(s.title)}</b>${s.focus ? `<span>${esc(s.focus)}</span>` : ""}</div></header>
+            <ol class="sess-list">${s.ex.map(e => { const n = e.n[0], m = media(n); return `<li><button class="sx" data-act="photo" data-name="${esc(n)}">
+              <span class="sx-img">${m ? `<img src="${m.img}" alt="" loading="lazy" decoding="async">` : ""}</span>
+              <span class="sx-name">${esc(n)}</span>
+              <span class="sx-sets mono">${e.s}×${esc(e.r)}</span></button></li>`; }).join("")}</ol>
+          </section>`).join("")}
         </div>
         ${pr.source ? `<p class="hint"><a href="${pr.source}" target="_blank" rel="noopener">Источник программы</a></p>` : ""}
       </details>
+      ${pr.diet ? dietHTML(pr) : ""}
       ${on ? `<div class="prog-on">
           ${weekBoard(pr)}
           <div><button class="btn quiet" data-act="prog-off">Убрать из календаря</button></div>
@@ -1402,6 +1407,7 @@ function helpHintHTML() {
 const HELP = [
   ["С чего начать", [
     "Открой «Программы», выбери подходящую (фильтр «В зале / Дома» сверху) и нажми «Поставить в календарь» — тренировки сами встанут на нужные дни недели.",
+    "У программ звёзд — Катлера, Коулмана и Скалы Джонсона — есть блок «Питание»: как ел сам спортсмен, сколько есть тебе (по весу из профиля) и пример дня.",
     "Там же блок «Твоя неделя»: перетащи тренировку на другой день (или нажми на неё, а потом на день), «+» на дне отдыха добавляет тренировку, крестик делает день выходным.",
     "Не хочешь программу — открой день в календаре и нажми «Записать тренировку» или «Взять из программ».",
   ]],
@@ -1518,6 +1524,28 @@ document.addEventListener("pointerdown", ev => {
   };
   addEventListener("pointermove", move, { passive: false }); addEventListener("pointerup", up); addEventListener("pointercancel", up);
 });
+
+/* ---------- diet ---------- */
+// Питание звёздных программ: как ел сам спортсмен, сколько есть тебе (по весу из профиля) и пример дня.
+const DIET = { // ккал на кг веса, белок и жиры — г на кг; углеводы — остаток
+  mass: { kcal: 35, p: 2.2, f: 1, label: "набор массы" },
+  lean: { kcal: 31, p: 2.4, f: 0.9, label: "сухая масса" },
+};
+function dietHTML(pr) {
+  const d = pr.diet, g = DIET[d.goal], w = S.profile?.weight_kg;
+  const calc = w ? (() => { const kcal = Math.round(w * g.kcal / 50) * 50, p = Math.round(w * g.p), f = Math.round(w * g.f), c = Math.max(0, Math.round((kcal - p * 4 - f * 9) / 4));
+    return `<div class="macros"><div><b>${fmt(kcal)}</b><span>ккал</span></div><div><b>${p} г</b><span>белок</span></div><div><b>${f} г</b><span>жиры</span></div><div><b>${c} г</b><span>углеводы</span></div></div>
+      <p class="hint">Посчитано на твой вес ${fmt(w, 1)} кг под цель «${g.label}». Если за 2 недели вес не меняется — добавь 200 ккал, если растёт быстрее 0,5 кг в неделю — убери.</p>`; })()
+    : `<p class="hint">Укажи вес в <a href="#/me">профиле</a> — посчитаем калории, белки, жиры и углеводы под тебя. Ориентир: белок ${g.p} г на кг веса, жиры ${g.f} г на кг.</p>`;
+  return `<details class="fold diet"><summary>Питание</summary>
+    <div class="diet-in">
+      <div class="diet-block"><div class="eyebrow">Как ел он</div><ul class="diet-how">${d.how.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+      <div class="diet-block"><div class="eyebrow">Сколько есть тебе</div>${calc}</div>
+      <div class="diet-block"><div class="eyebrow">Пример дня · порции на ~80 кг</div>
+        <ol class="diet-day">${d.day.map(([t, x]) => `<li><b>${esc(t)}</b><span>${esc(x)}</span></li>`).join("")}</ol>
+        <p class="hint">Порции меняй пропорционально своему весу. Это ориентир, а не медицинская рекомендация.</p></div>
+    </div></details>`;
+}
 
 /* ---------- profile ---------- */
 function profileView() {
