@@ -742,6 +742,7 @@ function coachChat() {
 }
 
 /* ---------- programs ---------- */
+const STAR_ORDER = ["coleman", "cutler", "the-rock"];
 function programsView() {
   const p = S.profile, cur = programById(p.program_id);
   const card = pr => {
@@ -780,7 +781,8 @@ function programsView() {
   };
   const where = S.progWhere || "all";
   const list = [...PROGRAMS].filter(pr => where === "all" || pr.id === p.program_id || (where === "home") === (pr.place === "дом"))
-    .sort((a, b) => (b.id === p.program_id) - (a.id === p.program_id));
+    // сначала программы звёзд (Коулман, Катлер, Скала), внутри групп — та, что стоит в календаре
+    .sort((a, b) => (!!b.photo - !!a.photo) || (b.id === p.program_id) - (a.id === p.program_id) || STAR_ORDER.indexOf(a.id) - STAR_ORDER.indexOf(b.id));
   return `
     <section class="hero"><h1>Программы</h1>
       <p class="lead">Готовые схемы тренировок. Поставь программу в календарь — тренировки сами появятся на нужных днях.</p>
