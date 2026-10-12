@@ -711,3 +711,66 @@ img.cov.ok{opacity:1}
 .diet-day b{font-weight:600}
 .diet-day span{color:var(--muted)}
 @media (max-width:380px){.diet-day li{grid-template-columns:1fr;gap:2px}.macros b{font-size:15px}}
+/* предложения друзьям */
+.share-thumbs{flex:none;display:grid;grid-template-columns:repeat(2,22px);grid-auto-rows:22px;gap:2px;border-radius:9px;overflow:hidden}
+.share-thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.share-thumbs.one{display:block;width:46px;height:46px}
+.share-thumbs.one img{height:46px}
+.pick-row{display:flex!important;align-items:center;gap:12px;grid-template-columns:none}
+.pick-row>span:not(.share-thumbs){flex:1;min-width:0;display:grid;gap:2px}
+.pick-row>span b{font-weight:600;line-height:1.3}
+.pick-row>svg{flex:none;width:18px;height:18px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips.scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px 10px;padding:2px 16px}
+.chips.scroll::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:36px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:14px;white-space:nowrap;transition:background-color var(--t2) ease,border-color var(--t2) ease,color var(--t2) ease}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+@media (hover:hover){.chip:hover:not([aria-pressed="true"]){border-color:var(--accent)}}
+.field .chips+.inp{margin-top:2px}
+.share-list{border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:2px 10px}
+.sx-name small{display:block;font-size:12px;color:var(--accent);margin-top:1px}
+.share-note{padding:10px 14px;border-radius:12px;background:var(--accent-soft);font-size:14.5px;line-height:1.45}
+.share-note b{font-weight:600}
+.share-busy{padding:10px 12px;border-radius:12px;background:var(--chip);color:var(--ink)}
+.sheet-photo{margin:0;border-radius:14px;height:170px}
+.sheet .sessions{padding:0}
+.inbox-card{display:grid!important;gap:10px}
+.inbox-top{display:flex;align-items:center;gap:12px}
+.inbox-top .inbox-t{flex:1;min-width:0;display:grid;gap:1px}
+.inbox-top .inbox-t b{font-size:16px}
+.inbox-top .inbox-t .muted{font-size:13px}
+.inbox-note{font-size:14px;color:var(--muted);font-style:italic;padding-left:52px}
+.inbox-card>.row{padding-left:52px}
+@media (max-width:420px){.inbox-note,.inbox-card>.row{padding-left:0}}
+.sent-list{list-style:none;margin:0;padding:0}
+.sent-list li{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.sent-list li:last-child{border-bottom:0}
+.sent-t{flex:1;min-width:0;display:grid;gap:1px}
+.sent-t b{font-weight:600;font-size:14.5px}
+.sent-t span{font-size:12.5px;color:var(--muted)}
+.sent-list .linkbtn{min-height:32px;padding:0}
+.share-st{padding:3px 10px;border-radius:999px;background:var(--chip);color:var(--muted);font-size:12.5px;font-weight:500}
+.share-st.st-accepted{background:var(--accent-soft);color:var(--accent)}
+.share-st.st-declined{background:var(--bad-soft);color:var(--bad)}
+a.has-badge{position:relative}
+a.has-badge>svg{overflow:visible}
+a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px var(--surface)}
+.nav a.has-badge::after{top:6px;left:24px}
+.sheet{grid-template-columns:minmax(0,1fr)}
+.sheet>*{min-width:0}
+.pick-row>span:not(.share-thumbs)>span{font-size:13px;color:var(--muted);line-height:1.35}
+.pick .pick-row{gap:12px;align-items:center}
+.sheet-backdrop[data-closing]{pointer-events:none}
+/* фото профиля */
+.me-ava{overflow:hidden}
+.me-ava.has-img{background:var(--chip)}
+.me-ava.has-img img{width:100%;height:100%;object-fit:cover;display:block}
+.ava-edit{position:relative;display:inline-grid;cursor:pointer;border-radius:50%}
+.ava-edit .me-ava{transition:filter var(--t2) ease}
+.ava-cam{position:absolute;right:-2px;bottom:-2px;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);box-shadow:0 0 0 3px var(--bg)}
+.ava-cam svg{width:14px;height:14px}
+@media (hover:hover){.ava-edit:hover .me-ava{filter:brightness(1.1)}}
+.ava-edit.busy .me-ava{filter:brightness(.6)}
+.ava-edit.busy::after{content:"";position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;border-right-color:transparent;animation:spin .7s linear infinite}
+.me .hint{font-size:13px;margin-top:2px}
+.ava-rm{min-height:30px;padding:0;font-size:13px}

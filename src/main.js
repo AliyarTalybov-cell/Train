@@ -58,6 +58,7 @@ const I = {
   back10: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">10</text></svg>',
   fwd10: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">10</text></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
@@ -99,8 +100,10 @@ function sheet(title, html, mount, onClose) {
   bd.className = "sheet-backdrop";
   bd.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="sheet-head"><h2>${esc(title)}</h2><button class="icon-btn bare" data-close aria-label="Закрыть">${I.x}</button></div>${html}</div>`;
   const prev = document.activeElement;
-  const close = () => { if (!bd.isConnected || !bd.classList.contains("open")) return; onClose?.(); bd.classList.remove("open"); document.removeEventListener("keydown", onKey); setTimeout(() => bd.remove(), 320); prev?.focus?.({ preventScroll: true }); };
+  // закрывается один раз и сразу, даже если анимация открытия ещё не закончилась; закрывающаяся шторка не ловит нажатия
+  const close = () => { if (!bd.isConnected || bd.dataset.closing) return; bd.dataset.closing = "1"; onClose?.(); bd.classList.remove("open"); document.removeEventListener("keydown", onKey); setTimeout(() => bd.remove(), 320); prev?.focus?.({ preventScroll: true }); };
   const onKey = e => { if (e.key === "Escape") close(); };
+  bd.addEventListener("click", e => { if (bd.dataset.closing) e.stopImmediatePropagation(); }, true); // двойной тап не открывает вторую шторку
   bd.addEventListener("click", e => { if (e.target === bd || e.target.closest("[data-close]")) close(); });
   document.addEventListener("keydown", onKey);
   document.body.append(bd);
@@ -132,11 +135,12 @@ async function loadAll() {
     q(sb.from("gym_profile").select("*").eq("user_id", me).maybeSingle(), { silent: true }),
     q(sb.from("gym_workouts").select("*").eq("user_id", me).order("day"), { silent: true }),
     q(sb.from("gym_exercises").select("*").eq("user_id", me).order("position"), { silent: true }),
-    q(sb.from("gym_profile").select("user_id,name,program_id,program_start,program_days,program_week,program_moves").neq("user_id", me), { silent: true }).catch(() => []),
+    q(sb.from("gym_profile").select("user_id,name,program_id,program_start,program_days,program_week,program_moves,avatar").neq("user_id", me), { silent: true }).catch(() => []),
     q(sb.from("gym_shares").select("*").order("created_at", { ascending: false }).limit(100), { silent: true }).catch(() => []),
   ]);
   Object.assign(S, { workouts, exercises, people: people.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")), shares, friends: {} });
   S.profile = profile || await q(sb.from("gym_profile").insert({ name: (S.user.email || "").split("@")[0] }).select().single());
+  S.avatars = {}; await loadAvatars();
   S.loaded = true;
 }
 const workoutOn = day => S.workouts.find(w => w.day === day);
@@ -174,7 +178,7 @@ const route = () => {
 function render() {
   if (!S.user) return loginView();
   const r = route();
-  queueMicrotask(() => { if (S.loaded) S.fabShown = true; }); // кнопка тренера въезжает только при первом показе
+  queueMicrotask(() => { if (S.loaded) S.fabShown = true; paintBadge(); }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
     <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
@@ -183,6 +187,7 @@ function render() {
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
+  queueMicrotask(paintBadge);
   const main = document.getElementById("main"); if (!main) return render();
   main.classList.remove("screen");
   main.innerHTML = route().view();
@@ -790,111 +795,266 @@ function programsView() {
     <div class="progs">${list.map(card).join("")}</div>`;
 }
 
+/* ---------- avatars ---------- */
+// Фото профиля лежат в закрытом хранилище gym-avatars; ссылки подписываются пачкой на 6 часов.
+S.avatars = {};
+async function loadAvatars() {
+  const all = [S.profile, ...S.people].filter(u => u?.avatar);
+  if (!all.length) return;
+  const { data } = await sb.storage.from("gym-avatars").createSignedUrls(all.map(u => u.avatar), 6 * 3600).catch(() => ({ data: [] }));
+  for (const d of data || []) { const u = all.find(x => x.avatar === d.path); if (u && d.signedUrl) S.avatars[u.user_id] = d.signedUrl; }
+}
+const avatarHTML = (uid, name, cls = "") => S.avatars[uid]
+  ? `<span class="me-ava ${cls} has-img" aria-hidden="true"><img src="${S.avatars[uid]}" alt="" decoding="async"></span>`
+  : `<span class="me-ava ${cls}" aria-hidden="true">${esc(initial(name))}</span>`;
+// Квадрат 512×512 по центру, JPEG — чтобы фото весило ~50 КБ, а не мегабайты с телефона.
+function squareJpeg(file, size = 512) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement("canvas");
+      c.width = c.height = size;
+      c.getContext("2d").drawImage(img, (img.naturalWidth - k) / 2, (img.naturalHeight - k) / 2, k, k, 0, 0, size, size);
+      URL.revokeObjectURL(url); c.toBlob(b => b ? res(b) : rej(new Error("blob")), "image/jpeg", 0.86);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("img")); };
+    img.src = url;
+  });
+}
+async function uploadAvatar(file) {
+  if (!file || !/^image\//.test(file.type)) return toast("Нужна картинка");
+  const box = document.querySelector(".ava-edit"); box?.classList.add("busy");
+  try {
+    const blob = await squareJpeg(file), path = `${S.user.id}/${Date.now().toString(36)}.jpg`, old = S.profile.avatar;
+    const { error } = await sb.storage.from("gym-avatars").upload(path, blob, { contentType: "image/jpeg" });
+    if (error) throw error;
+    await q(sb.from("gym_profile").update({ avatar: path }).eq("user_id", S.user.id));
+    if (old) sb.storage.from("gym-avatars").remove([old]);
+    S.profile.avatar = path; S.avatars[S.user.id] = URL.createObjectURL(blob);
+    rerender(); toast("Фото обновлено");
+  } catch (e) { console.error(e); toast("Не получилось загрузить фото — попробуй другое"); box?.classList.remove("busy"); }
+}
+async function removeAvatar() {
+  const old = S.profile.avatar; if (!old) return;
+  try {
+    await q(sb.from("gym_profile").update({ avatar: null }).eq("user_id", S.user.id));
+    sb.storage.from("gym-avatars").remove([old]);
+    S.profile.avatar = null; delete S.avatars[S.user.id]; rerender(); toast("Фото убрано");
+  } catch {}
+}
+
 /* ---------- friends ---------- */
 const initial = name => (String(name || "?").trim()[0] || "?").toUpperCase();
 const personName = id => S.people.find(u => u.user_id === id)?.name || "Друг";
 const repsOf = plan => String(plan || "").split("×")[1]?.trim() || "";
+
+// Список упражнений с фото — общий для предложений (как в «Посмотреть тренировки»).
+const exListHTML = (items, hint) => `<ol class="sess-list share-list">${items.map(e => { const m = media(e.name); return `<li><button class="sx" type="button" data-photo="${esc(e.name)}">
+  <span class="sx-img">${m ? `<img src="${m.img}" alt="" loading="lazy" decoding="async">` : ""}</span>
+  <span class="sx-name">${esc(e.name)}${hint && e.w ? `<small>${esc(hint)}: ${fmt(e.w, 1)} кг</small>` : ""}</span>
+  <span class="sx-sets mono">${e.s}×${esc(e.r || "—")}</span></button></li>`; }).join("")}</ol>`;
+const thumbsHTML = names => `<span class="share-thumbs" aria-hidden="true">${names.map(n => media(n)?.img).filter(Boolean).slice(0, 4).map(src => `<img src="${src}" alt="" loading="lazy">`).join("")}</span>`;
+const dayChips = d => [0, 1, 2].map(k => addDays(today(), k)).map((x, k) => `<button type="button" class="chip" data-day="${x}" aria-pressed="${x === d}">${["Сегодня", "Завтра", "Послезавтра"][k]}</button>`).join("");
+function wireDay(el, onChange) { // чипы «Сегодня / Завтра / Послезавтра» и поле даты работают вместе
+  const inp = el.querySelector("[name=day]");
+  const sync = () => { el.querySelectorAll(".chip[data-day]").forEach(c => c.setAttribute("aria-pressed", c.dataset.day === inp.value)); onChange?.(inp.value); };
+  el.querySelectorAll(".chip[data-day]").forEach(c => c.onclick = () => { inp.value = c.dataset.day; sync(); });
+  inp.addEventListener("change", sync); sync();
+}
+const wirePhotos = el => el.querySelectorAll("[data-photo]").forEach(b => b.onclick = () => photoSheet(b.dataset.photo));
 
 // Входящие предложения — карточками над календарём.
 function inboxHTML() {
   const inbox = S.shares.filter(x => x.to_user === S.user.id && x.status === "new");
   if (!inbox.length) return "";
   return `<section class="inbox">${inbox.map(x => {
-    const pr = x.kind === "program" && programById(x.payload?.program_id);
-    const what = x.kind === "program" ? `«${esc(pr?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`;
-    return `<div class="inbox-card">
-      <span class="me-ava sm" aria-hidden="true">${esc(initial(personName(x.from_user)))}</span>
-      <div class="inbox-t"><span class="eyebrow">${esc(personName(x.from_user))} · ${x.kind === "program" ? "программа" : "тренировка"}</span><b>${what}</b>${x.note ? `<span class="muted">${esc(x.note)}</span>` : ""}
-        <div class="row"><button class="btn sm" data-act="share-open" data-id="${x.id}">Посмотреть</button><button class="btn quiet sm" data-act="share-no" data-id="${x.id}">Отклонить</button></div></div>
-    </div>`;
+    const pr = x.kind === "program" && programById(x.payload?.program_id), items = x.payload?.items || [];
+    const what = x.kind === "program" ? esc(pr?.title || "Программа") : esc(x.payload?.title || "Тренировка");
+    const sub = x.kind === "program" ? `программа · ${pr?.days || "?"} ${plural(pr?.days || 0, "раз", "раза", "раз")} в неделю` : `тренировка · ${items.length} ${exWord(items.length)}${x.day ? ` · на ${shortDay(x.day)}` : ""}`;
+    const names = x.kind === "program" ? (pr ? sessionsOf(pr).flatMap(s => s.ex.map(e => e.n[0])) : []) : items.map(e => e.name);
+    const thumbs = pr?.photo ? `<span class="share-thumbs one"><img src="${pr.photo.src}" alt="" style="object-position:${pr.photo.pos || "30% 22%"}"></span>` : thumbsHTML(names);
+    return `<article class="inbox-card">
+      <div class="inbox-top">${avatarHTML(x.from_user, personName(x.from_user), "sm")}
+        <div class="inbox-t"><span class="eyebrow">${esc(personName(x.from_user))} предлагает</span><b>${what}</b><span class="muted">${sub}</span></div>${thumbs}</div>
+      ${x.note ? `<p class="inbox-note">«${esc(x.note)}»</p>` : ""}
+      <div class="row"><button class="btn sm" data-act="share-open" data-id="${x.id}">Посмотреть</button><button class="btn quiet sm" data-act="share-no" data-id="${x.id}">Отклонить</button></div>
+    </article>`;
   }).join("")}</section>`;
 }
 async function answerShare(sh, status) {
   await q(sb.from("gym_shares").update({ status }).eq("id", sh.id));
-  sh.status = status;
+  sh.status = status; // список мог обновиться в фоне — меняем и актуальную запись
+  S.shares.forEach(x => { if (x.id === sh.id) x.status = status; });
+}
+async function declineShare(sh) {
+  await answerShare(sh, "declined"); rerender();
+  toast("Предложение отклонено", { label: "Вернуть", run: async () => { await answerShare(sh, "new").catch(() => {}); rerender(); } });
 }
 function acceptSheet(sh) {
   if (!sh) return;
-  const from = esc(personName(sh.from_user));
+  const from = personName(sh.from_user);
+  const note = sh.note ? `<p class="share-note"><b>${esc(from)}:</b> «${esc(sh.note)}»</p>` : "";
   if (sh.kind === "program") {
     const pr = programById(sh.payload?.program_id); if (!pr) return;
-    return sheet(pr.title, `<p class="muted">${from} предлагает эту программу. ${esc(pr.about)}</p>
-      <div class="sessions">${sessionsOf(pr).map(s => `<div class="sess"><b>${esc(s.title)}</b><ol class="plan-list">${s.ex.map(e => `<li><span class="pl-name">${esc(e.n[0])}</span><span class="pl-sets mono">${e.s} × ${e.r}</span></li>`).join("")}</ol></div>`).join("")}</div>
-      ${S.profile.program_id ? `<p class="hint">Вместо «${esc(programById(S.profile.program_id)?.title || "")}» в календаре будет эта программа. Уже записанные тренировки останутся.</p>` : ""}
-      <div class="sheet-actions"><button class="btn quiet" data-close>Позже</button><button class="btn" data-ok>Поставить в календарь</button></div>`, (el, close) => {
+    return sheet(pr.title, `
+      ${pr.photo ? `<figure class="prog-photo sheet-photo"><img src="${pr.photo.src}" alt="" style="object-position:${pr.photo.pos || "30% 22%"}"><figcaption><b>${esc(pr.photo.caption)}</b></figcaption></figure>` : ""}
+      <p class="muted">${esc(from)} предлагает программу. ${esc(pr.about)}</p>${note}
+      <div class="sessions">${sessionsOf(pr).map((s, k) => `<section class="sess"><header class="sess-head"><span class="sess-n mono">${k + 1}</span><div><b>${esc(s.title)}</b>${s.focus ? `<span>${esc(s.focus)}</span>` : ""}</div></header>
+        ${exListHTML(s.ex.map(e => ({ name: e.n[0], s: e.s, r: e.r })))}</section>`).join("")}</div>
+      ${S.profile.program_id && S.profile.program_id !== pr.id ? `<p class="hint">Сейчас в календаре «${esc(programById(S.profile.program_id)?.title || "")}» — её заменит эта программа. Уже записанные тренировки останутся.</p>` : ""}
+      <div class="sheet-actions"><button class="btn quiet" data-close>Позже</button><button class="btn" data-ok>${S.profile.program_id === pr.id ? "Уже в календаре — отметить принятой" : "Поставить в календарь"}</button></div>`, (el, close) => {
+      wirePhotos(el);
       el.querySelector("[data-ok]").onclick = async ev => {
         const b = ev.currentTarget; b.classList.add("loading"); b.disabled = true;
         try {
           await answerShare(sh, "accepted");
-          Object.assign(S.profile, { program_id: pr.id, program_days: pr.defaultDays, program_week: defaultLayout(pr), program_start: today(), program_moves: {} }); saveProfile();
+          if (S.profile.program_id !== pr.id) { Object.assign(S.profile, { program_id: pr.id, program_days: pr.defaultDays, program_week: defaultLayout(pr), program_start: today(), program_moves: {} }); saveProfile(); }
           close(); S.day = today(); rerender(); toast(`«${pr.title}» — в календаре`);
         } catch { b.classList.remove("loading"); b.disabled = false; }
       };
     });
   }
   const items = sh.payload?.items || [], d0 = sh.day && sh.day >= today() ? sh.day : today();
-  sheet(sh.payload?.title || "Тренировка", `<p class="muted">От ${from}${sh.note ? ` — «${esc(sh.note)}»` : ""}</p>
-    <ol class="plan-list">${items.map(e => `<li><button class="pl-name" data-name="${esc(e.name)}">${esc(e.name)}</button><span class="pl-sets mono">${e.s} × ${esc(e.r || "—")}</span></li>`).join("")}</ol>
-    <label class="field"><span>На какой день</span><input class="inp" type="date" name="day" value="${d0}" min="${today()}"></label>
-    <p class="err" role="alert"></p>
+  sheet(sh.payload?.title || "Тренировка", `
+    <p class="muted">${esc(from)} предлагает тренировку · ${items.length} ${exWord(items.length)}</p>${note}
+    ${exListHTML(items, `у ${from}`)}
+    <div class="field"><span>На какой день</span><div class="chips">${dayChips(d0)}</div><input class="inp" type="date" name="day" value="${d0}" min="${today()}"></div>
+    <p class="hint share-busy" hidden></p>
     <div class="sheet-actions"><button class="btn quiet" data-close>Позже</button><button class="btn" data-ok>Добавить в календарь</button></div>`, (el, close) => {
-    el.querySelectorAll("button.pl-name").forEach(b => b.onclick = () => photoSheet(b.dataset.name));
-    el.querySelector("[data-ok]").onclick = async ev => {
-      const b = ev.currentTarget, d = el.querySelector("[name=day]").value, err = el.querySelector(".err");
-      if (!d) return;
-      if (workoutOn(d)) { err.textContent = "На этот день уже записана тренировка — выбери другой"; return; }
-      b.classList.add("loading"); b.disabled = true;
+    wirePhotos(el);
+    const ok = el.querySelector("[data-ok]"), busy = el.querySelector(".share-busy");
+    wireDay(el, d => { // день занят — упражнения добавятся к той тренировке
+      const w = d && workoutOn(d);
+      busy.hidden = !w; if (w) busy.textContent = `На ${shortDay(d)} уже есть «${w.title || "Тренировка"}» — упражнения добавятся к ней.`;
+      ok.textContent = w ? "Добавить к тренировке" : "Добавить в календарь";
+    });
+    ok.onclick = async () => {
+      const d = el.querySelector("[name=day]").value; if (!d) return;
+      ok.classList.add("loading"); ok.disabled = true;
+      const rows = items.map(e => ({ name: e.name, plan: `${e.s} × ${e.r || "—"}`, sets: suggestSets(e.name, +e.s || 3, e.r || "", d) }));
       try {
-        await createWorkout(d, sh.payload?.title || "", items.map(e => ({ name: e.name, plan: `${e.s} × ${e.r || "—"}`, sets: suggestSets(e.name, +e.s || 3, e.r || "", d) })));
+        const w = workoutOn(d);
+        if (w) { // дописываем в конец существующей тренировки
+          const pos = (exercisesOf(w.id).at(-1)?.position ?? -1) + 1;
+          S.exercises.push(...await q(sb.from("gym_exercises").insert(rows.map((r, k) => ({ workout_id: w.id, position: pos + k, name: r.name, plan: r.plan, sets: r.sets.map(x => ({ ...x, done: false })) }))).select()));
+        } else await createWorkout(d, sh.payload?.title || "", rows);
         await answerShare(sh, "accepted");
-        close(); S.day = d; rerender(); toast(`Добавлено на ${shortDay(d)}`);
-      } catch { b.classList.remove("loading"); b.disabled = false; }
+        close(); S.day = d; rerender(); toast(w ? `Добавлено к тренировке ${shortDay(d)}` : `Тренировка на ${shortDay(d)}`);
+      } catch { ok.classList.remove("loading"); ok.disabled = false; }
     };
   });
 }
 
-// Отправка: одна тренировка (своя записанная или из программ) на день, либо целая программа.
-async function sendShare(to, row, b) {
-  b.classList.add("busy");
-  try {
-    const out = await q(sb.from("gym_shares").insert({ to_user: to, ...row }).select().single());
-    S.shares.unshift(out); return true;
-  } catch { b.classList.remove("busy"); return false; }
+// Отправка в два шага: выбрать тренировку → посмотреть, выбрать день, написать пару слов → «Отправить».
+async function sendShare(to, row) {
+  const out = await q(sb.from("gym_shares").insert({ to_user: to, ...row }).select().single());
+  S.shares.unshift(out);
 }
-function sendWorkoutSheet(to) {
+const pendingSame = (to, kind, key) => S.shares.find(x => x.from_user === S.user.id && x.to_user === to && x.status === "new" && x.kind === kind &&
+  (kind === "program" ? x.payload?.program_id === key : norm(x.payload?.title) === norm(key.title) && x.day === key.day));
+function sendWorkoutSheet(to, tab) {
+  const name = personName(to);
   const seen = new Set(), mine = [...S.workouts].filter(w => exercisesOf(w.id).length).sort((a, b) => b.day.localeCompare(a.day))
-    .filter(w => { const k = norm(w.title) || w.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
-  const mineHTML = mine.length ? `<div class="eyebrow">Мои тренировки</div><div class="pick">${mine.map(w => `<button data-w="${w.id}"><b>${esc(w.title || "Тренировка")}</b><span>${shortDay(w.day)} · ${esc(exercisesOf(w.id).map(e => e.name).join(", "))}</span></button>`).join("")}</div>` : "";
-  const progHTML = PROGRAMS.map(pr => `<div class="eyebrow">${esc(pr.title)}</div><div class="pick">${sessionsOf(pr).map((s, i) => `<button data-prog="${pr.id}" data-i="${i}"><b>${esc(s.title)}</b><span>${s.ex.length} ${exWord(s.ex.length)}: ${esc(s.ex.slice(0, 3).map(e => e.n[0]).join(", "))}…</span></button>`).join("")}</div>`).join("");
-  sheet(`Тренировка для: ${personName(to)}`, `
-    <div class="grid2"><label class="field"><span>На какой день</span><input class="inp" type="date" name="day" value="${addDays(today(), 1)}" min="${today()}"></label>
-    <label class="field"><span>Комментарий</span><input class="inp" name="note" maxlength="140" placeholder="необязательно"></label></div>
-    <p class="hint">Выбери тренировку — ${esc(personName(to))} увидит её и решит, добавлять ли в календарь.</p>
-    <div class="pick-groups">${mineHTML}${progHTML}</div>`, (el, close) => {
-    el.addEventListener("click", async ev => {
+    .filter(w => { const k = norm(w.title) || w.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
+  tab ||= mine.length ? "mine" : "prog";
+  const progs = [...PROGRAMS].sort((a, b) => (!!b.photo - !!a.photo) || STAR_ORDER.indexOf(a.id) - STAR_ORDER.indexOf(b.id));
+  let prog = S.sendProg && programById(S.sendProg) ? S.sendProg : progs[0].id;
+  const progList = () => sessionsOf(programById(prog)).map((s, i) => `<button class="pick-row" data-prog="${prog}" data-i="${i}">${thumbsHTML(s.ex.map(e => e.n[0]))}<span><b>${esc(s.title)}</b><span>${s.ex.length} ${exWord(s.ex.length)}${s.focus ? ` · ${esc(s.focus)}` : ""}</span></span>${I.right}</button>`).join("");
+  sheet(`Тренировка для ${name}`, `
+    <div class="seg full" role="radiogroup" aria-label="Откуда тренировка">
+      <button role="radio" data-tab="mine" aria-checked="${tab === "mine"}">Мои тренировки</button><button role="radio" data-tab="prog" aria-checked="${tab === "prog"}">Из программ</button></div>
+    <div data-pane="mine" ${tab === "mine" ? "" : "hidden"}>${mine.length ? `<div class="pick">${mine.map(w => { const ex = exercisesOf(w.id); return `<button class="pick-row" data-w="${w.id}">${thumbsHTML(ex.map(e => e.name))}<span><b>${esc(w.title || "Тренировка")}</b><span>${shortDay(w.day)} · ${ex.length} ${exWord(ex.length)}</span></span>${I.right}</button>`; }).join("")}</div>`
+      : `<p class="hint">Записанных тренировок пока нет — выбери из программ.</p>`}</div>
+    <div data-pane="prog" ${tab === "prog" ? "" : "hidden"}>
+      <div class="chips scroll">${progs.map(pr => `<button type="button" class="chip" data-pr="${pr.id}" aria-pressed="${pr.id === prog}">${esc(pr.title)}</button>`).join("")}</div>
+      <div class="pick" data-list>${progList()}</div></div>`, (el, close) => {
+    el.addEventListener("click", ev => {
+      const t = ev.target.closest("[data-tab]");
+      if (t) { el.querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-checked", x === t)); el.querySelectorAll("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== t.dataset.tab); return; }
+      const c = ev.target.closest("[data-pr]");
+      if (c) { prog = S.sendProg = c.dataset.pr; el.querySelectorAll("[data-pr]").forEach(x => x.setAttribute("aria-pressed", x === c)); el.querySelector("[data-list]").innerHTML = progList(); return; }
       const b = ev.target.closest("[data-w],[data-prog]"); if (!b) return;
       let title, items;
       if (b.dataset.w) {
         const w = S.workouts.find(x => x.id === b.dataset.w); title = w.title || "Тренировка";
-        items = exercisesOf(w.id).map(e => ({ name: e.name, s: e.sets?.length || 3, r: repsOf(e.plan) || String(e.sets?.[0]?.r ?? "") }));
+        items = exercisesOf(w.id).map(e => ({ name: e.name, s: e.sets?.length || 3, r: repsOf(e.plan) || String(e.sets?.[0]?.r ?? ""), w: Math.max(0, ...(e.sets || []).map(x => +x.w || 0)) || null }));
       } else {
         const s = sessionsOf(programById(b.dataset.prog))[+b.dataset.i]; title = s.title;
         items = s.ex.map(e => ({ name: e.n[0], s: e.s, r: e.r }));
       }
-      const day = el.querySelector("[name=day]").value || null, note = el.querySelector("[name=note]").value.trim();
-      if (await sendShare(to, { kind: "workout", day, note, payload: { title, items } }, b)) { close(); rerender(); toast(`Отправлено: ${personName(to)}`); }
+      close(); setTimeout(() => sendPreview(to, { title, items }, b.dataset.w ? "mine" : "prog"), 260);
     });
+  });
+}
+function sendPreview(to, { title, items }, back) {
+  const name = personName(to), d0 = addDays(today(), 1);
+  sheet(title, `
+    <p class="muted">${items.length} ${exWord(items.length)} · для ${esc(name)}</p>
+    ${exListHTML(items, "у тебя")}
+    <div class="field"><span>На какой день</span><div class="chips">${dayChips(d0)}</div><input class="inp" type="date" name="day" value="${d0}" min="${today()}"></div>
+    <label class="field"><span>Пара слов, необязательно</span><input class="inp" name="note" maxlength="140" placeholder="Например: попробуй, после неё ноги горят"></label>
+    <p class="err" role="alert"></p>
+    <div class="sheet-actions"><button class="btn quiet" data-back>Назад</button><button class="btn" data-ok>Отправить</button></div>`, (el, close) => {
+    wirePhotos(el); wireDay(el);
+    el.querySelector("[data-back]").onclick = () => { close(); setTimeout(() => sendWorkoutSheet(to, back), 260); };
+    el.querySelector("[data-ok]").onclick = async ev => {
+      const b = ev.currentTarget, day = el.querySelector("[name=day]").value || null, note = el.querySelector("[name=note]").value.trim();
+      if (pendingSame(to, "workout", { title, day })) { el.querySelector(".err").textContent = `Эта тренировка на ${shortDay(day)} уже отправлена и ждёт ответа`; return; }
+      b.classList.add("loading"); b.disabled = true;
+      try { await sendShare(to, { kind: "workout", day, note, payload: { title, items } }); close(); rerender(); toast(`Отправлено ${name}`); }
+      catch { b.classList.remove("loading"); b.disabled = false; }
+    };
   });
 }
 function sendProgramSheet(to) {
-  sheet(`Программа для: ${personName(to)}`, `<p class="hint">${esc(personName(to))} увидит предложение и решит, ставить ли программу в календарь.</p>
-    <div class="pick">${PROGRAMS.map(pr => `<button data-p="${pr.id}"><b>${esc(pr.title)}</b><span>${pr.days} ${plural(pr.days, "тренировка", "тренировки", "тренировок")} в неделю${pr.length ? ` · ${pr.length} недель` : ""}</span></button>`).join("")}</div>`, (el, close) => {
-    el.addEventListener("click", async ev => {
+  const name = personName(to), progs = [...PROGRAMS].sort((a, b) => (!!b.photo - !!a.photo) || STAR_ORDER.indexOf(a.id) - STAR_ORDER.indexOf(b.id));
+  sheet(`Программа для ${name}`, `<p class="hint">${esc(name)} увидит предложение над своим календарём и решит, ставить ли программу.</p>
+    <div class="pick">${progs.map(pr => `<button class="pick-row" data-p="${pr.id}">${pr.photo ? `<span class="share-thumbs one"><img src="${pr.photo.src}" alt="" style="object-position:${pr.photo.pos || "30% 22%"}"></span>` : thumbsHTML(sessionsOf(pr).flatMap(s => s.ex.map(e => e.n[0])))}<span><b>${esc(pr.title)}</b><span>${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю${pr.length ? ` · ${pr.length} недель` : ""} · ${pr.place === "дом" ? "дома" : "в зале"}</span></span>${I.right}</button>`).join("")}</div>`, (el, close) => {
+    el.addEventListener("click", ev => {
       const b = ev.target.closest("[data-p]"); if (!b) return;
-      if (await sendShare(to, { kind: "program", payload: { program_id: b.dataset.p } }, b)) { close(); rerender(); toast(`Отправлено: ${personName(to)}`); }
+      const pr = programById(b.dataset.p);
+      close(); setTimeout(() => sheet(pr.title, `<p class="muted">${esc(pr.about)}</p>
+        <label class="field"><span>Пара слов, необязательно</span><input class="inp" name="note" maxlength="140" placeholder="Например: давай вместе по ней"></label>
+        <p class="err" role="alert"></p>
+        <div class="sheet-actions"><button class="btn quiet" data-back>Назад</button><button class="btn" data-ok>Отправить</button></div>`, (el2, close2) => {
+        el2.querySelector("[data-back]").onclick = () => { close2(); setTimeout(() => sendProgramSheet(to), 260); };
+        el2.querySelector("[data-ok]").onclick = async ev2 => {
+          const btn = ev2.currentTarget;
+          if (pendingSame(to, "program", pr.id)) { el2.querySelector(".err").textContent = "Эта программа уже отправлена и ждёт ответа"; return; }
+          btn.classList.add("loading"); btn.disabled = true;
+          try { await sendShare(to, { kind: "program", note: el2.querySelector("[name=note]").value.trim(), payload: { program_id: pr.id } }); close2(); rerender(); toast(`Отправлено ${name}`); }
+          catch { btn.classList.remove("loading"); btn.disabled = false; }
+        };
+      }), 260);
     });
   });
 }
+async function cancelShare(id) {
+  const sh = S.shares.find(x => x.id === id); if (!sh) return;
+  await q(sb.from("gym_shares").delete().eq("id", id));
+  S.shares = S.shares.filter(x => x.id !== id); rerender(); toast("Предложение отозвано");
+}
+// Предложения обновляются, когда возвращаешься на вкладку и раз в минуту: новые входящие и ответы друзей.
+async function refreshShares() {
+  if (!S.loaded || document.visibilityState !== "visible") return;
+  const fresh = await q(sb.from("gym_shares").select("*").order("created_at", { ascending: false }).limit(100), { silent: true }).catch(() => null);
+  if (!fresh) return;
+  const old = new Map(S.shares.map(x => [x.id, x]));
+  const answered = fresh.filter(x => x.from_user === S.user.id && old.get(x.id)?.status === "new" && x.status !== "new");
+  const incoming = fresh.some(x => x.to_user === S.user.id && x.status === "new" && !old.has(x.id));
+  S.shares = fresh;
+  for (const x of answered) toast(`${personName(x.to_user)}: «${x.kind === "program" ? programById(x.payload?.program_id)?.title || "программа" : x.payload?.title || "тренировка"}» — ${x.status === "accepted" ? "принято" : "отклонено"}`);
+  const typing = document.activeElement?.matches?.("input,textarea");
+  if ((incoming || answered.length) && !typing && !document.querySelector(".sheet-backdrop")) rerender();
+  paintBadge();
+}
+function paintBadge() { // точка на «Календаре», если есть непросмотренные предложения
+  const n = S.shares.filter(x => x.to_user === S.user?.id && x.status === "new").length;
+  const onCal = route() === ROUTES[0]; // на календаре карточки и так видны
+  document.querySelectorAll('a[href="#/"]').forEach(a => { if (a.classList.contains("brand")) return; a.classList.toggle("has-badge", n > 0 && !onCal); });
+}
+setInterval(refreshShares, 60000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshShares(); });
 
 // Страница друга: неделя, итоги, рабочие веса, последние тренировки. Только чтение.
 async function loadFriend(id) {
@@ -940,7 +1100,7 @@ function friendView() {
   return `
     <div class="back"><a class="linkbtn muted-link" href="#/me">${I.left}Профиль</a></div>
     <section class="hero me">
-      <span class="me-ava" aria-hidden="true">${esc(initial(u.name))}</span>
+      ${avatarHTML(u.user_id, u.name)}
       <div><h1>${esc(u.name || "Без имени")}</h1><p class="muted">${prog ? `Программа «${esc(prog.title)}»` : "Без программы"}</p></div>
     </section>
     <div class="row friend-acts"><button class="btn" data-act="send-w" data-u="${id}">${I.plus}Отправить тренировку</button><button class="btn quiet" data-act="send-p" data-u="${id}">Предложить программу</button></div>
@@ -957,7 +1117,10 @@ function friendView() {
       ${recent.length ? `<ul class="hist-list recent">${recent.map(w => `<li><span>${shortDay(w.day)}</span><span class="recent-t"><b>${esc(w.title || "Тренировка")}</b> ${esc(exOf(w.id).map(e => e.name).join(", "))}</span></li>`).join("")}</ul>`
         : `<p class="hint">Пока ничего не отмечено.</p>`}
     </section>
-    ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="hist-list">${sent.map(x => `<li><span>${x.kind === "program" ? `Программа «${esc(programById(x.payload?.program_id)?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»${x.day ? ` на ${shortDay(x.day)}` : ""}`}</span><span class="share-st st-${x.status}">${stName[x.status]}</span></li>`).join("")}</ul></section>` : ""}`;
+    ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="sent-list">${sent.map(x => `<li>
+        <span class="sent-t"><b>${x.kind === "program" ? `Программа «${esc(programById(x.payload?.program_id)?.title || "—")}»` : `«${esc(x.payload?.title || "Тренировка")}»`}</b><span>${x.kind === "program" ? "" : x.day ? `на ${shortDay(x.day)} · ` : ""}отправлено ${shortDay(x.created_at.slice(0, 10))}</span></span>
+        <span class="share-st st-${x.status}">${stName[x.status]}</span>
+        ${x.status === "new" ? `<button class="linkbtn muted-link" data-act="share-cancel" data-id="${x.id}">Отозвать</button>` : ""}</li>`).join("")}</ul></section>` : ""}`;
 }
 
 /* ---------- music ---------- */
@@ -1195,6 +1358,7 @@ async function uploadTracks(files) {
   if (route().path === "music") rerender();
   toast([`Загружено: ${ok}`, made && `новых папок: ${made}`, dup && `уже были: ${dup}`, fail && `не получилось: ${fail}`].filter(Boolean).join(", "));
 }
+document.addEventListener("change", ev => { if (ev.target.dataset?.field === "p-avatar") { uploadAvatar(ev.target.files[0]); ev.target.value = ""; } });
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "mu-files") { uploadTracks(ev.target.files); ev.target.value = ""; } });
 document.addEventListener("dragover", ev => { if (route().path === "music" && S.user?.id === OWNER && ev.dataTransfer?.types.includes("Files")) { ev.preventDefault(); document.documentElement.classList.add("mu-drop"); } });
 document.addEventListener("dragleave", ev => { if (!ev.relatedTarget) document.documentElement.classList.remove("mu-drop"); });
@@ -1431,21 +1595,15 @@ const HELP = [
     "Попроси «составь план на 4 недели» — тренер сам расставит тренировки в календаре. Не понравилось — «Отменить», и всё вернётся как было.",
   ]],
   ["Друзья", [
-    "В «Профиле» — список всех, кто пользуется сайтом. Нажми на человека, чтобы увидеть его неделю, рабочие веса и последние тренировки.",
-    "На его странице можно отправить тренировку на конкретный день или предложить целую программу.",
-    "Тебе тоже могут прислать — предложение появится карточкой над календарём: «Посмотреть», чтобы добавить, или «Отклонить».",
-    "Друзья видят твоё имя, программу и тренировки, но не почту.",
-  ]],
-  ["Музыка", [
-    "Вкладка «Музыка»: сверху папки групп — листай их вбок и нажми, внизу появятся треки этой папки. «Все треки» — всё сразу.",
-    "Сердечко у трека добавляет его в «Избранное» — это твоя папка, у каждого своя.",
-    "Поиск над списком ищет по всем трекам сразу: по названию, группе и альбому — можно писать часть слова.",
-    "Нажми на мини-плеер внизу — откроется большой: перемотка, ±10 секунд, повтор (всё / один трек / выкл.), перемешивание, громкость.",
-    "На компьютере: пробел — пауза, ←/→ — перемотка на 5 секунд, Shift+←/→ — соседний трек. На телефоне треками можно управлять с экрана блокировки.",
-    "Владелец сайта загружает треки с компьютера: группа, название и обложка берутся из самого mp3, папка группы создаётся сама. Через ⋯ трек можно перенести или удалить.",
+    "В «Профиле» — список всех, кто пользуется сайтом. Нажми на человека: его неделя, рабочие веса и последние тренировки.",
+    "«Отправить тренировку»: выбери свою записанную или из программ, посмотри упражнения, выбери день, напиши пару слов — «Отправить». Одно и то же дважды не уйдёт.",
+    "«Предложить программу» — так же: выбери, посмотри и отправь. Пока друг не ответил, предложение можно отозвать.",
+    "Тебе прислали — на «Календаре» появится точка, а над календарём карточка. «Посмотреть» — выбрать день и добавить; если в этот день уже есть тренировка, упражнения допишутся к ней. «Отклонить» можно вернуть.",
+    "Когда друг ответит, придёт уведомление, а на его странице увидишь «принято» или «отклонено».",
   ]],
   ["Профиль", [
-    "Имя видят друзья. Вес и рост нужны тренеру, чтобы подбирать нагрузку. Всё сохраняется само.",
+    "Нажми на кружок с буквой — загрузишь своё фото, его увидят друзья. «Убрать фото» — вернуть букву.",
+    "Имя видят друзья. Вес и рост нужны тренеру и для расчёта питания. Всё сохраняется само.",
     "Там же тема оформления и выход из аккаунта.",
   ]],
   ["На телефоне как приложение", [
@@ -1557,8 +1715,8 @@ function profileView() {
   const lay = prog ? weekLayout(p, prog) : [], days = WD.filter((_, i) => lay[i] != null).map(w => w.toLowerCase()).join(", ");
   return `
     <section class="hero me">
-      <span class="me-ava" aria-hidden="true">${esc(initial(p.name || S.user.email))}</span>
-      <div><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p></div>
+      <label class="ava-edit" aria-label="Сменить фото профиля">${avatarHTML(S.user.id, p.name || S.user.email)}<input type="file" accept="image/*" hidden data-field="p-avatar"><span class="ava-cam" aria-hidden="true">${I.camera}</span></label>
+      <div><h1>${esc(p.name || "Профиль")}</h1><p class="muted">${esc(S.user.email)}</p>${p.avatar ? `<button class="linkbtn muted-link ava-rm" data-act="ava-rm">Убрать фото</button>` : `<p class="hint">Нажми на кружок — добавишь своё фото</p>`}</div>
     </section>
     <div class="stats">
       <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
@@ -1568,7 +1726,7 @@ function profileView() {
     ${S.people.length ? `<section class="card">
       <h2 class="card-t">Друзья</h2>
       <div class="people">${S.people.map(u => `<a class="person" href="#/u/${u.user_id}">
-        <span class="me-ava sm" aria-hidden="true">${esc(initial(u.name))}</span>
+        ${avatarHTML(u.user_id, u.name, "sm")}
         <span class="person-t"><b>${esc(u.name || "Без имени")}</b><span>${esc(programById(u.program_id)?.title || "без программы")}</span></span>${I.right}</a>`).join("")}</div>
     </section>` : ""}
     <section class="card">
@@ -1647,7 +1805,9 @@ async function run(b, act) {
     case "send-p": sendProgramSheet(b.dataset.u); break;
     case "share-open": acceptSheet(S.shares.find(x => x.id === b.dataset.id)); break;
     case "share-no": { const sh = S.shares.find(x => x.id === b.dataset.id); b.classList.add("loading"); b.disabled = true;
-      try { await answerShare(sh, "declined"); rerender(); } catch { b.classList.remove("loading"); b.disabled = false; } break; }
+      try { await declineShare(sh); } catch { b.classList.remove("loading"); b.disabled = false; } break; }
+    case "ava-rm": removeAvatar(); break;
+    case "share-cancel": b.disabled = true; cancelShare(b.dataset.id).catch(() => { b.disabled = false; }); break;
     case "start": {
       b.classList.add("loading"); b.disabled = true;
       const nw = await ensureWorkout().catch(() => null); if (!nw) { b.classList.remove("loading"); b.disabled = false; return; }
@@ -1718,7 +1878,7 @@ document.addEventListener("input", ev => {
   const w = workoutOn(S.day), li = el.closest("[data-ex]"), e = li && S.exercises.find(x => x.id === li.dataset.ex);
   if (f === "w-title") { w.title = el.value; refreshDayBits(); later("wt", () => q(sb.from("gym_workouts").update({ title: w.title.trim() }).eq("id", w.id))); }
   else if (f === "set-w" || f === "set-r") { const i = +el.closest(".set").dataset.i; e.sets[i][f === "set-w" ? "w" : "r"] = num(el.value); saveEx(e); }
-  else if (f === "p-name") { S.profile.name = el.value; document.querySelector(".hero h1").textContent = el.value || "Профиль"; document.querySelector(".me-ava").textContent = (el.value || S.user.email || "?").trim()[0]?.toUpperCase() || "?"; saveProfile(); }
+  else if (f === "p-name") { S.profile.name = el.value; document.querySelector(".hero h1").textContent = el.value || "Профиль"; const av = document.querySelector(".ava-edit .me-ava:not(.has-img)"); if (av) av.textContent = (el.value || S.user.email || "?").trim()[0]?.toUpperCase() || "?"; saveProfile(); }
   else if (f === "p-weight_kg" || f === "p-height_cm") { const v = num(el.value), k = f.slice(2); S.profile[k] = v != null && v > 0 && v < 400 ? v : null; saveProfile(); }
 });
 
