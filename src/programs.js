@@ -210,6 +210,8 @@ PROGRAMS.push({
   length: 12,
   about: "Пять тренировок в неделю: ноги, грудь, спина, плечи, руки. Тяжёлые недели чередуются с умеренными, каждые 2 недели меняются повторы.",
   source: "https://gym.in.ua/workouts/cut-like-cutler-cycle-1",
+  // фото с Wikimedia Commons, лицензия CC BY 2.0 — автора указываем на самом фото
+  photo: { src: "/img/jay-cutler.jpg", caption: "Джей Катлер — 4 раза «Мистер Олимпия»", credit: "Фото: Morten Skovgaard, CC BY 2.0", link: "https://commons.wikimedia.org/wiki/File:Jay_Cutler_%E2%80%93_Loaded_039_(15263347890).jpg" },
   sessionsFor: cutlerWeek,
   sessions: cutlerWeek(0),
 });

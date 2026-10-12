@@ -57,6 +57,7 @@ const I = {
   repeatOne: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/><path d="M11 10h1v5"/></svg>',
   back10: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">10</text></svg>',
   fwd10: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">10</text></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
   dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
@@ -749,7 +750,9 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}">
-      <div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>
+      ${pr.photo ? `<figure class="prog-photo"><img src="${pr.photo.src}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async">
+          <figcaption><b>${esc(pr.photo.caption)}</b><a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a></figcaption></figure>`
+        : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
       <div class="prog-head">
         <h2>${esc(pr.title)}</h2>
         <div class="tags">${on ? `<span class="tag on">${I.check}в календаре</span>` : ""}<span class="tag">${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю</span><span class="tag">${pr.place === "дом" ? "дома" : "в зале"}</span>${pr.length ? `<span class="tag">${pr.length} недель</span>` : ""}</div>
@@ -989,6 +992,10 @@ const coverHTML = (f, cls = "") => coverOf(f) ? `<img class="cov ${cls}" style="
   : `<span class="cover-tile ${cls}" style="--h:${tileHue(f?.name)}" aria-hidden="true">${esc(initial(f?.name || "♪"))}</span>`;
 // внутри папки — по альбомам и номерам треков, во «Все треки» — по порядку добавления
 const visibleTracks = () => {
+  if (M.q) { // поиск — по всем трекам: название, группа, альбом
+    const words = norm(M.q).split(/\s+/).filter(Boolean);
+    return M.tracks.map((t, i) => ({ t, i })).filter(({ t }) => { const hay = norm(`${t.title} ${t.artist} ${t.album}`); return words.every(w => hay.includes(w)); });
+  }
   if (M.folder === "fav") return (M.favOrder || []).map(id => M.tracks.findIndex(t => t.id === id)).filter(i => i >= 0).map(i => ({ t: M.tracks[i], i }));
   const list = M.tracks.map((t, i) => ({ t, i })).filter(x => !M.folder || x.t.folder_id === M.folder);
   if (M.folder) list.sort((a, b) => (a.t.album || "").localeCompare(b.t.album || "") || (a.t.track_no ?? 999) - (b.t.track_no ?? 999) || a.i - b.i);
@@ -1002,10 +1009,8 @@ function musicView() {
       .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
     return skeleton();
   }
-  const list = visibleTracks(), fav = M.folder === "fav", f = M.folders.find(x => x.id === M.folder), playing = !M.audio.paused;
-  const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
   const count = id => M.tracks.filter(t => t.folder_id === id).length;
-  const card = (id, name, n, cover) => `<button class="fold-card ${M.folder === id ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
+  const card = (id, name, n, cover) => `<button class="fold-card ${M.folder === id && !M.q ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
       <span class="fold-cover">${cover}</span><b>${esc(name)}</b><span>${n} ${plural(n, "трек", "трека", "треков")}</span></button>`;
   return `
     <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
@@ -1015,12 +1020,19 @@ function musicView() {
       ${M.folders.map(x => card(x.id, x.name, count(x.id), coverHTML(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
     </div>
+    <label class="mu-search">${I.search}<input type="search" data-field="mu-q" value="${esc(M.q || "")}" placeholder="Найти трек или группу" autocomplete="off" enterkeyhint="search" aria-label="Поиск по трекам">${M.q ? `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>` : ""}</label>
+    <div id="mu-list">${musicList()}</div>`;
+}
+function musicList() {
+  const list = visibleTracks(), fav = M.folder === "fav" && !M.q, f = !M.q && M.folders.find(x => x.id === M.folder), playing = !M.audio.paused;
+  const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
+  return `
     <section class="mu-head">
-      <div class="mu-title">${f ? `<span class="mu-cover">${coverHTML(f)}</span>` : ""}<div><h2>${esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
+      <div class="mu-title">${f ? `<span class="mu-cover">${coverHTML(f)}</span>` : ""}<div><h2>${M.q ? "Поиск" : esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
       <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>
-    ${isOwner() && !fav ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint" id="mu-st">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
+    ${isOwner() && !fav && !M.q ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint" id="mu-st">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-i="${i}">
       <button class="track" data-act="mu-play" data-i="${i}">
         <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span>
@@ -1028,7 +1040,7 @@ function musicView() {
         <span class="tr-d mono">${mmss(t.sec)}</span></button>
       <button class="tr-fav" data-act="mu-fav" data-i="${i}" aria-pressed="${M.favs.has(t.id)}" aria-label="${M.favs.has(t.id) ? "Убрать из избранного" : "В избранное"}">${M.favs.has(t.id) ? I.heartFill : I.heart}</button>
       ${isOwner() ? `<button class="tr-more" data-act="mu-track-menu" data-i="${i}" aria-label="Действия с треком">${I.dots}</button>` : ""}</li>`).join("")}</ol>`
-      : `<p class="hint mu-empty">${fav ? "Здесь будут треки, которые ты отметишь сердечком." : isOwner() ? "В папке пока нет треков — загрузи их кнопкой выше или перенеси из «Все треки» через ⋯ у трека." : "В папке пока нет треков."}</p>`}`;
+      : `<p class="hint mu-empty">${M.q ? "Ничего не нашлось — попробуй часть названия или группу." : fav ? "Здесь будут треки, которые ты отметишь сердечком." : isOwner() ? "В папке пока нет треков — загрузи их кнопкой выше или перенеси из «Все треки» через ⋯ у трека." : "В папке пока нет треков."}</p>`}`;
 }
 
 // Действия владельца: перенести трек в папку, удалить трек, создать папку, сменить обложку, удалить папку.
@@ -1419,6 +1431,7 @@ const HELP = [
   ["Музыка", [
     "Вкладка «Музыка»: сверху папки групп — листай их вбок и нажми, внизу появятся треки этой папки. «Все треки» — всё сразу.",
     "Сердечко у трека добавляет его в «Избранное» — это твоя папка, у каждого своя.",
+    "Поиск над списком ищет по всем трекам сразу: по названию, группе и альбому — можно писать часть слова.",
     "Нажми на мини-плеер внизу — откроется большой: перемотка, ±10 секунд, повтор (всё / один трек / выкл.), перемешивание, громкость.",
     "На компьютере: пробел — пауза, ←/→ — перемотка на 5 секунд, Shift+←/→ — соседний трек. На телефоне треками можно управлять с экрана блокировки.",
     "Владелец сайта загружает треки с компьютера: группа, название и обложка берутся из самого mp3, папка группы создаётся сама. Через ⋯ трек можно перенести или удалить.",
@@ -1588,11 +1601,12 @@ async function run(b, act) {
     case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
     case "mu-folder": {
       const x = document.querySelector(".folders")?.scrollLeft || 0;
-      M.folder = b.dataset.id || null; rerender();
+      M.folder = b.dataset.id || null; M.q = ""; rerender();
       const strip = document.querySelector(".folders"); if (strip) strip.scrollLeft = x; // полоса папок остаётся на месте
       break;
     }
     case "mu-fav": toggleFav(+b.dataset.i); break;
+    case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
     case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
@@ -1664,6 +1678,13 @@ async function run(b, act) {
 
 document.addEventListener("input", ev => {
   const el = ev.target, f = el.dataset?.field; if (!f) return;
+  if (f === "mu-q") { // список обновляется без перерисовки поля — фокус и курсор остаются
+    M.q = el.value; const box = document.getElementById("mu-list"); if (box) box.innerHTML = musicList();
+    const lab = el.closest(".mu-search"); lab.querySelector("button")?.remove();
+    if (M.q) lab.insertAdjacentHTML("beforeend", `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>`);
+    document.querySelectorAll(".fold-card").forEach(c => c.classList.toggle("on", !M.q && (c.dataset.id || null) === M.folder));
+    return;
+  }
   const w = workoutOn(S.day), li = el.closest("[data-ex]"), e = li && S.exercises.find(x => x.id === li.dataset.ex);
   if (f === "w-title") { w.title = el.value; refreshDayBits(); later("wt", () => q(sb.from("gym_workouts").update({ title: w.title.trim() }).eq("id", w.id))); }
   else if (f === "set-w" || f === "set-r") { const i = +el.closest(".set").dataset.i; e.sets[i][f === "set-w" ? "w" : "r"] = num(el.value); saveEx(e); }
