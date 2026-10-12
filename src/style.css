@@ -499,20 +499,24 @@ a.help-link{display:flex;align-items:center;gap:12px;color:var(--ink);text-decor
 .wkb-ghost{position:fixed;z-index:100;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25);border-color:var(--accent);background:var(--surface);transform:rotate(-1.5deg)}
 /* музыка: список треков и плеер внизу */
 .btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
-.tracks{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:2px}
-.track{width:100%;display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 10px;border:0;border-radius:12px;background:none;text-align:left;transition:background-color var(--t2) ease}
-@media (hover:hover){.track:hover{background:var(--surface)}}
-.track.cur{background:var(--surface)}
+.tracks{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:2px}
+.tracks li{display:flex;align-items:center;border-radius:12px;transition:background-color var(--t2) ease}
+@media (hover:hover){.tracks li:hover{background:var(--surface)}}
+.tracks li.cur{background:var(--surface)}
+.track{flex:1;min-width:0;display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 10px;border:0;border-radius:12px;background:none;text-align:left}
 .tr-n{flex:none;width:24px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;color:var(--muted)}
 .tr-t{flex:1;min-width:0;display:grid;line-height:1.3}
 .tr-t b{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.track.cur .tr-t b{color:var(--accent)}
+.tracks li.cur .tr-t b{color:var(--accent)}
 .tr-t span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr-d{flex:none;font-size:13px;color:var(--muted)}
+.tr-more{flex:none;display:grid;place-items:center;width:40px;height:44px;margin-right:2px;padding:0;border:0;border-radius:10px;background:none;color:var(--muted)}
+.tr-more svg{width:18px;height:18px}
+@media (hover:hover){.tr-more:hover{color:var(--ink);background:var(--chip)}}
 .eq{display:flex;align-items:flex-end;gap:2px;height:14px}
 .eq b{width:3px;height:40%;border-radius:1px;background:var(--accent)}
-.track.playing .eq b{animation:eq .9s ease-in-out infinite}
-.track.playing .eq b:nth-child(2){animation-delay:-.3s}.track.playing .eq b:nth-child(3){animation-delay:-.6s}
+.tracks li.playing .eq b{animation:eq .9s ease-in-out infinite}
+.tracks li.playing .eq b:nth-child(2){animation-delay:-.3s}.tracks li.playing .eq b:nth-child(3){animation-delay:-.6s}
 @keyframes eq{0%,100%{height:30%}50%{height:100%}}
 .player{position:fixed;left:8px;right:8px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:44;max-width:560px;margin-inline:auto;border-radius:16px;overflow:hidden;
   background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.22);
@@ -522,8 +526,11 @@ a.help-link{display:flex;align-items:center;gap:12px;color:var(--ink);text-decor
 .pl-prog{position:relative;height:3px;background:var(--chip)}
 .pl-prog i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent)}
 .pl-prog input{position:absolute;left:0;right:0;top:-8px;width:100%;height:18px;margin:0;opacity:0;cursor:pointer}
-.pl-row{display:flex;align-items:center;gap:2px;padding:6px 6px 6px 14px}
-.pl-info{flex:1;min-width:0;display:grid;border:0;background:none;padding:2px 0;text-align:left;line-height:1.25}
+.pl-row{display:flex;align-items:center;gap:2px;padding:6px 6px 6px 8px}
+.pl-info{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;padding:2px 0;text-align:left;line-height:1.25}
+.pl-txt{flex:1;min-width:0;display:grid}
+.pl-cover{flex:none;width:40px;height:40px;border-radius:8px;overflow:hidden;display:grid}
+.pl-cover img,.pl-cover .cover-tile{width:100%;height:100%;object-fit:cover;font-size:16px}
 .pl-info b{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-info span{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-play{flex:none;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);padding:0}
@@ -533,10 +540,44 @@ html.has-player .coach-fab{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 html.has-player .rest{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 html.has-player body{padding-bottom:calc(220px + env(safe-area-inset-bottom,0px))}
 @media (min-width:760px){html.has-player .coach-fab,html.has-player .rest{bottom:96px}html.has-player body{padding-bottom:170px}}
-@media (prefers-reduced-motion: reduce){.track.playing .eq b{animation:none;height:70%}}
+@media (prefers-reduced-motion: reduce){.tracks li.playing .eq b{animation:none;height:70%}}
 .mu-up{display:flex;align-items:center;gap:14px;margin-top:16px;padding:14px 16px;border-radius:16px;border:1px dashed var(--line);cursor:pointer;transition:border-color var(--t2) ease,background-color var(--t2) ease}
 .mu-up>svg{flex:none;width:22px;height:22px;color:var(--accent)}
 .mu-up>span{display:grid;gap:2px}
 .mu-up .hint{font-size:13px}
 @media (hover:hover){.mu-up:hover{border-color:var(--accent)}}
 html.mu-drop .mu-up{border-color:var(--accent);background:var(--accent-soft)}
+/* музыка: папки */
+.mu-hero{padding-bottom:0}
+.folders{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x proximity;scroll-padding-inline:16px;scrollbar-width:none;margin:18px -16px 0;padding:2px 16px 6px}
+.folders::-webkit-scrollbar{display:none}
+.fold-card{flex:none;width:136px;display:grid;gap:2px;padding:0;border:0;background:none;text-align:left;scroll-snap-align:start}
+.fold-cover{display:grid;width:136px;height:136px;margin-bottom:8px;border-radius:16px;overflow:hidden;background:var(--chip);box-shadow:0 1px 2px rgba(0,0,0,.08);transition:transform var(--t2) var(--ease-out),box-shadow var(--t2) ease}
+.fold-cover img,.fold-cover .cover-tile{width:100%;height:100%;object-fit:cover}
+.fold-card b{font-weight:600;font-size:14.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fold-card>span:last-child{font-size:12.5px;color:var(--muted)}
+.fold-card.on .fold-cover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.fold-card.on b{color:var(--accent)}
+.fold-card:active .fold-cover{transform:scale(.97)}
+@media (hover:hover){.fold-card:hover .fold-cover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.18)}}
+@media (min-width:760px){.folders{margin-inline:0;padding-inline:2px}.fold-card{width:150px}.fold-cover{width:150px;height:150px}}
+.cover-tile{display:grid;place-items:center;font-family:var(--display);font-weight:600;font-size:44px;color:#fff;
+  background:linear-gradient(135deg,hsl(var(--h,170) 45% 38%),hsl(calc(var(--h,170) + 40) 55% 22%))}
+.cover-tile.all{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 40%,#000));color:var(--accent-ink)}
+.cover-tile.all svg{width:44px;height:44px}
+.cover-tile.plus{background:none;border:2px dashed var(--line);border-radius:16px;color:var(--muted)}
+.cover-tile.plus svg{width:32px;height:32px}
+.mu-head{display:grid;gap:14px;margin-top:22px}
+.mu-title{display:flex;align-items:center;gap:14px;min-width:0}
+.mu-title>div{min-width:0}
+.mu-title h2{font-size:clamp(20px,5.5vw,24px);overflow-wrap:anywhere}
+.mu-title .muted{font-size:14px}
+.mu-cover{flex:none;width:64px;height:64px;border-radius:12px;overflow:hidden;display:grid}
+.mu-cover img,.mu-cover .cover-tile{width:100%;height:100%;object-fit:cover;font-size:24px}
+.mu-empty{margin-top:16px}
+.pick-file{display:grid;gap:2px;min-height:52px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);cursor:pointer}
+.pick-file span{font-size:13px;color:var(--muted)}
+@media (hover:hover){.pick-file:hover{border-color:var(--accent);background:var(--accent-soft)}}
+.pick button:disabled{opacity:.6;cursor:default}
+.sheet .music-form{display:grid;gap:12px}
+.sheet .err{color:var(--bad);font-size:14px}

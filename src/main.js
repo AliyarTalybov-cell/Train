@@ -48,6 +48,7 @@ const I = {
   prev: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 6v12a1 1 0 0 1-1.5.86L9.5 13.7a2 2 0 0 1 0-3.4l9-5.16A1 1 0 0 1 20 6z"/></svg>',
   next: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 6v12a1 1 0 0 0 1.5.86l9-5.16a2 2 0 0 0 0-3.4l-9-5.16A1 1 0 0 0 4 6z"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>',
+  dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
 
@@ -169,7 +170,7 @@ function render() {
     <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
-    ${S.loaded ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
+    ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
   const main = document.getElementById("main"); if (!main) return render();
@@ -929,36 +930,145 @@ function friendView() {
 // Загружать новые может только владелец сайта.
 const OWNER = "63719d65-7465-436c-b3e0-0fd943771228";
 // Плеер живёт вне страниц: музыка не прерывается при переходах и отметках подходов.
-const M = { tracks: null, i: -1, urls: {}, shuffle: false, audio: new Audio(), bar: null, loading: null };
+const M = { tracks: null, folders: [], covers: {}, folder: null, queue: [], i: -1, urls: {}, shuffle: false, audio: new Audio(), bar: null, loading: null };
 M.audio.preload = "metadata";
 const mmss = sec => sec == null || !isFinite(sec) ? "" : `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 function loadTracks() {
   M.loading ||= (async () => {
     const cur = M.tracks?.[M.i]?.file;
-    M.tracks = await q(sb.from("gym_tracks").select("*").order("created_at").order("title"), { silent: true });
-    const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(M.tracks.map(t => "tracks/" + t.file), 6 * 3600);
-    for (const u of urls || []) if (u.signedUrl) M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
+    const [tracks, folders] = await Promise.all([
+      q(sb.from("gym_tracks").select("*").order("created_at").order("title"), { silent: true }),
+      q(sb.from("gym_music_folders").select("*").order("created_at"), { silent: true }).catch(() => []),
+    ]);
+    M.tracks = tracks; M.folders = folders;
+    const paths = [...M.tracks.map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover)];
+    const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600);
+    for (const u of urls || []) if (u.signedUrl) {
+      if (u.path.startsWith("covers/")) M.covers[u.path.slice(7)] = u.signedUrl; else M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
+    }
+    if (M.folder && !folders.some(f => f.id === M.folder)) M.folder = null;
     M.tracks = M.tracks.filter(t => M.urls[t.file]);
     if (cur) M.i = M.tracks.findIndex(t => t.file === cur);
   })().catch(e => { M.loading = null; throw e; });
   return M.loading;
 }
+const folderOf = t => M.folders.find(f => f.id === t?.folder_id);
+const coverOf = f => f?.cover ? M.covers[f.cover] : null;
+// обложка-заглушка: первая буква на цветном фоне, цвет зависит от названия
+const tileHue = name => [...String(name || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17);
+const coverHTML = (f, cls = "") => coverOf(f) ? `<img class="${cls}" src="${coverOf(f)}" alt="" loading="lazy" decoding="async">`
+  : `<span class="cover-tile ${cls}" style="--h:${tileHue(f?.name)}" aria-hidden="true">${esc(initial(f?.name || "♪"))}</span>`;
+const visibleTracks = () => M.tracks.map((t, i) => ({ t, i })).filter(x => !M.folder || x.t.folder_id === M.folder);
+const isOwner = () => S.user?.id === OWNER;
+
 function musicView() {
   if (!M.tracks) {
     loadTracks().then(() => { if (route().path === "music") rerender(); })
       .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
     return skeleton();
   }
-  const total = M.tracks.reduce((a, t) => a + (t.sec || 0), 0), playing = !M.audio.paused;
+  const list = visibleTracks(), f = M.folders.find(x => x.id === M.folder), playing = !M.audio.paused;
+  const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
+  const count = id => M.tracks.filter(t => t.folder_id === id).length;
+  const card = (id, name, n, cover) => `<button class="fold-card ${M.folder === id ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
+      <span class="fold-cover">${cover}</span><b>${esc(name)}</b><span>${n} ${plural(n, "трек", "трека", "треков")}</span></button>`;
   return `
-    <section class="hero"><h1>Музыка</h1><p class="lead">${M.tracks.length} ${plural(M.tracks.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин. Музыка играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p>
-      <div class="row"><button class="btn" data-act="mu-all">${I.play}Слушать всё</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button></div></section>
-    ${S.user.id === OWNER ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки с компьютера</b><span class="hint" id="mu-st">mp3, можно несколько сразу или перетащить файлы на страницу. Название берётся из имени файла «Исполнитель - Трек».</span></span></label>` : ""}
-    <ol class="tracks">${M.tracks.map((t, i) => `<li><button class="track ${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-act="mu-play" data-i="${i}">
-      <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : i + 1}</span>
-      <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
-      <span class="tr-d mono">${mmss(t.sec)}</span></button></li>`).join("")}</ol>`;
+    <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
+    <div class="folders" role="list">
+      ${card(null, "Все треки", M.tracks.length, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`)}
+      ${M.folders.map(x => card(x.id, x.name, count(x.id), coverHTML(x))).join("")}
+      ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
+    </div>
+    <section class="mu-head">
+      <div class="mu-title">${f ? `<span class="mu-cover">${coverHTML(f)}</span>` : ""}<div><h2>${esc(f?.name || "Все треки")}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
+      <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
+        ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
+    </section>
+    ${isOwner() ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint" id="mu-st">mp3 с компьютера, можно несколько или перетащить на страницу. Название — из имени файла «Исполнитель - Трек».</span></span></label>` : ""}
+    ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-i="${i}">
+      <button class="track" data-act="mu-play" data-i="${i}">
+        <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span>
+        <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
+        <span class="tr-d mono">${mmss(t.sec)}</span></button>
+      ${isOwner() ? `<button class="tr-more" data-act="mu-track-menu" data-i="${i}" aria-label="Действия с треком">${I.dots}</button>` : ""}</li>`).join("")}</ol>`
+      : `<p class="hint mu-empty">${isOwner() ? "В папке пока нет треков — загрузи их кнопкой выше или перенеси из «Все треки» через ⋯ у трека." : "В папке пока нет треков."}</p>`}`;
 }
+
+// Действия владельца: перенести трек в папку, удалить трек, создать папку, сменить обложку, удалить папку.
+function trackMenu(i) {
+  const t = M.tracks[i]; if (!t) return;
+  sheet(t.title, `<p class="muted">${esc(t.artist)}</p>
+    <div class="eyebrow">Перенести в папку</div>
+    <div class="pick">${[{ id: "", name: "Без папки" }, ...M.folders].map(f => `<button data-to="${f.id}" ${(t.folder_id || "") === f.id ? "disabled" : ""}><b>${esc(f.name)}</b>${(t.folder_id || "") === f.id ? "<span>сейчас здесь</span>" : ""}</button>`).join("")}</div>
+    <div class="sheet-actions"><button class="btn danger-soft" data-del>Удалить трек</button></div>`, (el, close) => {
+    el.addEventListener("click", async ev => {
+      const to = ev.target.closest("[data-to]");
+      if (to) { to.disabled = true;
+        try { await q(sb.from("gym_tracks").update({ folder_id: to.dataset.to || null }).eq("id", t.id)); t.folder_id = to.dataset.to || null; close(); rerender(); toast("Перенесено"); } catch { to.disabled = false; }
+        return; }
+      if (!ev.target.closest("[data-del]")) return;
+      close();
+      if (!await confirmSheet("Удалить трек?", `«${t.title}» исчезнет с сайта у всех. Файл на твоём компьютере останется.`)) return;
+      try {
+        await q(sb.from("gym_tracks").delete().eq("id", t.id));
+        await sb.storage.from("gym-music").remove(["tracks/" + t.file]);
+        if (M.i === i) { M.audio.pause(); M.audio.removeAttribute("src"); }
+        const cur = M.tracks[M.i]?.file; M.tracks.splice(i, 1); M.i = cur ? M.tracks.findIndex(x => x.file === cur) : -1;
+        if (M.i < 0) { M.bar?.remove(); M.bar = null; document.documentElement.classList.remove("has-player"); }
+        rerender(); toast("Трек удалён");
+      } catch {}
+    });
+  });
+}
+function newFolderSheet() {
+  sheet("Новая папка", `<form class="music-form" data-mf>
+      <label class="field"><span>Название — группа или альбом</span><input class="inp" name="name" maxlength="60" required autocomplete="off"></label>
+      <label class="field"><span>Обложка, необязательно</span><input class="inp" type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+      <p class="err" role="alert"></p>
+      <div class="sheet-actions"><button class="btn quiet" type="button" data-close>Отмена</button><button class="btn" type="submit">Создать</button></div></form>`, (el, close) => {
+    el.querySelector("[name=name]").focus();
+    el.querySelector("form").onsubmit = async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const fm = ev.target, name = fm.name.value.trim(), btn = fm.querySelector("[type=submit]"), err = fm.querySelector(".err");
+      if (!name) return;
+      if (M.folders.some(f => norm(f.name) === norm(name))) { err.textContent = "Такая папка уже есть"; return; }
+      btn.classList.add("loading"); btn.disabled = true;
+      try {
+        const cover = fm.cover.files[0] ? await uploadCover(fm.cover.files[0], name) : null;
+        const row = await q(sb.from("gym_music_folders").insert({ name, cover }).select().single());
+        // треки этого исполнителя без папки сразу переезжают в неё
+        const ids = M.tracks.filter(t => !t.folder_id && norm(t.artist.split(",")[0]) === norm(name)).map(t => t.id);
+        if (ids.length) await q(sb.from("gym_tracks").update({ folder_id: row.id }).in("id", ids));
+        M.folder = row.id; M.loading = null; await loadTracks(); close(); rerender(); toast(`Папка «${name}» создана${ids.length ? `, перенесено треков: ${ids.length}` : ""}`);
+      } catch { btn.classList.remove("loading"); btn.disabled = false; err.textContent = "Не получилось — попробуй ещё раз"; }
+    };
+  });
+}
+async function uploadCover(file, name) {
+  const ext = /png/.test(file.type) ? "png" : /webp/.test(file.type) ? "webp" : "jpg", path = `${slugify(name)}-${Date.now().toString(36)}.${ext}`;
+  const { error } = await sb.storage.from("gym-music").upload("covers/" + path, file, { contentType: file.type || "image/jpeg" });
+  if (error) throw error;
+  return path;
+}
+function folderMenu() {
+  const f = M.folders.find(x => x.id === M.folder); if (!f) return;
+  sheet(f.name, `<div class="pick">
+      <label class="pick-file"><input type="file" accept="image/jpeg,image/png,image/webp" hidden data-cover><b>Сменить обложку</b><span>картинка с компьютера</span></label>
+      <button data-del-folder><b>Удалить папку</b><span>треки останутся во «Все треки»</span></button></div>`, (el, close) => {
+    el.querySelector("[data-cover]").onchange = async ev => {
+      const file = ev.target.files[0]; if (!file) return;
+      try { const cover = await uploadCover(file, f.name); await q(sb.from("gym_music_folders").update({ cover }).eq("id", f.id)); if (f.cover) sb.storage.from("gym-music").remove(["covers/" + f.cover]);
+        M.loading = null; await loadTracks(); close(); rerender(); toast("Обложка обновлена"); } catch { toast("Не получилось загрузить картинку"); }
+    };
+    el.querySelector("[data-del-folder]").onclick = async () => {
+      close();
+      if (!await confirmSheet(`Удалить папку «${f.name}»?`, "Треки не удалятся — они останутся во «Все треки».")) return;
+      try { await q(sb.from("gym_music_folders").delete().eq("id", f.id)); if (f.cover) sb.storage.from("gym-music").remove(["covers/" + f.cover]);
+        M.folder = null; M.loading = null; await loadTracks(); rerender(); toast("Папка удалена"); } catch {}
+    };
+  });
+}
+
 // Загрузка: файл → хранилище, строка → gym_tracks. Длительность читается в браузере.
 const slugify = s => s.normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "track";
 const durationOf = f => new Promise(res => { const a = new Audio(), u = URL.createObjectURL(f); a.preload = "metadata"; a.src = u;
@@ -967,22 +1077,26 @@ async function uploadTracks(files) {
   files = [...files].filter(f => /\.mp3$/i.test(f.name) || f.type === "audio/mpeg");
   if (!files.length) return toast("Нужны файлы mp3");
   const st = () => document.getElementById("mu-st"), have = new Set((M.tracks || []).map(t => t.file));
-  let ok = 0, fail = 0;
+  const same = new Set((M.tracks || []).map(t => norm(t.artist) + "|" + norm(t.title)));
+  let ok = 0, fail = 0, dup = 0;
   for (const [k, f] of files.entries()) {
     if (st()) st().textContent = `Загружаю ${k + 1} из ${files.length}: ${f.name}`;
     const base = f.name.replace(/\.mp3$/i, ""), [artist, title] = base.includes(" - ") ? [base.slice(0, base.indexOf(" - ")), base.slice(base.indexOf(" - ") + 3)] : ["", base];
+    if (same.has(norm(artist) + "|" + norm(title || base))) { dup++; continue; } // такой трек уже есть
     let file = slugify(base) + ".mp3"; if (have.has(file)) file = slugify(base) + "-" + Date.now().toString(36) + ".mp3";
+    // папка: открытая сейчас, иначе папка с именем исполнителя
+    const folder_id = M.folder || M.folders.find(x => norm(x.name) === norm(artist.split(",")[0]))?.id || null;
     try {
       const sec = await durationOf(f);
       const { error } = await sb.storage.from("gym-music").upload("tracks/" + file, f, { contentType: "audio/mpeg" });
       if (error) throw error;
-      await q(sb.from("gym_tracks").insert({ file, artist: artist.trim(), title: title.trim() || base, sec }), { silent: true });
-      have.add(file); ok++;
+      await q(sb.from("gym_tracks").insert({ file, artist: artist.trim(), title: title.trim() || base, sec, folder_id }), { silent: true });
+      have.add(file); same.add(norm(artist) + "|" + norm(title || base)); ok++;
     } catch (e) { console.error(e); fail++; }
   }
   M.loading = null; await loadTracks().catch(() => {});
   if (route().path === "music") rerender();
-  toast(fail ? `Загружено ${ok}, не получилось ${fail}` : `Загружено: ${ok}`);
+  toast([`Загружено: ${ok}`, dup && `уже были: ${dup}`, fail && `не получилось: ${fail}`].filter(Boolean).join(", "));
 }
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "mu-files") { uploadTracks(ev.target.files); ev.target.value = ""; } });
 document.addEventListener("dragover", ev => { if (route().path === "music" && S.user?.id === OWNER && ev.dataTransfer?.types.includes("Files")) { ev.preventDefault(); document.documentElement.classList.add("mu-drop"); } });
@@ -992,21 +1106,23 @@ document.addEventListener("drop", ev => { if (route().path !== "music" || S.user
 function playAt(i) {
   const t = M.tracks[i]; if (!t) return;
   M.i = i; M.audio.src = M.urls[t.file]; M.audio.play().catch(() => {});
-  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: "Дневник" });
+  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: folderOf(t)?.name || "Дневник", artwork: coverOf(folderOf(t)) ? [{ src: coverOf(folderOf(t)), sizes: "400x400" }] : [] });
   drawBar(); refreshTracks();
 }
+// Очередь — треки той папки, откуда включили музыку.
 const nextIndex = dir => {
-  const n = M.tracks.length;
-  if (M.shuffle && n > 1) { let k; do k = Math.floor(Math.random() * n); while (k === M.i); return k; }
-  return (M.i + dir + n) % n;
+  const fromQ = M.queue.map(f => M.tracks.findIndex(t => t.file === f)).filter(i => i >= 0);
+  const qu = fromQ.length ? fromQ : M.tracks.map((_, i) => i), n = qu.length, pos = qu.indexOf(M.i);
+  if (M.shuffle && n > 1) { let k; do k = qu[Math.floor(Math.random() * n)]; while (k === M.i); return k; }
+  return qu[((pos < 0 ? 0 : pos) + dir + n) % n];
 };
 function refreshTracks() {
   if (route().path !== "music") return;
   const playing = !M.audio.paused;
-  document.querySelectorAll(".track").forEach(b => {
-    const i = +b.dataset.i, cur = i === M.i;
-    b.classList.toggle("cur", cur); b.classList.toggle("playing", cur && playing);
-    b.querySelector(".tr-n").innerHTML = cur ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : i + 1;
+  document.querySelectorAll(".tracks li").forEach((li, k) => {
+    const i = +li.dataset.i, cur = i === M.i;
+    li.classList.toggle("cur", cur); li.classList.toggle("playing", cur && playing);
+    li.querySelector(".tr-n").innerHTML = cur ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1;
   });
 }
 function drawBar() {
@@ -1014,7 +1130,7 @@ function drawBar() {
   if (!M.bar) {
     M.bar = document.createElement("div"); M.bar.className = "player"; M.bar.setAttribute("aria-label", "Плеер");
     M.bar.innerHTML = `<div class="pl-prog"><i></i><input type="range" min="0" max="1000" value="0" aria-label="Перемотка"></div>
-      <div class="pl-row"><button class="pl-info" data-p="go"><b></b><span></span></button>
+      <div class="pl-row"><button class="pl-info" data-p="go"><span class="pl-cover"></span><span class="pl-txt"><b></b><span></span></span></button>
       <button class="icon-btn bare" data-p="prev" aria-label="Предыдущий">${I.prev}</button>
       <button class="pl-play" data-p="toggle" aria-label="Пауза"></button>
       <button class="icon-btn bare" data-p="next" aria-label="Следующий">${I.next}</button></div>`;
@@ -1027,8 +1143,9 @@ function drawBar() {
     document.body.append(M.bar); document.documentElement.classList.add("has-player");
     requestAnimationFrame(() => M.bar.classList.add("on"));
   }
-  M.bar.querySelector(".pl-info b").textContent = t.title;
-  M.bar.querySelector(".pl-info span").textContent = t.artist;
+  M.bar.querySelector(".pl-txt b").textContent = t.title;
+  M.bar.querySelector(".pl-txt span").textContent = t.artist;
+  M.bar.querySelector(".pl-cover").innerHTML = coverHTML(folderOf(t) || { name: t.artist });
   const paused = M.audio.paused, play = M.bar.querySelector(".pl-play");
   play.innerHTML = paused ? I.play : I.pause; play.setAttribute("aria-label", paused ? "Играть" : "Пауза");
 }
@@ -1254,8 +1371,12 @@ async function run(b, act) {
     case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
-    case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else playAt(i); break; }
-    case "mu-all": playAt(M.shuffle ? nextIndex(1) : 0); break;
+    case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else { M.queue = visibleTracks().map(x => x.t.file); playAt(i); } break; }
+    case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
+    case "mu-folder": M.folder = b.dataset.id || null; rerender(); break;
+    case "mu-track-menu": trackMenu(+b.dataset.i); break;
+    case "mu-new-folder": newFolderSheet(); break;
+    case "mu-folder-menu": folderMenu(); break;
     case "mu-shuffle": M.shuffle = !M.shuffle; b.setAttribute("aria-pressed", M.shuffle); break;
     case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
