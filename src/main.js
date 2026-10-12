@@ -1703,7 +1703,7 @@ function photoSrc(pr) {
 }
 let funLoading = null;
 function loadFun() {
-  const paths = PROGRAMS.flatMap(p => [p.photo?.storage, p.photo2?.storage, p.flash]).filter(Boolean);
+  const paths = PROGRAMS.flatMap(p => [p.photo?.storage, p.photo2?.storage, ...[p.flash || []].flat()]).filter(Boolean);
   funLoading ||= sb.storage.from("gym-avatars").createSignedUrls(paths, 6 * 3600).then(({ data }) => {
     for (const d of data || []) if (d.signedUrl) { S.fun[d.path] = d.signedUrl; new Image().src = d.signedUrl; } // заранее прогреть картинку для вспышки
   }).catch(() => { funLoading = null; });
@@ -1718,7 +1718,11 @@ function bolt(x) { // ломаная молния сверху вниз, в пр
 }
 function storm(id) {
   if (document.querySelector(".storm")) return;
-  const pr = programById(id), face = pr?.flash && S.fun[pr.flash];
+  // случайное фото из списка, не то же, что в прошлый раз
+  const pr = programById(id), pool = [pr?.flash || []].flat().filter(f => S.fun[f]);
+  let pick = pool[Math.floor(Math.random() * pool.length)];
+  if (pool.length > 1 && pick === S.lastFlash) pick = pool[(pool.indexOf(pick) + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length];
+  S.lastFlash = pick; const face = pick && S.fun[pick];
   const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const el = document.createElement("div");
   el.className = "storm" + (calm ? " calm" : ""); el.setAttribute("aria-hidden", "true");

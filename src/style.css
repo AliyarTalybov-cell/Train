@@ -806,3 +806,4 @@ a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);wid
 .duo-bolt path{fill:none;stroke:#fff;stroke-width:3;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 .prog-photo.duo .duo-bolt{animation:duoGlow 3.2s ease-in-out infinite}
 @keyframes duoGlow{0%,100%{opacity:.85}48%{opacity:.85}50%{opacity:.2}52%{opacity:1}}
+.storm-face{aspect-ratio:auto;height:auto;max-height:70vh;width:auto;max-width:min(72vw,360px);object-fit:contain}

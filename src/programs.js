@@ -583,7 +583,7 @@ PROGRAMS.push({
   about: "Проверенная годами схема: проснулся, покушац, покурыт, качат качат, идти работат. Каждый будний день, без отговорок.",
   photo: { storage: "fun/wake.jpg", caption: "Проснулся", pos: "50% 38%" },
   photo2: { storage: "fun/work.jpg", caption: "Идти работат", pos: "50% 42%" }, // вторая половина обложки
-  flash: "fun/irish.jpg",
+  flash: ["fun/irish.jpg", "fun/face-1.jpg", "fun/face-2.jpg", "fun/face-3.jpg", "fun/face-4.jpg"], // в грозе мелькает случайное
   sessions: [
     { title: "Утро", focus: "Проснулся → идти работат", ex: [
       { n: ["Проснулся"], s: 1, r: "1", tip: "Главное — открыть глаза" },
