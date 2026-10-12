@@ -145,6 +145,7 @@ const M = {
   "Скручивания на наклонной скамье": ["Decline_Crunch", "Пресс"],
   "Косые скручивания": ["Oblique_Crunches_-_On_The_Floor", "Пресс"],
   "Паллоф-жим": ["Pallof_Press", "Пресс"],
+  "Качат качат": ["Barbell_Curl", "Бицепс"],
   "Дровосек на верхнем блоке": ["Standing_Cable_Wood_Chop", "Пресс"],
 };
 const key = s => String(s || "").trim().toLowerCase().replace(/ё/g, "е");

@@ -747,7 +747,7 @@ function coachChat() {
 }
 
 /* ---------- programs ---------- */
-const STAR_ORDER = ["coleman", "cutler", "the-rock"];
+const STAR_ORDER = ["coleman", "cutler", "the-rock", "morning"];
 function programsView() {
   const p = S.profile, cur = programById(p.program_id);
   const card = pr => {
@@ -756,15 +756,15 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}">
-      ${pr.photo ? `<figure class="prog-photo"><img src="${pr.photo.src}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">
-          <figcaption><b>${esc(pr.photo.caption)}</b><a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a></figcaption></figure>`
+      ${pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
+          <figcaption><b>${esc(pr.photo.caption)}</b>${pr.photo.credit ? `<a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a>` : ""}</figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
       <div class="prog-head">
         <h2>${esc(pr.title)}</h2>
-        <div class="tags">${on ? `<span class="tag on">${I.check}в календаре</span>` : ""}<span class="tag">${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю</span><span class="tag">${pr.place === "дом" ? "дома" : "в зале"}</span>${pr.length ? `<span class="tag">${pr.length} недель</span>` : ""}</div>
+        <div class="tags">${on ? `<span class="tag on">${I.check}в календаре</span>` : ""}<span class="tag">${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю</span><span class="tag">${{ дом: "дома", везде: "где угодно" }[pr.place] || "в зале"}</span>${pr.length ? `<span class="tag">${pr.length} недель</span>` : ""}</div>
       </div>
       <p>${esc(pr.about)}</p>
-      <details class="fold"><summary>Посмотреть тренировки</summary>
+      <details class="fold" ${pr.joke ? `data-storm="${pr.id}"` : ""}><summary>Посмотреть тренировки</summary>
         <div class="sessions">${sessionsOf(pr).map((s, k) => `
           <section class="sess">
             <header class="sess-head"><span class="sess-n mono">${k + 1}</span><div><b>${esc(s.title)}</b>${s.focus ? `<span>${esc(s.focus)}</span>` : ""}</div></header>
@@ -1685,6 +1685,45 @@ document.addEventListener("pointerdown", ev => {
   addEventListener("pointermove", move, { passive: false }); addEventListener("pointerup", up); addEventListener("pointercancel", up);
 });
 
+/* ---------- шуточная программа: молнии ---------- */
+// Фото шуточной программы — из закрытого хранилища, подписанные ссылки кэшируются.
+S.fun = {};
+function photoSrc(pr) {
+  if (!pr.photo?.storage) return pr.photo?.src;
+  if (S.fun[pr.photo.storage]) return S.fun[pr.photo.storage];
+  loadFun().then(() => { if (route().path === "programs") rerender(); });
+  return "";
+}
+let funLoading = null;
+function loadFun() {
+  const paths = PROGRAMS.flatMap(p => [p.photo?.storage, p.flash]).filter(Boolean);
+  funLoading ||= sb.storage.from("gym-avatars").createSignedUrls(paths, 6 * 3600).then(({ data }) => {
+    for (const d of data || []) if (d.signedUrl) { S.fun[d.path] = d.signedUrl; new Image().src = d.signedUrl; } // заранее прогреть картинку для вспышки
+  }).catch(() => { funLoading = null; });
+  return funLoading;
+}
+// Гроза: три вспышки с молниями (не чаще трёх в секунду), на второй — мелькает фото и исчезает.
+function bolt(x) { // ломаная молния сверху вниз, в процентах экрана
+  let px = x, py = -2, d = `M${px} ${py}`;
+  while (py < 70 + Math.random() * 25) { px += (Math.random() - 0.5) * 14; py += 6 + Math.random() * 9; d += ` L${px.toFixed(1)} ${py.toFixed(1)}`; }
+  const bx = px + (Math.random() - 0.5) * 20; // ответвление
+  return `<path d="${d}"/><path class="br" d="M${px.toFixed(1)} ${py.toFixed(1)} L${bx.toFixed(1)} ${(py + 12).toFixed(1)}"/>`;
+}
+function storm(id) {
+  if (document.querySelector(".storm")) return;
+  const pr = programById(id), face = pr?.flash && S.fun[pr.flash];
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const el = document.createElement("div");
+  el.className = "storm" + (calm ? " calm" : ""); el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `<div class="storm-sky"></div>
+    ${[0, 1, 2].map(k => `<svg class="bolt b${k}" viewBox="0 0 100 100" preserveAspectRatio="none">${bolt(15 + k * 32 + Math.random() * 12)}</svg>`).join("")}
+    <div class="storm-flash"></div>${face ? `<img class="storm-face" src="${face}" alt="">` : ""}`;
+  document.body.append(el);
+  navigator.vibrate?.([60, 440, 60, 440, 120]);
+  setTimeout(() => el.remove(), calm ? 1600 : 2500);
+}
+document.addEventListener("toggle", ev => { const d = ev.target; if (d.dataset?.storm && d.open) { loadFun().then(() => storm(d.dataset.storm)); } }, true);
+
 /* ---------- diet ---------- */
 // Питание звёздных программ: как ел сам спортсмен, сколько есть тебе (по весу из профиля) и пример дня.
 const DIET = { // ккал на кг веса, белок и жиры — г на кг; углеводы — остаток
@@ -1807,6 +1846,7 @@ async function run(b, act) {
     case "share-no": { const sh = S.shares.find(x => x.id === b.dataset.id); b.classList.add("loading"); b.disabled = true;
       try { await declineShare(sh); } catch { b.classList.remove("loading"); b.disabled = false; } break; }
     case "ava-rm": removeAvatar(); break;
+    case "storm": loadFun().then(() => storm(b.dataset.id)); break;
     case "share-cancel": b.disabled = true; cancelShare(b.dataset.id).catch(() => { b.disabled = false; }); break;
     case "start": {
       b.classList.add("loading"); b.disabled = true;

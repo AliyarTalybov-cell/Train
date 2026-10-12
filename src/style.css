@@ -774,3 +774,23 @@ a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);wid
 .ava-edit.busy::after{content:"";position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;border-right-color:transparent;animation:spin .7s linear infinite}
 .me .hint{font-size:13px;margin-top:2px}
 .ava-rm{min-height:30px;padding:0;font-size:13px}
+/* гроза для шуточной программы */
+.prog-photo.joke{cursor:pointer}
+.storm{position:fixed;inset:0;z-index:300;pointer-events:none;overflow:hidden}
+.storm-sky{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(40,50,90,.55),rgba(3,5,12,.88));animation:skyIn 2.5s ease both}
+@keyframes skyIn{0%{opacity:0}8%{opacity:1}85%{opacity:1}100%{opacity:0}}
+.storm-flash{position:absolute;inset:0;background:#EAF2FF;opacity:0;animation:flash 2.5s linear both}
+@keyframes flash{0%,100%{opacity:0}6%{opacity:.85}9%{opacity:.1}12%{opacity:.55}16%{opacity:0}34%{opacity:0}38%{opacity:.9}43%{opacity:0}62%{opacity:0}66%{opacity:.7}71%{opacity:0}}
+.bolt{position:absolute;inset:0;width:100%;height:100%;opacity:0;filter:drop-shadow(0 0 6px #9FC3FF) drop-shadow(0 0 18px #6E9BFF)}
+.bolt path{fill:none;stroke:#fff;stroke-width:.7;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;stroke-width:3}
+.bolt path.br{stroke-width:1.5}
+.bolt.b0{animation:boltIn 2.5s linear both}
+.bolt.b1{animation:boltIn 2.5s linear .8s both}
+.bolt.b2{animation:boltIn 2.5s linear 1.5s both}
+@keyframes boltIn{0%{opacity:0}5%{opacity:1}10%{opacity:.2}13%{opacity:1}20%{opacity:0}100%{opacity:0}}
+.storm-face{position:absolute;left:50%;top:50%;width:min(64vw,340px);aspect-ratio:1;object-fit:cover;border-radius:24px;box-shadow:0 0 60px rgba(160,195,255,.6);
+  transform:translate(-50%,-50%) scale(.6);opacity:0;animation:face 2.5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes face{0%,36%{opacity:0;transform:translate(-50%,-50%) scale(.6) rotate(-4deg)}39%{opacity:1;transform:translate(-50%,-50%) scale(1.05) rotate(2deg)}46%{opacity:.85;transform:translate(-50%,-50%) scale(1) rotate(0)}58%{opacity:1}66%{opacity:0;transform:translate(-50%,-50%) scale(1.25)}100%{opacity:0}}
+.storm.calm .storm-flash,.storm.calm .bolt{display:none}
+.storm.calm .storm-sky,.storm.calm .storm-face{animation-duration:1.6s}
+@media (prefers-reduced-motion: reduce){.storm.calm .storm-sky,.storm.calm .storm-face{animation:none!important}.storm.calm .storm-face{opacity:1;transform:translate(-50%,-50%)}}
