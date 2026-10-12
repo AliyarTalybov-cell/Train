@@ -374,7 +374,7 @@ function exBody(e, last) {
 }
 
 function addForm() {
-  const names = [...new Set([...S.exercises.map(e => e.name.trim()), ...PROGRAMS.flatMap(pr => [...(pr.sessions || []), ...(pr.sessionsFor ? pr.sessionsFor(1) : [])].flatMap(s => s.ex.flatMap(e => e.n)))].filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+  const names = [...new Set([...S.exercises.map(e => e.name.trim()), ...KNOWN_NAMES, ...PROGRAMS.flatMap(pr => [...(pr.sessions || []), ...(pr.sessionsFor ? pr.sessionsFor(1) : [])].flatMap(s => s.ex.flatMap(e => e.n)))].filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
   return `<form class="add-ex" data-form="add-ex">
     <input class="inp" name="name" list="ex-names" placeholder="Добавить упражнение" autocomplete="off" maxlength="80" aria-label="Новое упражнение">
     <datalist id="ex-names">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
@@ -397,6 +397,7 @@ function dayPanel() {
     return `${head}
       <h2 class="day-title">${esc(s.plan.title)}</h2>
       <p class="day-sub">${progLine(d)}</p>
+      ${workoutMeta(s.plan.ex.map(e => ({ name: e.name, sets: e.sets })))}
       <ol class="ex-list">${items.map((e, i) => exRow(e, i, d)).join("")}</ol>
       <div class="row actions">
         <button class="btn" data-act="start">${d < today() ? "Отметить как сделанную" : "Начать тренировку"}</button>
@@ -406,10 +407,17 @@ function dayPanel() {
   return `${head}
     <input class="day-title title-inp" data-field="w-title" value="${esc(s.w.title)}" placeholder="Название тренировки" aria-label="Название тренировки" maxlength="80">
     <p class="day-sub"><span id="day-sub">${subLine(s)}</span>${sessionOn(d) ? ` · ${progLine(d)}` : ""}</p>
+    ${s.ex.length ? workoutMeta(s.ex.map(e => ({ name: e.name, sets: e.sets?.length || 0 }))) : ""}
     <ol class="ex-list" id="ex-list">${s.ex.map((e, i) => exRow(e, i, d)).join("")}</ol>
     ${addForm()}
     ${s.ex.length && s.done < s.ex.length ? `<div class="row actions"><button class="btn" data-act="finish">${I.check}Отметить всё</button></div>` : ""}
     <div class="row links"><button class="linkbtn muted-link" data-act="move">Перенести на другой день</button><button class="linkbtn muted-link" data-act="del-w">Удалить тренировку</button></div>`;
+}
+// Сводка тренировки: число упражнений, примерное время (≈2,5 мин на подход с отдыхом) и мышцы.
+function workoutMeta(items) {
+  const sets = items.reduce((a, e) => a + (+e.sets || 0), 0), min = Math.max(10, Math.round(sets * 2.5 / 5) * 5);
+  const groups = [...new Set(items.map(e => media(e.name)?.group).filter(Boolean))];
+  return `<div class="w-meta"><span class="tag">${items.length} ${exWord(items.length)}</span>${sets ? `<span class="tag">≈ ${min} мин</span>` : ""}${groups.map(g => `<span class="tag muscle">${esc(g)}</span>`).join("")}</div>`;
 }
 // «Джей Катлер · неделя 3 из 12 · тяжёлая неделя, отдых 3–4 мин»
 function progLine(d) {
@@ -728,10 +736,14 @@ function programsView() {
   const p = S.profile, cur = programById(p.program_id);
   const card = pr => {
     const on = pr.id === p.program_id;
+    // четыре фото из разных тренировок программы — чтобы сразу было видно, что в ней
+    const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
+    const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}">
+      <div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>
       <div class="prog-head">
         <h2>${esc(pr.title)}</h2>
-        <p class="muted">${pr.days} ${plural(pr.days, "тренировка", "тренировки", "тренировок")} в неделю${pr.length ? ` · ${pr.length} недель` : ""}${on ? " · в календаре" : ""}</p>
+        <div class="tags">${on ? `<span class="tag on">${I.check}в календаре</span>` : ""}<span class="tag">${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю</span><span class="tag">${pr.place === "дом" ? "дома" : "в зале"}</span>${pr.length ? `<span class="tag">${pr.length} недель</span>` : ""}</div>
       </div>
       <p>${esc(pr.about)}</p>
       <details class="fold"><summary>Посмотреть тренировки</summary>
@@ -749,10 +761,14 @@ function programsView() {
         : `<div><button class="btn ${cur ? "quiet" : ""}" data-act="pick-prog" data-v="${pr.id}">Поставить в календарь</button></div>`}
     </article>`;
   };
+  const where = S.progWhere || "all";
+  const list = [...PROGRAMS].filter(pr => where === "all" || pr.id === p.program_id || (where === "home") === (pr.place === "дом"))
+    .sort((a, b) => (b.id === p.program_id) - (a.id === p.program_id));
   return `
     <section class="hero"><h1>Программы</h1>
-      <p class="lead">Готовые схемы тренировок. Поставь программу в календарь — тренировки сами появятся на нужных днях.</p></section>
-    <div class="progs">${[...PROGRAMS].sort((a, b) => (b.id === p.program_id) - (a.id === p.program_id)).map(card).join("")}</div>`;
+      <p class="lead">Готовые схемы тренировок. Поставь программу в календарь — тренировки сами появятся на нужных днях.</p>
+      <div class="seg" role="radiogroup" aria-label="Где тренируешься">${[["all", "Все"], ["gym", "В зале"], ["home", "Дома"]].map(([k, l]) => `<button role="radio" data-act="prog-where" data-v="${k}" aria-checked="${where === k}">${l}</button>`).join("")}</div></section>
+    <div class="progs">${list.map(card).join("")}</div>`;
 }
 
 /* ---------- friends ---------- */
@@ -1179,7 +1195,7 @@ function helpHintHTML() {
 }
 const HELP = [
   ["С чего начать", [
-    "Открой «Программы» и нажми «Поставить в календарь» у подходящей программы — тренировки сами встанут на нужные дни недели.",
+    "Открой «Программы», выбери подходящую (фильтр «В зале / Дома» сверху) и нажми «Поставить в календарь» — тренировки сами встанут на нужные дни недели.",
     "Там же блок «Твоя неделя»: перетащи тренировку на другой день (или нажми на неё, а потом на день), «+» на дне отдыха добавляет тренировку, крестик делает день выходным.",
     "Не хочешь программу — открой день в календаре и нажми «Записать тренировку» или «Взять из программ».",
   ]],
@@ -1207,8 +1223,10 @@ const HELP = [
     "Друзья видят твоё имя, программу и тренировки, но не почту.",
   ]],
   ["Музыка", [
-    "Вкладка «Музыка» — наши треки. Нажми на трек или «Слушать всё»; «Вперемешку» перемешивает порядок.",
-    "Внизу появится плеер: музыка играет, пока открыт сайт, — можно отмечать подходы и переходить между разделами.",
+    "Вкладка «Музыка»: сверху папки групп — листай их вбок и нажми, внизу появятся треки этой папки. «Все треки» — всё сразу.",
+    "Нажми на трек или «Слушать» — играет вся папка по порядку, «Вперемешку» перемешивает.",
+    "Плеер внизу не выключается, пока открыт сайт: можно отмечать подходы и переходить между разделами.",
+    "Владелец сайта может загружать треки с компьютера, создавать папки, менять обложки, переносить и удалять треки через ⋯.",
   ]],
   ["Профиль", [
     "Имя видят друзья. Вес и рост нужны тренеру, чтобы подбирать нагрузку. Всё сохраняется само.",
@@ -1374,6 +1392,7 @@ async function run(b, act) {
     case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else { M.queue = visibleTracks().map(x => x.t.file); playAt(i); } break; }
     case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
     case "mu-folder": M.folder = b.dataset.id || null; rerender(); break;
+    case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
     case "mu-folder-menu": folderMenu(); break;
