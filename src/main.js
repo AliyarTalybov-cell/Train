@@ -431,19 +431,34 @@ function sidePosters() {
   wall.addEventListener("click", ev => { const p = ev.target.closest("[data-ath]"); if (p) athleteSheet(p.dataset.ath); });
   wall.addEventListener("keydown", ev => { const p = ev.target.closest("[data-ath]"); if (p && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); athleteSheet(p.dataset.ath); } });
 }
-// Мотивация от атлета: крупное фото, его фразы (только известные, без выдумок) и история; ссылка на его программу.
+// Мотивация от атлета — как постер: фото на всю карточку, цитата крупно поверх, имя огромными буквами внизу.
+// Фразы — только известные; у кого их нет — реальная история. Кнопка ведёт к его программе.
 function athleteSheet(id) {
   const a = ATHLETES.find(x => x.id === id); if (!a) return;
-  const pr = a.prog && programById(a.prog);
-  sheet(a.name, `<div class="ath-sheet">
-      <div class="ath-ph"><img src="${a.src}" alt="" style="object-position:${a.id === "rock" ? a.pos : "50% 4%"}"><span class="eyebrow">${esc(a.title)}</span></div>
-      ${(a.quotes || []).map(q => `<blockquote class="ath-q">${esc(q)}</blockquote>`).join("")}
-      ${a.quotes ? `<p class="ath-from">— ${esc(a.name)}${a.from ? `, ${esc(a.from)}` : ""}</p>` : ""}
-      <p class="ath-story">${esc(a.story)}</p>
-      ${pr ? `<a class="btn" href="#/programs" data-prog-go="${pr.id}">Тренироваться как ${esc(a.name.split(" ")[0])}${I.right}</a>` : ""}
-    </div>`, (el, close) => {
-    el.querySelector("[data-prog-go]")?.addEventListener("click", ev => { close(); S.goProg = pr.id; if (route().path === "programs") { ev.preventDefault(); rerender(); } });
+  const pr = a.prog && programById(a.prog), [first, ...rest] = a.short || a.name.replace(/«|»/g, "").split(" ");
+  const ov = document.createElement("div"); ov.className = "ath-ov"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-label", a.name);
+  ov.innerHTML = `<article class="ath-poster">
+      <span class="tape a" aria-hidden="true"></span><span class="tape b" aria-hidden="true"></span>
+      <img src="${a.src}" alt="" style="object-position:${a.id === "rock" ? a.pos : "50% 10%"}">
+      <div class="ap-top"><span>Train · легенды</span><span>${esc(a.title)}</span></div>
+      <div class="ap-body">
+        ${a.quotes ? `<blockquote class="ap-q">${esc(a.quotes[0])}</blockquote>` : `<p class="ap-q story">${esc(a.story)}</p>`}
+        <h2 class="ap-name" style="--len:${Math.max(first.length, ...rest.map(w => w.length), 4)}">${esc(first)}<br>${esc(rest.join(" "))}</h2>
+        ${a.quotes ? `<p class="ap-story">${esc(a.story)}</p>` : ""}
+        ${pr && S.user ? `<a class="ap-cta" href="#/programs" data-prog-go>Тренироваться как ${esc(a.short ? a.short[0] : first)}${I.right}</a>` : ""}
+      </div>
+    </article>
+    <button class="ap-x" type="button" aria-label="Закрыть">${I.x}</button>`;
+  const close = () => { ov.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => ov.remove(), 260); };
+  const key = ev => { if (ev.key === "Escape") close(); };
+  ov.addEventListener("click", ev => {
+    if (ev.target.closest("[data-prog-go]")) { close(); S.goProg = pr.id; if (route().path === "programs") { ev.preventDefault(); rerender(); } return; }
+    if (ev.target === ov || ev.target.closest(".ap-x")) close();
   });
+  document.addEventListener("keydown", key);
+  document.body.append(ov); document.documentElement.classList.add("lb-open");
+  requestAnimationFrame(() => ov.classList.add("on"));
+  ov.querySelector(".ap-x").focus({ preventScroll: true });
 }
 // Логотип: при нажатии буквы быстро перебираются и по очереди встают на место.
 function scramble(el) {
@@ -481,7 +496,7 @@ const ATHLETES = [
     story: "Вырос в приёмных семьях в Бруклине; заниматься бодибилдингом его подтолкнул школьный учитель. Трижды выиграл Arnold Classic и трижды был вторым на «Мистере Олимпия»." },
   { id: "priest", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 30%", prog: "lee-priest",
     story: "Начал выступать подростком, а в 21 год уже был профессионалом. Рост около 163 см — и одни из самых больших рук в истории спорта." },
-  { id: "rock", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
+  { id: "rock", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", short: ["Скала", "Джонсон"], title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
     quotes: ["Кровь, пот и уважение. Первые два ты отдаёшь, последнее — зарабатываешь."],
     story: "После того как его выгнали из канадской футбольной лиги, у него в кармане было семь долларов. В честь этого он назвал свою компанию Seven Bucks — и стал самым высокооплачиваемым актёром Голливуда." },
 ];
@@ -498,7 +513,7 @@ const ATH_CREDITS = [
 ];
 function loginView(mode = "in") {
   const up = mode === "up";
-  const card = a => `<figure class="ath"><img src="${a.src}" alt="" style="object-position:${a.pos}" decoding="async" onload="this.classList.add('ok')"><figcaption><b>${a.name}</b><span>${a.title}</span></figcaption></figure>`;
+  const card = a => `<figure class="ath" data-ath="${a.id}" role="button" tabindex="0" aria-label="${esc(a.name)} — мотивация"><img src="${a.src}" alt="" style="object-position:${a.pos}" decoding="async" onload="this.classList.add('ok')"><figcaption><b>${a.name}</b><span>${a.title}</span></figcaption></figure>`;
   app.innerHTML = `
     <main class="auth screen">
       <section class="auth-art" aria-label="Легенды бодибилдинга"><div class="auth-track">${[...ATHLETES, ...ATHLETES, ...ATHLETES].map(card).join("")}</div></section>
@@ -523,6 +538,7 @@ function loginView(mode = "in") {
       </section>
     </main>`;
   app.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => { if (b.dataset.auth !== mode) { const em = app.querySelector("[name=email]").value; loginView(b.dataset.auth); app.querySelector("[name=email]").value = em; } });
+  app.querySelector(".auth-art").onclick = ev => { const c = ev.target.closest("[data-ath]"); if (c) athleteSheet(c.dataset.ath); };
   app.querySelector("[data-credits]").onclick = () => sheet("Авторы фото", `<p class="hint">Фото с Wikimedia Commons</p>
     <div class="pick">${ATH_CREDITS.map(([who, cr, url]) => `<a class="pick-row credit-row" href="${url}" target="_blank" rel="noopener"><span><b>${who}</b><span>${cr}</span></span>${I.right}</a>`).join("")}</div>`);
   const f = document.getElementById("login");

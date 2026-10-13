@@ -1211,14 +1211,37 @@ body:has(.auth){padding-bottom:0}
   .poster:hover,.poster:focus-visible{opacity:.95;transform:rotate(0deg) scale(1.04);box-shadow:0 2px 3px rgba(0,0,0,.1),0 18px 36px rgba(0,0,0,.18);outline:none}
   :root[data-theme="dark"] .poster:hover{opacity:.9}
 }
-/* окно мотивации атлета */
-.ath-sheet{display:grid;gap:14px}
-.ath-ph{position:relative;height:min(46dvh,340px);border-radius:16px;overflow:hidden;background:#111}
-.ath-ph img{width:100%;height:100%;object-fit:cover;filter:grayscale(.2) contrast(1.05)}
-.ath-ph::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.6))}
-.ath-ph .eyebrow{position:absolute;left:14px;bottom:12px;z-index:1;color:#fff;opacity:.9}
-.ath-q{margin:0;padding:0 0 0 16px;border-left:3px solid var(--accent);font-family:var(--display);font-weight:500;font-size:clamp(18px,4.6vw,21px);line-height:1.35;letter-spacing:-.01em;color:var(--ink)}
-.ath-from{margin-top:-6px;font-size:13px;color:var(--muted)}
-.ath-story{font-size:15px;line-height:1.55;color:var(--muted)}
-.ath-sheet .btn{justify-self:start;text-decoration:none}
-.ath-sheet .btn svg{width:18px;height:18px}
+/* постер атлета: открывается поверх затемнения, как сорванный со стены */
+.ath-ov{position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at center,rgba(10,10,12,.72),rgba(0,0,0,.92));opacity:0;transition:opacity var(--t3) ease}
+.ath-ov.on{opacity:1}
+.ath-poster{position:relative;height:min(86dvh,700px);aspect-ratio:2/3;max-width:100%;padding:12px 12px 12px;background:#f2eee6;border-radius:3px;
+  box-shadow:0 2px 3px rgba(0,0,0,.25),0 30px 80px rgba(0,0,0,.55);transform:scale(.92) rotate(-4deg) translateY(16px);transition:transform .45s var(--ease-out)}
+.ath-ov.on .ath-poster{transform:rotate(-1deg)}
+.ath-poster>img{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:cover;filter:grayscale(1) contrast(1.18) brightness(.9)}
+.ath-poster::after{content:"";position:absolute;inset:12px;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 22%,rgba(0,0,0,.05) 40%,color-mix(in srgb,var(--accent) 35%,#000) 78%,#000 100%);opacity:.95}
+.ath-poster .tape{position:absolute;top:-10px;z-index:3;width:70px;height:24px;background:rgba(236,226,196,.82);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.ath-poster .tape.a{left:-16px;transform:rotate(-30deg)}
+.ath-poster .tape.b{right:-16px;transform:rotate(28deg)}
+.ap-top{position:absolute;z-index:2;top:26px;left:28px;right:28px;display:flex;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.82)}
+.ap-body{position:absolute;z-index:2;left:28px;right:28px;bottom:28px;display:grid;gap:12px;color:#fff}
+.ap-q{margin:0;font-family:var(--display);font-weight:600;font-size:clamp(17px,2.6vh,23px);line-height:1.25;letter-spacing:-.01em;text-wrap:balance;text-shadow:0 2px 14px rgba(0,0,0,.5)}
+.ap-q:not(.story)::before{content:"“";display:block;height:.55em;margin-bottom:6px;font-size:3.2em;line-height:1;color:var(--accent)}
+.ap-q.story{font-weight:500;font-size:clamp(15px,2.2vh,18px)}
+.ap-name{margin:2px 0 0;font-family:var(--display);font-weight:800;font-size:clamp(34px,6.4vh,58px);line-height:.88;letter-spacing:-.03em;text-transform:uppercase;color:#fff}
+.ap-story{font-size:13px;line-height:1.45;color:rgba(255,255,255,.78)}
+.ap-cta{justify-self:start;display:inline-flex;align-items:center;gap:6px;min-height:42px;margin-top:2px;padding:6px 16px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:14px;text-decoration:none}
+.ap-cta svg{width:16px;height:16px}
+.ap-x{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:14px;z-index:96;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff}
+.ap-x svg{width:20px;height:20px}
+@media (hover:hover){.ap-x:hover{background:rgba(255,255,255,.24)}}
+@media (max-width:520px){.ath-poster{height:auto;width:100%;max-height:86dvh}.ap-top{left:22px;right:22px;top:22px}.ap-body{left:22px;right:22px;bottom:22px}}
+@media (prefers-reduced-motion: reduce){.ath-poster{transition:none;transform:rotate(-1deg)}}
+/* размеры текста постера — от его ширины: длинная фамилия не вылезает за край */
+.ath-poster{container-type:size}
+.ap-name{font-size:min(58px,calc((100cqw - 60px) / (var(--len) * .78)))}
+.ap-q{font-size:clamp(14px,5cqw,23px)}
+.ap-q.story{font-size:clamp(14px,4.4cqw,18px)}
+@media (max-width:520px){.ath-poster{width:100%;height:min(84dvh,660px);max-height:none;aspect-ratio:auto}}
+.ap-body{grid-template-columns:minmax(0,1fr)}
+.ap-name{font-size:min(58px,calc((100cqw - 60px) / (var(--len) * .9)))}
+.ath{cursor:pointer}
