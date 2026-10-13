@@ -261,10 +261,10 @@ async function refreshAfterOffline() {
 function paintSync() {
   let el = document.getElementById("sync");
   const show = !!S.user && (outbox.length > 0 && (syncFail || !navigator.onLine) || !!S.offline);
-  if (!show) { el?.classList.remove("on"); return; }
+  if (!show) { if (el) { delete el.dataset.want; el.classList.remove("on"); } return; }
   if (!el) { el = document.createElement("div"); el.id = "sync"; el.className = "sync"; el.setAttribute("role", "status"); document.body.append(el); }
   el.innerHTML = `<i aria-hidden="true"></i><span>${outbox.length ? `Нет сети — отметки сохранятся, когда появится связь · ${outbox.length}` : "Нет связи — показаны последние сохранённые данные"}</span>`;
-  requestAnimationFrame(() => el.classList.add("on"));
+  el.dataset.want = "1"; requestAnimationFrame(() => { if (el.dataset.want) el.classList.add("on"); }); // плашку могли уже убрать до кадра
 }
 const workoutOn = day => S.workouts.find(w => w.day === day);
 const exercisesOf = wid => S.exercises.filter(e => e.workout_id === wid).sort((a, b) => a.position - b.position);
@@ -422,12 +422,28 @@ async function deleteAccount() {
 function sidePosters() {
   if (document.querySelector(".wall")) return;
   const list = [...ATHLETES].sort(() => Math.random() - .5).slice(0, 4); // четыре места на стене, кто висит — случайно
-  const wall = document.createElement("div"); wall.className = "wall"; wall.setAttribute("aria-hidden", "true");
-  wall.innerHTML = list.map((a, k) => `<figure class="poster p${k}">
+  const wall = document.createElement("div"); wall.className = "wall";
+  wall.innerHTML = list.map((a, k) => `<figure class="poster p${k}" data-ath="${a.id}" role="button" tabindex="0" aria-label="${esc(a.name)} — мотивация">
       <span class="tape a"></span><span class="tape b"></span>
       <span class="poster-ph"><img src="${a.src}" alt="" style="object-position:${a.pos}" decoding="async" loading="lazy"></span>
       <figcaption><b>${a.name}</b><span>${a.title.replace(" × ", "× ")}</span></figcaption></figure>`).join("");
   document.body.append(wall);
+  wall.addEventListener("click", ev => { const p = ev.target.closest("[data-ath]"); if (p) athleteSheet(p.dataset.ath); });
+  wall.addEventListener("keydown", ev => { const p = ev.target.closest("[data-ath]"); if (p && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); athleteSheet(p.dataset.ath); } });
+}
+// Мотивация от атлета: крупное фото, его фразы (только известные, без выдумок) и история; ссылка на его программу.
+function athleteSheet(id) {
+  const a = ATHLETES.find(x => x.id === id); if (!a) return;
+  const pr = a.prog && programById(a.prog);
+  sheet(a.name, `<div class="ath-sheet">
+      <div class="ath-ph"><img src="${a.src}" alt="" style="object-position:${a.id === "rock" ? a.pos : "50% 4%"}"><span class="eyebrow">${esc(a.title)}</span></div>
+      ${(a.quotes || []).map(q => `<blockquote class="ath-q">${esc(q)}</blockquote>`).join("")}
+      ${a.quotes ? `<p class="ath-from">— ${esc(a.name)}${a.from ? `, ${esc(a.from)}` : ""}</p>` : ""}
+      <p class="ath-story">${esc(a.story)}</p>
+      ${pr ? `<a class="btn" href="#/programs" data-prog-go="${pr.id}">Тренироваться как ${esc(a.name.split(" ")[0])}${I.right}</a>` : ""}
+    </div>`, (el, close) => {
+    el.querySelector("[data-prog-go]")?.addEventListener("click", ev => { close(); S.goProg = pr.id; if (route().path === "programs") { ev.preventDefault(); rerender(); } });
+  });
 }
 // Логотип: при нажатии буквы быстро перебираются и по очереди встают на место.
 function scramble(el) {
@@ -446,11 +462,28 @@ function scramble(el) {
 document.addEventListener("click", ev => { const h = ev.target.closest(".brand, [data-scramble]"); if (h) scramble(h.querySelector(".brand-t")); });
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
 const ATHLETES = [
-  { src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%" },
-  { src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%" },
-  { src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 22%" },
-  { src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%" },
-  { src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 30%" },
+  { id: "arnold", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%",
+    quotes: ["Последние три-четыре повтора — вот что заставляет мышцу расти. Эта зона боли отделяет чемпиона от того, кто им не станет.",
+      "Разум — вот предел. Если разум видит, что ты можешь что-то сделать, — ты сможешь, если веришь в это на все сто."],
+    from: "из фильма «Качая железо», 1977",
+    story: "Приехал в Америку почти без денег и английского — и стал семикратным «Мистером Олимпия», звездой кино и губернатором Калифорнии." },
+  { id: "coleman", src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%", prog: "coleman",
+    quotes: ["Все хотят быть бодибилдерами, но никто не хочет поднимать по-настоящему тяжёлые веса.", "Лёгкий вес, бэйби!"],
+    from: "его фразы из зала",
+    story: "Работал полицейским в Арлингтоне и тренировался после смен. Восемь раз подряд выиграл «Мистера Олимпия» — рекорд, который делит только с Ли Хейни." },
+  { id: "heath", src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 22%", prog: "phil-heath",
+    story: "Играл в баскетбол за университет и пришёл в бодибилдинг только в 22 года. Через девять лет стал «Мистером Олимпия» — и выигрывал семь лет подряд, с 2011 по 2017." },
+  { id: "cutler", src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%", prog: "cutler",
+    story: "Четыре раза был вторым после Коулмана — в 2001, 2003, 2004 и 2005 годах. Не сдался и в 2006-м победил. А в 2009-м стал первым, кто вернул себе титул после того, как его потерял." },
+  { id: "yates", src: "/img/dorian-yates.jpg", name: "Дориан Йейтс", title: "6 × «Мистер Олимпия»", pos: "50% 20%", prog: "dorian-yates",
+    story: "Тренировался в подвальном зале в Бирмингеме, вдали от звёздных залов Калифорнии. Короткие тренировки, один подход до отказа — и шесть титулов подряд, с 1992 по 1997." },
+  { id: "kai", src: "/img/kai-greene.jpg", name: "Кай Грин", title: "3 × Arnold Classic", pos: "50% 16%", prog: "kai-greene",
+    story: "Вырос в приёмных семьях в Бруклине; заниматься бодибилдингом его подтолкнул школьный учитель. Трижды выиграл Arnold Classic и трижды был вторым на «Мистере Олимпия»." },
+  { id: "priest", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 30%", prog: "lee-priest",
+    story: "Начал выступать подростком, а в 21 год уже был профессионалом. Рост около 163 см — и одни из самых больших рук в истории спорта." },
+  { id: "rock", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
+    quotes: ["Кровь, пот и уважение. Первые два ты отдаёшь, последнее — зарабатываешь."],
+    story: "После того как его выгнали из канадской футбольной лиги, у него в кармане было семь долларов. В честь этого он назвал свою компанию Seven Bucks — и стал самым высокооплачиваемым актёром Голливуда." },
 ];
 // Лицензии CC BY / CC BY-SA требуют указать авторов — список открывается по ссылке «Авторы фото».
 const ATH_CREDITS = [
@@ -458,7 +491,10 @@ const ATH_CREDITS = [
   ["Ронни Коулман", "localfitness.com.au, CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:Ronnie_Coleman_8_x_Mr_Olympia_-_2009_-_4.png"],
   ["Фил Хит", "Entilzha, CC0", "https://commons.wikimedia.org/wiki/File:Phil_Heath.JPG"],
   ["Джей Катлер", "Morten Skovgaard, CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Jay_Cutler_%E2%80%93_Loaded_039_(15263347890).jpg"],
+  ["Дориан Йейтс", "Beaverino, CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Dorian_yates.png"],
+  ["Кай Грин", "neverfearfailure.com, CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Kai_greene_arnold_classic.jpg"],
   ["Ли Прист", "Sam's Fitness, CC BY 3.0", "https://commons.wikimedia.org/wiki/File:Lee_Priest_Sam%27s_Fitness_Pec_Fly.jpg"],
+  ["Дуэйн «Скала» Джонсон", "Spc. Casey Brumbach, U.S. Army, общественное достояние", "https://commons.wikimedia.org/wiki/File:Dwayne_Johnson_Daytona_500_8246702.jpg"],
 ];
 function loginView(mode = "in") {
   const up = mode === "up";
@@ -1053,15 +1089,16 @@ function coachChat() {
 }
 
 /* ---------- programs ---------- */
-const STAR_ORDER = ["coleman", "cutler", "lee-priest", "frank-zane", "the-rock", "morning"];
+const STAR_ORDER = ["coleman", "cutler", "phil-heath", "dorian-yates", "kai-greene", "lee-priest", "frank-zane", "the-rock", "morning"];
 function programsView() {
   const p = S.profile, cur = programById(p.program_id);
+  if (S.goProg) { const id = S.goProg; S.goProg = null; setTimeout(() => document.getElementById("prog-" + id)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60); } // пришли с постера
   const card = pr => {
     const on = pr.id === p.program_id;
     // четыре фото из разных тренировок программы — чтобы сразу было видно, что в ней
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
-    return `<article class="prog ${on ? "on" : ""}">
+    return `<article class="prog ${on ? "on" : ""}" id="prog-${pr.id}">
       ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
           <figcaption><b>${esc(pr.photo.caption)}</b>${pr.photo.credit ? `<a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a>` : ""}</figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
@@ -2612,8 +2649,8 @@ sb.auth.onAuthStateChange((event, session) => {
   if (!u) return;
   obLoad();
   const extras = () => { loadTracks().then(restorePos).catch(() => {}); loadPf(S.user.id).then(drawFull).catch(() => {}); };
-  // нет сети — сразу последние сохранённые данные; сеть есть, но сервер молчит 4 секунды — тоже они, а загрузка идёт дальше в фоне
-  const quick = setTimeout(() => { if (!S.loaded && fromSnapshot()) { render(); paintSync(); } }, navigator.onLine ? 4000 : 0);
+  // нет сети — сразу последние сохранённые данные; сеть есть, но сервер молчит 6 секунд — тоже они, а загрузка идёт дальше в фоне
+  const quick = setTimeout(() => { if (!S.loaded && fromSnapshot()) { render(); paintSync(); } }, navigator.onLine ? 6000 : 0);
   loadAll().then(() => { clearTimeout(quick); paintSync(); render(); extras(); }).catch(() => {
     clearTimeout(quick);
     if (S.loaded || fromSnapshot()) { render(); paintSync(); return; }
