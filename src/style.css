@@ -1025,3 +1025,110 @@ html.lb-open,html.lb-open body{overflow:hidden}
 .co-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 .co-input textarea{border:0;background:none;box-shadow:none!important;padding:9px 6px 9px 12px;min-height:40px}
 .co-input .btn.send{width:40px;height:40px;min-height:40px}
+/* треки в профиль */
+.now-prof{justify-self:start;display:inline-flex;align-items:center;gap:6px;min-height:36px;margin-top:-8px;padding:4px 14px 4px 10px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--ink);font-size:14px;font-weight:600;transition:background-color var(--t2) ease,border-color var(--t2) ease,color var(--t2) ease}
+.now-prof svg{width:16px;height:16px}
+.now-prof[aria-pressed="true"]{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+@media (hover:hover){.now-prof:hover{border-color:var(--accent)}}
+.pt-count{margin:10px 0 6px}
+.pt-list{display:grid;gap:2px;max-height:min(56dvh,520px);overflow-y:auto;overscroll-behavior:contain;margin:0 -6px;padding:0 6px}
+.pt-row{display:flex;align-items:center;gap:12px;min-height:58px;padding:7px 8px;border:0;border-radius:12px;background:none;text-align:left;color:var(--ink);transition:background-color var(--t2) ease}
+@media (hover:hover){.pt-row:hover{background:var(--chip)}}
+.pt-row[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.pt-mark{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);color:var(--muted);transition:background-color var(--t2) ease,color var(--t2) ease,border-color var(--t2) ease}
+.pt-mark svg{width:16px;height:16px}
+.pt-row[aria-pressed="true"] .pt-mark{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);animation:tick var(--t3) var(--ease-out)}
+.pt-row:disabled{opacity:.6}
+.card-head .linkbtn svg:first-child{width:16px;height:16px}
+/* вход: лента легенд «Мистер Олимпия» плывёт сверху, форма — карточкой под ней */
+.auth{min-height:100dvh;display:grid;align-content:start;justify-items:center;margin:0 -16px;padding-bottom:40px;overflow:hidden}
+.auth-art{position:relative;width:100%;padding:22px 0 0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.auth-track{display:flex;gap:12px;width:max-content;padding-inline:6px;animation:athRun 38s linear infinite}
+@keyframes athRun{to{transform:translateX(-33.3333%)}}
+@media (hover:hover){.auth-art:hover .auth-track{animation-play-state:paused}}
+.ath{position:relative;flex:none;width:170px;height:236px;margin:0;border-radius:18px;overflow:hidden;background:var(--ink);box-shadow:0 10px 28px rgba(0,0,0,.18)}
+.ath:nth-child(even){margin-top:22px}
+.ath img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.08);opacity:0;transform:scale(1.06);transition:opacity .6s ease,transform 1.2s var(--ease-out),filter var(--t3) ease}
+.ath img.ok{opacity:1;transform:none}
+.ath::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,var(--accent) 45%,#000) 100%);mix-blend-mode:multiply;opacity:.9}
+@media (hover:hover){.ath:hover img{filter:none}}
+.ath figcaption{position:absolute;left:12px;right:12px;bottom:12px;z-index:1;display:grid;gap:1px;color:#fff;line-height:1.2;text-shadow:0 1px 8px rgba(0,0,0,.35)}
+.ath figcaption b{font-family:var(--display);font-weight:600;font-size:14px}
+.ath figcaption span{font-size:12px;opacity:.85}
+.auth-card{position:relative;z-index:1;width:calc(100% - 32px);max-width:420px;display:grid;gap:20px;margin-top:-34px;padding:24px 20px 20px;border-radius:24px;background:var(--surface);border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.12)}
+.auth-brand{display:grid;gap:6px}
+.auth-brand .eyebrow{color:var(--accent)}
+.auth-brand h1{font-size:clamp(40px,12vw,56px);letter-spacing:-.03em;line-height:1}
+.auth-brand .lead{font-size:15px}
+.auth form{display:grid;gap:14px}
+.auth .err{color:var(--bad);font-size:14px;min-height:20px}
+.auth form.shake{animation:shake .4s ease}
+.auth-credit{font-size:11.5px;line-height:1.45;color:var(--muted)}
+.auth-credit a{color:inherit;text-underline-offset:2px}
+@media (min-width:760px){
+  .auth{padding-top:24px}
+  .ath{width:210px;height:290px}
+  .auth-card{margin-top:-48px;padding:30px 28px 22px}
+}
+@media (prefers-reduced-motion: reduce){.auth-track{animation:none}.ath img{transition:none}}
+body:has(.auth){padding-bottom:0}
+/* логотип: перебор букв */
+.brand-t{white-space:nowrap}
+.brand-t.scr{color:var(--accent)}
+.auth-logo{cursor:pointer;user-select:none}
+.brand .brand-t{color:var(--ink)}
+.brand .brand-t.scr,.auth-logo .brand-t.scr{color:var(--accent)}
+/* вход: лента и форма вместе — по центру экрана по высоте */
+.auth{align-content:center;padding-block:24px}
+@media (min-width:760px){.auth{padding-block:32px}}
+/* компьютер: форма строго по центру экрана, лента чемпионов плывёт за ней поперёк */
+@media (min-width:760px){
+  .auth{position:relative;min-height:100dvh;display:grid;place-items:center;align-content:center;padding-block:32px}
+  .auth-art{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);padding:0}
+  .ath{width:220px;height:310px}
+  .ath:nth-child(even){margin-top:40px}
+  .auth-card{margin-top:0}
+}
+@media (max-width:759px){
+  .auth{align-content:start;padding-top:16px}
+  .auth-art{padding-top:0}
+  .ath{width:132px;height:184px;border-radius:16px}
+  .ath:nth-child(even){margin-top:14px}
+  .ath figcaption{left:10px;right:10px;bottom:10px}
+  .ath figcaption b{font-size:12.5px}.ath figcaption span{font-size:11px}
+  .auth-card{margin-top:14px;gap:16px;padding:20px 18px 18px}
+  .auth-brand .lead{font-size:14.5px}
+}
+.auth-credit{justify-self:center;min-height:32px;padding:4px 10px;border:0;background:none;font-size:12px;color:var(--muted);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--muted) 40%,transparent);text-underline-offset:3px}
+@media (hover:hover){.auth-credit:hover{color:var(--ink)}}
+.credit-row{min-height:52px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);text-decoration:none}
+.del-acc{color:var(--muted);font-size:14px;margin-left:auto}
+@media (hover:hover){.del-acc:hover{color:var(--bad)}}
+.del-form{display:grid;gap:12px}
+.del-form b{color:var(--bad)}
+/* стена с постерами чемпионов — только на широком экране, приглушённо, за контентом */
+.wall{display:none}
+@media (min-width:1180px){
+  .wall{position:fixed;inset:0;z-index:0;display:block;pointer-events:none}
+  .poster{--w:clamp(130px,calc((100vw - var(--col)) / 2 - 150px),168px);position:absolute;width:var(--w);margin:0;padding:8px 8px 10px;background:#f4f1ea;border-radius:2px;
+    box-shadow:0 1px 1px rgba(0,0,0,.08),0 8px 18px rgba(0,0,0,.10);transform:rotate(var(--r));opacity:.62;transition:opacity var(--t3) ease}
+  .poster-ph{display:block;aspect-ratio:3/4;overflow:hidden;background:#222}
+  .poster-ph img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(.95) brightness(1.02) sepia(.12)}
+  .poster figcaption{display:grid;gap:1px;padding:7px 2px 0;color:#2b2722;line-height:1.15}
+  .poster figcaption b{font-family:var(--display);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+  .poster figcaption span{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;opacity:.7}
+  .tape{position:absolute;top:-9px;width:46px;height:18px;background:rgba(236,226,196,.75);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .tape.a{left:-12px;transform:rotate(-32deg)}
+  .tape.b{right:-12px;transform:rotate(30deg)}
+  /* раскладка: по два с каждой стороны, на разной высоте и с разным наклоном */
+  .p0{--r:-3.5deg;left:calc((100vw - var(--col)) / 4 - var(--w) / 2 - 18px);top:14vh}
+  .p1{--r:2.5deg;left:calc((100vw - var(--col)) / 4 - var(--w) / 2 + 22px);top:52vh}
+  .p2{--r:3deg;right:calc((100vw - var(--col)) / 4 - var(--w) / 2 - 12px);top:20vh}
+  .p3{--r:-2deg;right:calc((100vw - var(--col)) / 4 - var(--w) / 2 + 18px);top:54vh}
+  /* в тёмной теме постеры ещё тише */
+  :root[data-theme="dark"] .poster{opacity:.42}
+  html.chat-open .p2,html.chat-open .p3{opacity:0}
+  body:has(.auth) .wall{display:none}
+  .topbar,main.wrap{position:relative;z-index:1}
+}
+@media (min-width:1180px) and (prefers-color-scheme: dark){:root:not([data-theme="light"]) .poster{opacity:.42}}
