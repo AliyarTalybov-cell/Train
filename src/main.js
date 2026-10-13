@@ -60,6 +60,8 @@ const I = {
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
 };
 
@@ -216,7 +218,7 @@ const ROUTES = [
   { path: "me", label: "Профиль", icon: I.user, view: profileView },
 ];
 const route = () => {
-  const h = location.hash.replace(/^#\/?/, "");
+  const h = location.hash.replace(/^#\/?/, "").split("?")[0];
   if (h.startsWith("u/")) return { path: h, view: friendView, parent: ROUTES[3] }; // страница друга живёт внутри «Профиля»
   if (h === "help") return { path: h, view: helpView, parent: ROUTES[3] };
   return ROUTES.find(r => r.path === h) || ROUTES[0];
@@ -231,7 +233,7 @@ function render() {
     <header class="topbar"><a class="brand" href="#/">Дневник<span>.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
-    ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера"><span class="orb" aria-hidden="true"></span><span>Тренер</span></button>` : ""}`;
+    ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
   queueMicrotask(paintBadge);
@@ -728,7 +730,26 @@ const adviceHTML = c => `${c.headline ? `<p class="co-head">${esc(c.headline)}</
 // Чат живёт, пока открыта вкладка: закрытие только сворачивает его, переписка и «Отменить» остаются.
 let chatEl = null;
 const chatDim = Object.assign(document.createElement("div"), { className: "chat-dim" });
-const openChat = () => { document.body.append(chatDim, chatEl); chatDim.onclick = () => chatEl.querySelector("[data-x]").click(); document.documentElement.classList.add("chat-open"); requestAnimationFrame(() => chatEl.classList.add("open")); };
+const openChat = () => { document.body.append(chatDim, chatEl); chatDim.onclick = () => chatEl.querySelector("[data-x]").click(); document.documentElement.classList.add("chat-open");
+  requestAnimationFrame(() => { chatEl.classList.add("open"); setTimeout(() => { bbPlay(chatEl.querySelector(".co-hello .bb"), "flex"); bbPlay(chatEl.querySelector(".chat-ava .bb"), "flex"); }, 180); }); };
+// Качок тренера: поза «двойной бицепс». Предплечья вращаются вокруг локтей, бицепсы надуваются — всё в цвете акцента.
+const bbSVG = (cls = "") => `<svg class="bb ${cls}" viewBox="0 0 120 120" aria-hidden="true">
+  <g class="bb-body">
+    <path class="bb-legs" d="M46 97h13l-2 19h-9zM61 97h13l-3 19h-9z"/>
+    <path class="bb-shorts" d="M48 85h24l2 13H62l-2-6-2 6H46z"/>
+    <path class="bb-skin" d="M40 44q20-5 40 0l-4 21q-4 15-6 21H50q-2-6-6-21z"/>
+    <path class="bb-line" d="M47 52q6 7 13 2q7 5 13-2M60 58v25M52 66h16M53 74h14"/>
+    <path class="bb-skin" d="M52 41q8-5 16 0l5 4H47z"/>
+    <circle class="bb-skin" cx="60" cy="27" r="10"/>
+    <path class="bb-hair" d="M50 25q1-10 10-10t10 10q-4-4-10-4t-10 4z"/>
+    <g class="bb-arm l"><circle class="bb-skin" cx="40" cy="47" r="7"/><path class="bb-limb" d="M38 48L22 50"/><ellipse class="bb-skin bb-bi" cx="30" cy="44.5" rx="8" ry="6"/>
+      <g class="bb-fa"><path class="bb-limb fa" d="M22 50L20 31"/><circle class="bb-skin" cx="20" cy="28" r="5.5"/></g></g>
+    <g class="bb-arm r"><circle class="bb-skin" cx="80" cy="47" r="7"/><path class="bb-limb" d="M82 48L98 50"/><ellipse class="bb-skin bb-bi" cx="90" cy="44.5" rx="8" ry="6"/>
+      <g class="bb-fa"><path class="bb-limb fa" d="M98 50L100 31"/><circle class="bb-skin" cx="100" cy="28" r="5.5"/></g></g>
+    <path class="bb-spark" d="M10 40l-5-2M12 33l-6-6M106 33l6-6M110 40l5-2"/>
+  </g></svg>`;
+// перезапустить анимацию качка (класс снимается и ставится снова)
+const bbPlay = (el, cls) => { if (!el) return; el.classList.remove("flex", "reps"); void el.getBoundingClientRect(); el.classList.add(cls); };
 function coachChat() {
   if (chatEl) return openChat();
   const day = S.day, cached = coachCached(day), chatKey = `gym-chat2-${S.user?.id}-${day}`;
@@ -738,16 +759,17 @@ function coachChat() {
   el.className = "chat"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Тренер");
   el.innerHTML = `
     <header class="chat-head">
-      <span class="chat-ava" aria-hidden="true"><span class="orb"></span></span>
-      <div><b>Тренер</b><span>видит твои тренировки, может расписать план</span></div>
+      <span class="chat-ava" aria-hidden="true">${bbSVG("mini")}</span>
+      <div><b>Тренер</b><span class="chat-st"><i aria-hidden="true"></i>на связи · видит твои тренировки</span></div>
       <button class="icon-btn bare" data-x aria-label="Свернуть чат">${I.x}</button>
     </header>
-    <div class="chat-feed" id="co-feed"></div>
+    <div class="chat-feed" id="co-feed"><div class="co-hello">${bbSVG("big")}<b>Привет! Я твой тренер</b><span>Подскажу вес, распишу план и поставлю его в календарь.</span></div></div>
     <footer class="chat-foot">
       <div class="co-chips">${chips.map(c => `<button type="button" data-chip>${c}</button>`).join("")}</div>
       <form id="cq" class="co-input"><textarea class="inp" name="q" rows="1" placeholder="Спроси тренера…" maxlength="600"></textarea><button class="btn send" type="submit" aria-label="Отправить">${I.up}</button></form>
     </footer>`;
   chatEl = el; openChat();
+  const ava = el.querySelector(".chat-ava .bb");
   const close = () => { el.classList.remove("open"); document.documentElement.classList.remove("chat-open"); };
   el.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   el.querySelector("[data-x]").onclick = close;
@@ -759,10 +781,10 @@ function coachChat() {
 
   // первым — совет на этот день
   const first = bubble("assistant", cached ? adviceHTML(cached) : waitHTML("Смотрю твои тренировки…"));
-  if (!cached) askCoach("").then(c => {
+  if (!cached) { setTimeout(() => bbPlay(ava, "reps"), 1700); askCoach("").then(c => {
     try { localStorage.setItem(coachKey(day), JSON.stringify(c)); } catch {}
-    first.innerHTML = adviceHTML(c);
-  }).catch(e => { first.innerHTML = `<p class="muted">${failText(e)}</p>`; });
+    first.innerHTML = adviceHTML(c); bbPlay(ava, "flex");
+  }).catch(e => { ava?.classList.remove("reps"); first.innerHTML = `<p class="muted">${failText(e)}</p>`; }); }
   for (const m of msgs) bubble(m.role, `<p>${esc(m.text)}</p>`);
 
   const send = async text => {
@@ -771,8 +793,10 @@ function coachChat() {
     const history = msgs.slice(-6).map(m => ({ role: m.role, content: m.text }));
     msgs.push({ role: "user", text }); save();
     const wait = bubble("assistant", waitHTML("Думаю…"));
+    bbPlay(ava, "reps");
     try {
       const out = await askCoach(text, history);
+      bbPlay(ava, "flex");
       wait.innerHTML = `<p>${esc(out.reply)}</p>`;
       msgs.push({ role: "assistant", text: out.reply }); save();
       if (out.actions?.length) {
@@ -785,7 +809,7 @@ function coachChat() {
         } catch { line.innerHTML = `<span class="muted">Не всё получилось поставить — попробуй ещё раз</span>`; rerender(); }
       }
       requestAnimationFrame(() => feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" }));
-    } catch (e) { wait.innerHTML = `<p class="muted">${failText(e)}</p>`; msgs.pop(); save(); }
+    } catch (e) { ava?.classList.remove("reps"); wait.innerHTML = `<p class="muted">${failText(e)}</p>`; msgs.pop(); save(); }
   };
   el.querySelectorAll("[data-chip]").forEach(b => b.onclick = () => send(b.textContent));
   f.onsubmit = ev => { ev.preventDefault(); const v = f.q.value; f.q.value = ""; f.q.style.height = ""; send(v); };
@@ -1147,10 +1171,11 @@ function friendView() {
   return `
     <div class="back"><a class="linkbtn muted-link" href="#/me">${I.left}Профиль</a></div>
     <section class="hero me">
-      ${avatarHTML(u.user_id, u.name)}
+      ${S.avatars[u.user_id] ? `<button class="ava-open" data-act="ph-ava" data-u="${u.user_id}" aria-label="Открыть фото профиля">${avatarHTML(u.user_id, u.name)}</button>` : avatarHTML(u.user_id, u.name)}
       <div><h1>${esc(u.name || "Без имени")}</h1><p class="muted">${prog ? `Программа «${esc(prog.title)}»` : "Без программы"}</p></div>
     </section>
     <div class="row friend-acts"><button class="btn" data-act="send-w" data-u="${id}">${I.plus}Отправить тренировку</button><button class="btn quiet" data-act="send-p" data-u="${id}">Предложить программу</button></div>
+    ${pfBlocks(id, false)}
     <div class="stats">
       <div><b>${doneW.length}</b><span>${plural(doneW.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
       <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
@@ -1226,8 +1251,10 @@ function musicView() {
       .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
     return skeleton();
   }
+  openShared();
   const count = id => M.tracks.filter(t => t.folder_id === id).length;
-  const card = (id, name, n, cover) => `<button class="fold-card ${M.folder === id && !M.q ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
+  let ci = 0;
+  const card = (id, name, n, cover) => `<button style="--i:${Math.min(ci++, 8)}" class="fold-card ${M.folder === id && !M.q ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
       <span class="fold-cover">${cover}</span><b>${esc(name)}</b><span>${n} ${plural(n, "трек", "трека", "треков")}</span></button>`;
   return `
     <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
@@ -1251,13 +1278,14 @@ function musicList() {
     </section>
     ${isOwner() && U.items.length ? uploadPanel() : ""}
     ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
-    ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-i="${i}">
+    ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
       <button class="track" data-act="mu-play" data-i="${i}">
         <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span>
         <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
         <span class="tr-d mono">${mmss(t.sec)}</span></button>
       <button class="tr-fav" data-act="mu-fav" data-i="${i}" aria-pressed="${M.favs.has(t.id)}" aria-label="${M.favs.has(t.id) ? "Убрать из избранного" : "В избранное"}">${M.favs.has(t.id) ? I.heartFill : I.heart}</button>
-      ${isOwner() ? `<button class="tr-more" data-act="mu-track-menu" data-i="${i}" aria-label="Действия с треком">${I.dots}</button>` : ""}</li>`).join("")}</ol>`
+      ${isOwner() ? `<button class="tr-more" data-act="mu-track-menu" data-i="${i}" aria-label="Действия с треком">${I.dots}</button>`
+        : `<button class="tr-more" data-act="mu-share" data-i="${i}" aria-label="Поделиться треком" title="Поделиться">${I.share}</button>`}</li>`).join("")}</ol>`
       : `<p class="hint mu-empty">${M.q ? "Ничего не нашлось — попробуй часть названия или группу." : fav ? "Здесь будут треки, которые ты отметишь сердечком." : isOwner() ? "В папке пока нет треков — загрузи их кнопкой выше или перенеси из «Все треки» через ⋯ у трека." : "В папке пока нет треков."}</p>`}`;
 }
 
@@ -1265,10 +1293,12 @@ function musicList() {
 function trackMenu(i) {
   const t = M.tracks[i]; if (!t) return;
   sheet(t.title, `<p class="muted">${esc(t.artist)}</p>
+    <div class="pick"><button data-share><b>Поделиться</b><span>ссылка откроет трек у друга</span></button></div>
     <div class="eyebrow">Перенести в папку</div>
     <div class="pick">${[{ id: "", name: "Без папки" }, ...M.folders].map(f => `<button data-to="${f.id}" ${(t.folder_id || "") === f.id ? "disabled" : ""}><b>${esc(f.name)}</b>${(t.folder_id || "") === f.id ? "<span>сейчас здесь</span>" : ""}</button>`).join("")}</div>
     <div class="sheet-actions"><button class="btn danger-soft" data-del>Удалить трек</button></div>`, (el, close) => {
     el.addEventListener("click", async ev => {
+      if (ev.target.closest("[data-share]")) { close(); return shareTrack(t); }
       const to = ev.target.closest("[data-to]");
       if (to) { to.disabled = true;
         try { await q(sb.from("gym_tracks").update({ folder_id: to.dataset.to || null }).eq("id", t.id)); t.folder_id = to.dataset.to || null; close(); rerender(); toast("Перенесено"); } catch { to.disabled = false; }
@@ -1463,6 +1493,105 @@ async function runUpload() {
   toast(U.stop ? `Загрузка остановлена, загружено: ${ok}` : bad ? `Загружено: ${ok}, не получилось: ${bad}` : `Загружено треков: ${ok}`);
 }
 addEventListener("beforeunload", ev => { if (U.run) ev.preventDefault(); }); // не потерять загрузку случайным закрытием вкладки
+// ---------- Фото и любимые треки в профиле: видят все вошедшие, менять может только владелец ----------
+const PF = { photos: {}, favs: {}, urls: {}, loading: {}, busy: "" };
+function loadPf(uid, force) {
+  if (!force && (PF.photos[uid] || PF.loading[uid])) return PF.loading[uid] || Promise.resolve();
+  return PF.loading[uid] = (async () => {
+    const [photos, favs] = await Promise.all([
+      q(sb.from("gym_photos").select("*").eq("user_id", uid).order("created_at", { ascending: false }), { silent: true }).catch(() => []),
+      q(sb.from("gym_track_favs").select("track_id").eq("user_id", uid).order("created_at", { ascending: false }).limit(5), { silent: true }).catch(() => []),
+    ]);
+    const need = photos.map(x => x.path).filter(x => !PF.urls[x]);
+    if (need.length) { const { data } = await sb.storage.from("gym-avatars").createSignedUrls(need, 6 * 3600).catch(() => ({ data: [] })); for (const d of data || []) if (d.signedUrl) PF.urls[d.path] = d.signedUrl; }
+    PF.photos[uid] = photos.filter(x => PF.urls[x.path]); PF.favs[uid] = favs.map(x => x.track_id);
+    if (!M.tracks && favs.length) await loadTracks().catch(() => {});
+  })().finally(() => { PF.loading[uid] = null; });
+}
+// блоки «Фото» и «Любимые треки» — на своей странице и на странице друга
+function pfBlocks(uid, own) {
+  if (!PF.photos[uid]) { loadPf(uid).then(() => { if (["me", `u/${uid}`].includes(route().path)) rerender(); }); return `<div class="skel" style="height:140px;margin-top:12px;border-radius:18px"></div>`; }
+  const ph = PF.photos[uid];
+  const favs = own && M.favOrder ? M.favOrder.slice(0, 5) : PF.favs[uid] || [];
+  const idx = favs.map(id => M.tracks ? M.tracks.findIndex(t => t.id === id) : -1).filter(i => i >= 0);
+  const photos = ph.length || own ? `<section class="card">
+      <div class="card-head"><h2 class="card-t">Фото</h2>${ph.length ? `<span class="hint">${ph.length}</span>` : ""}</div>
+      ${!ph.length ? `<p class="hint">Добавь фото с тренировок или формы — их увидят друзья.</p>` : ""}
+      <div class="ph-grid">
+        ${own ? `<label class="ph-add ${PF.busy ? "busy" : ""}">${PF.busy ? `<span class="spin" aria-hidden="true"></span><span>${PF.busy}</span>` : `${I.plus}<span>Добавить</span>`}<input type="file" accept="image/*" multiple hidden data-field="ph-files" ${PF.busy ? "disabled" : ""}></label>` : ""}
+        ${ph.map((x, k) => `<button class="ph" data-act="ph-open" data-u="${uid}" data-k="${k}" aria-label="Открыть фото ${k + 1}"><img src="${PF.urls[x.path]}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')"></button>`).join("")}
+      </div></section>` : "";
+  const tracks = idx.length || own ? `<section class="card">
+      <div class="card-head"><h2 class="card-t">Любимые треки</h2>${own && idx.length ? `<button class="linkbtn" data-act="pf-favs">Все${I.right}</button>` : ""}</div>
+      ${idx.length ? `<ol class="tracks pf-tracks">${idx.map(i => { const t = M.tracks[i], f = folderOf(t) || { name: t.artist };
+        return `<li class="${i === M.i ? "cur" : ""} ${i === M.i && !M.audio.paused ? "playing" : ""}" data-i="${i}"><button class="track" data-act="pf-play" data-u="${uid}" data-i="${i}">
+          <span class="pf-cov">${coverHTML(f)}<span class="pf-ic" aria-hidden="true">${i === M.i && !M.audio.paused ? I.pause : I.play}</span></span>
+          <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span><span class="tr-d mono">${mmss(t.sec)}</span></button></li>`; }).join("")}</ol>`
+        : `<p class="hint">Отмечай треки сердечком в «Музыке» — последние пять появятся здесь, их увидят друзья.</p>`}
+    </section>` : "";
+  return photos + tracks;
+}
+// Фото уменьшается до 1600 точек по длинной стороне и сохраняется в JPEG — чётко, но не мегабайты.
+function fitJpeg(file, max = 1600) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = async () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+      for (const qv of [0.86, 0.78, 0.68]) { const b = await new Promise(r => c.toBlob(r, "image/jpeg", qv)); if (b && (b.size < 1.9e6 || qv === 0.68)) return res({ blob: b, w, h }); }
+      rej(new Error("blob"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("img")); };
+    img.src = url;
+  });
+}
+async function uploadPhotos(files) {
+  files = [...files].filter(f => /^image\//.test(f.type)); if (!files.length) return toast("Нужны картинки");
+  const me = S.user.id; let ok = 0;
+  for (const [k, f] of files.entries()) {
+    PF.busy = files.length > 1 ? `${k + 1} из ${files.length}` : "Загружаю"; if (route().path === "me") rerender();
+    try {
+      const { blob, w, h } = await fitJpeg(f), path = `${me}/photos/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`;
+      const { error } = await sb.storage.from("gym-avatars").upload(path, blob, { contentType: "image/jpeg" }); if (error) throw error;
+      const row = await q(sb.from("gym_photos").insert({ path, w, h }).select().single(), { silent: true });
+      PF.urls[path] = URL.createObjectURL(blob); (PF.photos[me] ||= []).unshift(row); ok++;
+    } catch (e) { console.error(e); }
+  }
+  PF.busy = ""; if (route().path === "me") rerender();
+  toast(ok === files.length ? (ok > 1 ? `Добавлено фото: ${ok}` : "Фото добавлено") : `Добавлено ${ok} из ${files.length} — остальные не получились`);
+}
+// Просмотр фото на весь экран: стрелки, свайп, клавиши ← → и Esc; своё фото можно удалить.
+function lightbox(list, k = 0, own = false) {
+  const el = document.createElement("div"); el.className = "lb"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Фото");
+  el.innerHTML = `<div class="lb-top"><span class="lb-n mono"></span><span class="lb-acts">${own ? `<button class="lb-btn" data-lb="del" aria-label="Удалить фото" title="Удалить">${I.trash}</button>` : ""}<button class="lb-btn" data-lb="x" aria-label="Закрыть">${I.x}</button></span></div>
+    <img class="lb-img" alt=""><button class="lb-btn lb-prev" data-lb="prev" aria-label="Предыдущее">${I.left}</button><button class="lb-btn lb-next" data-lb="next" aria-label="Следующее">${I.right}</button>`;
+  const img = el.querySelector("img");
+  const close = () => { el.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => el.remove(), 220); };
+  const show = () => {
+    if (!list.length) return close(); k = (k + list.length) % list.length;
+    img.classList.remove("ok"); img.onload = () => img.classList.add("ok"); img.src = list[k].src;
+    el.querySelector(".lb-n").textContent = list.length > 1 ? `${k + 1} / ${list.length}` : "";
+    el.classList.toggle("one", list.length < 2);
+  };
+  const key = ev => { if (ev.key === "Escape") close(); else if (ev.key === "ArrowRight") { k++; show(); } else if (ev.key === "ArrowLeft") { k--; show(); } };
+  el.addEventListener("click", async ev => {
+    const b = ev.target.closest("[data-lb]")?.dataset.lb;
+    if (!b) { if (ev.target === el) close(); return; }
+    if (b === "x") close(); else if (b === "next") { k++; show(); } else if (b === "prev") { k--; show(); }
+    else if (b === "del") {
+      const x = list[k]; if (!await confirmSheet("Удалить фото?", "Его больше не увидят друзья.")) return;
+      try { await q(sb.from("gym_photos").delete().eq("id", x.id)); sb.storage.from("gym-avatars").remove([x.path]);
+        PF.photos[S.user.id] = PF.photos[S.user.id].filter(y => y.id !== x.id); list.splice(k, 1); show(); if (route().path === "me") rerender(); toast("Фото удалено"); } catch {}
+    }
+  });
+  let x0 = null;
+  el.addEventListener("touchstart", ev => { x0 = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
+  el.addEventListener("touchend", ev => { if (x0 == null) return; const dx = ev.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50 && list.length > 1) { k += dx < 0 ? 1 : -1; show(); } });
+  document.addEventListener("keydown", key);
+  document.body.append(el); document.documentElement.classList.add("lb-open"); show();
+  requestAnimationFrame(() => el.classList.add("on"));
+}
+document.addEventListener("change", ev => { if (ev.target.dataset?.field === "ph-files") { uploadPhotos(ev.target.files); ev.target.value = ""; } });
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "p-avatar") { uploadAvatar(ev.target.files[0]); ev.target.value = ""; } });
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "mu-files") { uploadTracks(ev.target.files); ev.target.value = ""; } });
 document.addEventListener("dragover", ev => { if (route().path === "music" && S.user?.id === OWNER && ev.dataTransfer?.types.includes("Files")) { ev.preventDefault(); document.documentElement.classList.add("mu-drop"); } });
@@ -1499,8 +1628,12 @@ const nextIndex = dir => {
   return qu[((pos < 0 ? 0 : pos) + dir + n) % n];
 };
 function refreshTracks() {
-  if (route().path !== "music") return;
   const playing = !M.audio.paused;
+  document.querySelectorAll(".pf-tracks li").forEach(li => { // любимые треки в профиле
+    const cur = +li.dataset.i === M.i; li.classList.toggle("cur", cur); li.classList.toggle("playing", cur && playing);
+    li.querySelector(".pf-ic").innerHTML = cur && playing ? I.pause : I.play;
+  });
+  if (route().path !== "music") return;
   document.querySelectorAll(".tracks li").forEach((li, k) => {
     const i = +li.dataset.i, cur = i === M.i;
     li.classList.toggle("cur", cur); li.classList.toggle("playing", cur && playing);
@@ -1521,7 +1654,7 @@ function paintTime() {
 function wirePlayer(root) {
   root.addEventListener("click", ev => {
     const b = ev.target.closest("[data-p]"); if (!b) return;
-    ({ open: openFull, close: closeFull,
+    ({ open: openFull, close: closeFull, hide: hidePlayer, share: () => shareTrack(M.tracks[M.i]),
       prev: () => M.audio.currentTime > 5 ? (M.audio.currentTime = 0) : playAt(nextIndex(-1)),
       next: () => { const n = nextIndex(1); n >= 0 ? playAt(n) : playAt(M.queue.length ? M.tracks.findIndex(t => t.file === M.queue[0]) : 0); },
       toggle: () => { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); },
@@ -1562,7 +1695,8 @@ function drawBar() {
         <button class="pl-play" data-p="toggle"></button>
         <button class="icon-btn bare" data-p="next" aria-label="Следующий">${I.next}</button>
         <div class="pl-wide pl-seek">${seekHTML("mini")}</div>
-        <span class="pl-wide">${volHTML()}</span></div>`;
+        <span class="pl-wide">${volHTML()}</span>
+        <button class="icon-btn bare pl-x" data-p="hide" aria-label="Закрыть плеер" title="Закрыть плеер">${I.x}</button></div>`;
     wirePlayer(M.bar);
     document.body.append(M.bar); document.documentElement.classList.add("has-player");
     requestAnimationFrame(() => M.bar.classList.add("on"));
@@ -1582,7 +1716,7 @@ function openFull() {
   if (!M.full) {
     M.full = document.createElement("section"); M.full.className = "now"; M.full.setAttribute("role", "dialog"); M.full.setAttribute("aria-label", "Сейчас играет");
     M.full.innerHTML = `<div class="now-in">
-      <header class="now-head"><button class="icon-btn bare" data-p="close" aria-label="Свернуть">${I.down}</button><span class="eyebrow" data-from></span><span style="width:44px"></span></header>
+      <header class="now-head"><button class="icon-btn bare" data-p="close" aria-label="Свернуть">${I.down}</button><span class="eyebrow" data-from></span><button class="icon-btn bare" data-p="share" aria-label="Поделиться треком" title="Поделиться">${I.share}</button></header>
       <div class="now-cover"></div>
       <div class="now-title"><div><h2 data-title></h2><p class="muted" data-artist></p></div><button class="icon-btn bare now-fav" data-p="fav"></button></div>
       ${seekHTML("big")}
@@ -1599,6 +1733,7 @@ function openFull() {
     </div>`;
     wirePlayer(M.full);
     M.full.addEventListener("click", ev => { if (ev.target === M.full) closeFull(); });
+    swipeDown(M.full.querySelector(".now-in"), closeFull);
     document.body.append(M.full);
   }
   drawFull();
@@ -1612,7 +1747,7 @@ function drawFull() {
   M.full.querySelector("[data-title]").textContent = t.title;
   M.full.querySelector("[data-artist]").textContent = t.artist + (t.album ? ` · ${t.album}` : "");
   M.full.querySelector("[data-from]").textContent = M.folder === "fav" ? "Избранное" : f.name || "Музыка";
-  if (M.full.dataset.cov !== (f.id || f.name)) { M.full.dataset.cov = f.id || f.name; M.full.querySelector(".now-cover").innerHTML = coverHTML(f, "xl"); }
+  if (M.full.dataset.cov !== (f.id || f.name)) { M.full.dataset.cov = f.id || f.name; M.full.querySelector(".now-cover").innerHTML = coverHTML(f, "xl"); ambient(f); }
   const paused = M.audio.paused, play = M.full.querySelector(".pl-play");
   play.innerHTML = paused ? I.play : I.pause; play.setAttribute("aria-label", paused ? "Играть" : "Пауза");
   M.full.querySelector("[data-p=shuffle]").setAttribute("aria-pressed", M.shuffle);
@@ -1665,6 +1800,89 @@ document.addEventListener("keydown", ev => {
   }
 });
 function stopMusic() { M.audio.pause(); M.audio.removeAttribute("src"); M.bar?.remove(); M.bar = null; M.full?.remove(); M.full = null; document.documentElement.classList.remove("now-open"); M.favs = new Set(); M.i = -1; M.tracks = null; M.urls = {}; M.loading = null; document.documentElement.classList.remove("has-player"); }
+
+// Крестик в мини-плеере: музыка останавливается, плеер уезжает. Следующий трек — снова из списка.
+function hidePlayer() {
+  M.audio.pause(); closeFull(); forgetPos();
+  const bar = M.bar; M.bar = null; M.i = -1; M.audio.removeAttribute("src");
+  document.documentElement.classList.remove("has-player");
+  bar?.classList.remove("on"); setTimeout(() => bar?.remove(), 260);
+  refreshTracks();
+}
+// Где остановились: после перезагрузки плеер появляется на паузе на том же месте.
+const POS_KEY = "gym-last-track";
+let posSaved = 0;
+function savePos(force) {
+  const t = M.tracks?.[M.i]; if (!t || (!force && Date.now() - posSaved < 4000)) return; posSaved = Date.now();
+  try { localStorage.setItem(POS_KEY, JSON.stringify({ user: S.user?.id, file: t.file, at: Math.floor(M.audio.currentTime || 0) })); } catch {}
+}
+function forgetPos() { try { localStorage.removeItem(POS_KEY); } catch {} }
+M.audio.addEventListener("timeupdate", () => savePos());
+M.audio.addEventListener("pause", () => savePos(true));
+function restorePos() {
+  if (M.i >= 0 || !M.tracks) return;
+  let last; try { last = JSON.parse(localStorage.getItem(POS_KEY)); } catch {}
+  const i = last?.user === S.user?.id ? M.tracks.findIndex(t => t.file === last.file) : -1; if (i < 0) return;
+  M.i = i; M.audio.preload = "metadata"; M.audio.src = M.urls[M.tracks[i].file];
+  const at = last.at > 3 && last.at < (M.tracks[i].sec || 1e9) - 3 ? last.at : 0;
+  M.audio.currentTime = at; // до загрузки данных браузер запоминает это как место старта
+  M.audio.addEventListener("loadedmetadata", () => { if (at && M.audio.currentTime < 1) M.audio.currentTime = at; paintTime(); }, { once: true });
+  drawBar(); refreshTracks();
+}
+
+// Поделиться треком: ссылка открывает у друга «Музыку» на этом треке, играет он по нажатию.
+async function shareTrack(t) {
+  if (!t) return;
+  const url = `${location.origin}/#/music?t=${t.id}`;
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+    try { await navigator.share({ title: `${t.title} — ${t.artist}`, url }); } catch {} // закрыл меню — ничего не делаем
+    return;
+  }
+  try { await navigator.clipboard.writeText(url); toast("Ссылка на трек скопирована — отправь её другу"); }
+  catch { sheet("Ссылка на трек", `<p class="muted">${esc(t.title)} — ${esc(t.artist)}</p><input class="inp" readonly value="${esc(url)}" onfocus="this.select()">`); }
+}
+const sharedId = () => new URLSearchParams(location.hash.split("?")[1] || "").get("t");
+// Открыли ссылку на трек: папка трека, трек заряжен в плеер на паузе и открыт большой плеер — остаётся нажать «Играть».
+function openShared() {
+  const id = sharedId(); if (!id || !M.tracks) return;
+  history.replaceState(null, "", "#/music"); // ссылка срабатывает один раз; дальше — обычная «Музыка»
+  const i = M.tracks.findIndex(t => t.id === id), t = M.tracks[i];
+  if (!t) return queueMicrotask(() => toast("Этого трека уже нет — возможно, его удалили"));
+  M.q = ""; M.folder = t.folder_id || null;
+  if (M.i !== i) { M.audio.pause(); M.i = i; M.audio.preload = "metadata"; M.audio.src = M.urls[t.file]; M.audio.currentTime = 0; }
+  setTimeout(() => { drawBar(); refreshTracks(); openFull(); M.full?.querySelector(".pl-play")?.focus({ preventScroll: true });
+    document.querySelector(`.tracks li[data-i="${i}"]`)?.scrollIntoView({ block: "center" }); }, 0);
+}
+
+// Свайп вниз по большому плееру (когда он не прокручен) — свернуть.
+function swipeDown(el, done) {
+  let y0 = null, dy = 0;
+  el.addEventListener("touchstart", ev => { y0 = el.scrollTop <= 0 && !ev.target.closest("input[type=range]") ? ev.touches[0].clientY : null; dy = 0; }, { passive: true });
+  el.addEventListener("touchmove", ev => {
+    if (y0 == null) return; dy = Math.max(0, ev.touches[0].clientY - y0);
+    el.style.transition = "none"; el.style.transform = dy ? `translateY(${dy}px)` : "";
+  }, { passive: true });
+  el.addEventListener("touchend", () => {
+    if (y0 == null) return; y0 = null; el.style.transition = ""; el.style.transform = "";
+    if (dy > 110) done();
+  });
+}
+// Фон большого плеера мягко окрашивается в цвет обложки.
+function ambient(f) {
+  const el = M.full?.querySelector(".now-in"), src = coverOf(f); if (!el) return;
+  if (!src) return el.style.setProperty("--amb", `hsl(${tileHue(f?.name)} 45% 45%)`);
+  const img = new Image(); img.crossOrigin = "anonymous";
+  img.onload = () => {
+    try {
+      const c = document.createElement("canvas"); c.width = c.height = 8;
+      const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, 8, 8);
+      const d = x.getImageData(0, 0, 8, 8).data; let r = 0, g = 0, b = 0;
+      for (let k = 0; k < d.length; k += 4) { r += d[k]; g += d[k + 1]; b += d[k + 2]; }
+      const n = d.length / 4; el.style.setProperty("--amb", `rgb(${r / n | 0} ${g / n | 0} ${b / n | 0})`);
+    } catch { el.style.removeProperty("--amb"); }
+  };
+  img.src = src;
+}
 
 /* ---------- help ---------- */
 // Подсказка новичку: пока нет ни одной тренировки и её не закрыли.
@@ -1877,6 +2095,7 @@ function profileView() {
       <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
       <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
     </div>
+    ${pfBlocks(S.user.id, true)}
     <a class="card help-link" href="#/help"><span><b>Как пользоваться сайтом</b><span class="hint">Календарь, тренировки, программы, тренер и друзья — коротко</span></span>${I.right}</a>
     ${S.people.length ? `<section class="card">
       <h2 class="card-t">Друзья</h2>
@@ -1959,6 +2178,12 @@ async function run(b, act) {
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
     case "mu-folder-menu": folderMenu(); break;
+    case "ph-open": { const uid = b.dataset.u; lightbox(PF.photos[uid].map(x => ({ ...x, src: PF.urls[x.path] })), +b.dataset.k, uid === S.user.id); break; }
+    case "ph-ava": lightbox([{ src: S.avatars[b.dataset.u] }]); break;
+    case "pf-favs": M.folder = "fav"; M.q = ""; location.hash = "#/music"; break;
+    case "pf-play": { const i = +b.dataset.i; if (i === M.i) { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); break; }
+      const uid = b.dataset.u; M.queue = (uid === S.user.id && M.favOrder ? M.favOrder.slice(0, 5) : PF.favs[uid] || []).map(id => M.tracks.find(t => t.id === id)?.file).filter(Boolean); playAt(i); break; }
+    case "mu-share": shareTrack(M.tracks[+b.dataset.i]); break;
     case "mu-up-stop": U.stop = true; U.xhr?.abort(); break;
     case "mu-up-close": U.items = []; document.getElementById("mu-upl")?.remove(); break;
     case "mu-up-retry": U.items = U.items.filter(y => y.st === "fail" || y.st === "skip").map(y => ({ f: y.f, st: "wait", pct: 0 })); runUpload(); break;
@@ -2076,7 +2301,7 @@ sb.auth.onAuthStateChange((event, session) => {
   S.user = u; S.loaded = false;
   chatEl?.remove(); chatDim.remove(); chatEl = null; stopMusic(); document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
-  if (u) loadAll().then(() => { render(); loadTracks().catch(() => {}); }).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
+  if (u) loadAll().then(() => { render(); loadTracks().then(restorePos).catch(() => {}); }).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
 });
 // на вкладке, открытой с вечера, «сегодня» должно сдвинуться
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.loaded) { const t = today(); if (S._t && S._t !== t) { S.day = t; render(); } S._t = t; } });
