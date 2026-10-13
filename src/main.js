@@ -60,6 +60,9 @@ const I = {
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-6"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
@@ -190,7 +193,78 @@ async function loadAll() {
   Object.assign(S, { workouts, exercises, people: people.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")), shares, friends: {} });
   S.profile = profile || await q(sb.from("gym_profile").insert({ name: (S.user.email || "").split("@")[0] }).select().single());
   S.avatars = {}; await loadAvatars();
-  S.loaded = true;
+  obLoad(); applyOutbox(); snapLater();
+  S.loaded = true; S.offline = false;
+}
+/* ---------- без сети: очередь записей и снимок данных на телефоне ---------- */
+// Отметки подходов, новые упражнения и тренировки сначала попадают в очередь (localStorage) и отправляются,
+// как только есть связь. Номера записей придумываются на телефоне, поэтому начать тренировку можно и без сети.
+const OB_KEY = () => `gym-outbox-${S.user?.id}`, SNAP_KEY = () => `gym-snap-${S.user?.id}`;
+let outbox = [], syncFail = false, flushP = null, flushTimer;
+const TABLE_OF = { gym_workouts: () => S.workouts, gym_exercises: () => S.exercises };
+function obLoad() { try { outbox = JSON.parse(localStorage.getItem(OB_KEY()) || "[]"); } catch { outbox = []; } }
+function obSave() { try { outbox.length ? localStorage.setItem(OB_KEY(), JSON.stringify(outbox)) : localStorage.removeItem(OB_KEY()); } catch {} paintSync(); }
+// op: { k: "таблица:id", t, kind: "upsert" | "update", id, row }; правки одной записи сливаются в одну
+function enqueue(op) {
+  const same = outbox.find(o => o.k === op.k);
+  if (same) same.row = { ...same.row, ...op.row }; else outbox.push(op);
+  obSave(); snapLater(); return flush();
+}
+const isNetErr = e => !navigator.onLine || /fetch|network|load failed|timed? ?out|abort/i.test(e?.message || String(e));
+function flush() {
+  if (!S.user || !outbox.length) return Promise.resolve();
+  return flushP ||= (async () => {
+    try {
+      while (outbox.length) {
+        const op = outbox[0], b = sb.from(op.t);
+        const { error } = op.kind === "upsert" ? await b.upsert(op.row, { onConflict: "id" }) : await b.update(op.row).eq("id", op.id);
+        if (error && isNetErr(error)) { syncFail = true; break; }
+        if (error) { console.error(error); toast("Одна запись не сохранилась — обнови страницу"); }
+        syncFail = false; outbox.shift(); obSave();
+      }
+    } catch (e) { syncFail = true; }
+    finally {
+      flushP = null; paintSync(); clearTimeout(flushTimer);
+      if (outbox.length) flushTimer = setTimeout(flush, 15000);
+      else if (S.offline) refreshAfterOffline(); // связь вернулась — подтянуть свежие данные
+    }
+  })();
+}
+addEventListener("online", () => { if (outbox.length) flush(); else if (S.offline) refreshAfterOffline(); paintSync(); });
+addEventListener("offline", paintSync);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) flush(); });
+// записи из очереди поверх загруженных данных (если страницу перезагрузили до отправки)
+function applyOutbox() {
+  for (const op of outbox) {
+    const arr = TABLE_OF[op.t]?.(); if (!arr) continue;
+    const id = op.kind === "upsert" ? op.row.id : op.id, cur = arr.find(x => x.id === id);
+    if (cur) Object.assign(cur, op.row); else if (op.kind === "upsert") arr.push({ user_id: S.user.id, created_at: new Date().toISOString(), plan: null, done: false, ...op.row });
+  }
+}
+const snapLater = () => later("snap", () => {
+  try { localStorage.setItem(SNAP_KEY(), JSON.stringify({ at: Date.now(), profile: S.profile, workouts: S.workouts, exercises: S.exercises, people: S.people, shares: S.shares })); } catch {}
+}, 800);
+function fromSnapshot() {
+  let snap; try { snap = JSON.parse(localStorage.getItem(SNAP_KEY()) || "null"); } catch {}
+  if (!snap?.profile) return false;
+  Object.assign(S, { profile: snap.profile, workouts: snap.workouts || [], exercises: snap.exercises || [], people: snap.people || [], shares: snap.shares || [], friends: {}, avatars: S.avatars || {}, loaded: true, offline: true });
+  applyOutbox();
+  clearInterval(fromSnapshot.t); fromSnapshot.t = setInterval(() => { if (!S.offline) clearInterval(fromSnapshot.t); else refreshAfterOffline(); }, 20000);
+  return true;
+}
+let refreshing = false;
+async function refreshAfterOffline() {
+  if (refreshing || !navigator.onLine) return; refreshing = true;
+  try { await loadAll(); S.offline = false; paintSync(); rerender(); } catch {} finally { refreshing = false; }
+}
+// плашка сверху: только когда есть неотправленное и нет связи
+function paintSync() {
+  let el = document.getElementById("sync");
+  const show = !!S.user && (outbox.length > 0 && (syncFail || !navigator.onLine) || !!S.offline);
+  if (!show) { el?.classList.remove("on"); return; }
+  if (!el) { el = document.createElement("div"); el.id = "sync"; el.className = "sync"; el.setAttribute("role", "status"); document.body.append(el); }
+  el.innerHTML = `<i aria-hidden="true"></i><span>${outbox.length ? `Нет сети — отметки сохранятся, когда появится связь · ${outbox.length}` : "Нет связи — показаны последние сохранённые данные"}</span>`;
+  requestAnimationFrame(() => el.classList.add("on"));
 }
 const workoutOn = day => S.workouts.find(w => w.day === day);
 const exercisesOf = wid => S.exercises.filter(e => e.workout_id === wid).sort((a, b) => a.position - b.position);
@@ -207,6 +281,76 @@ function lastFor(name, beforeDay) {
     if (!best || d > best.day) best = { day: d, sets: e.sets };
   }
   return best;
+}
+// История упражнения: лучший вес выполненных подходов за каждый день (до сегодня включительно).
+function liftHistory(name, workouts = S.workouts, exercises = S.exercises) {
+  const n = norm(name), t = today(), by = new Map();
+  for (const e of exercises) {
+    if (norm(e.name) !== n) continue;
+    const d = workouts.find(w => w.id === e.workout_id)?.day; if (!d || d > t) continue;
+    for (const x of e.sets || []) if ((x.done || e.done) && x.w != null && +x.w > 0 && (!by.has(d) || +x.w > by.get(d).w)) by.set(d, { d, w: +x.w, r: x.r });
+  }
+  return [...by.values()].sort((a, b) => a.d.localeCompare(b.d));
+}
+// лучший вес до этого дня (для отметки рекорда) — по выполненным подходам
+const bestBefore = (name, day) => liftHistory(name).filter(p => p.d < day).reduce((m, p) => Math.max(m, p.w), 0);
+// какой подход сегодня — рекорд: самый тяжёлый выполненный, если он тяжелее всех прошлых (первый раз — не рекорд)
+function prSetIndex(e, day) {
+  const prev = bestBefore(e.name, day); if (!prev) return -1;
+  let k = -1, max = prev;
+  (e.sets || []).forEach((x, i) => { if (x.done && x.w != null && +x.w > max) { max = +x.w; k = i; } });
+  return k;
+}
+// все рекорды: лучший вес по каждому упражнению и когда он поставлен
+function records(workouts = S.workouts, exercises = S.exercises) {
+  const names = [...new Map(exercises.map(e => [norm(e.name), e.name])).values()].filter(Boolean);
+  return names.map(n => { const h = liftHistory(n, workouts, exercises); if (!h.length) return null;
+      const best = h.reduce((a, b) => b.w > a.w ? b : a); return { name: n, w: best.w, d: best.d, n: h.length }; })
+    .filter(Boolean).sort((a, b) => b.d.localeCompare(a.d) || b.w - a.w);
+}
+// График рабочего веса: линия по датам, точка рекорда, подсказка при наведении или касании, под графиком — таблица.
+function liftChart(name, uid) {
+  const f = uid && uid !== S.user.id ? S.friends[uid] : null;
+  const h = f ? liftHistory(name, f.workouts, f.exercises) : liftHistory(name);
+  if (!h.length) return toast("По этому упражнению пока нет подходов с весом");
+  const W = 320, H = 168, L = 34, R = 14, T = 16, B = 26;
+  const ws = h.map(p => p.w), lo = Math.min(...ws), hi = Math.max(...ws), pad = Math.max(2.5, (hi - lo) * .15);
+  const y0 = Math.max(0, Math.floor((lo - pad) / 2.5) * 2.5), y1 = Math.ceil((hi + pad) / 2.5) * 2.5;
+  const t0 = +parse(h[0].d), t1 = +parse(h.at(-1).d), span = Math.max(1, t1 - t0);
+  const X = p => h.length === 1 ? (L + W - R) / 2 : L + (+parse(p.d) - t0) / span * (W - L - R);
+  const Y = w => T + (1 - (w - y0) / (y1 - y0 || 1)) * (H - T - B);
+  const ticks = [y0, (y0 + y1) / 2, y1].map(v => Math.round(v * 2) / 2);
+  const best = h.reduce((a, b) => b.w > a.w ? b : a), last = h.at(-1), first = h[0], dw = last.w - first.w;
+  const path = h.map((p, i) => `${i ? "L" : "M"}${X(p).toFixed(1)},${Y(p.w).toFixed(1)}`).join("");
+  const svg = `<svg class="lc" viewBox="0 0 ${W} ${H}" role="img" aria-label="Рабочий вес: от ${fmt(first.w, 1)} до ${fmt(last.w, 1)} кг">
+    ${ticks.map(v => `<line class="lc-grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="lc-ax" x="${L - 6}" y="${Y(v) + 3.5}" text-anchor="end">${fmt(v, 1)}</text>`).join("")}
+    <text class="lc-ax" x="${L}" y="${H - 6}">${shortDay(first.d)}</text>${h.length > 1 ? `<text class="lc-ax" x="${W - R}" y="${H - 6}" text-anchor="end">${shortDay(last.d)}</text>` : ""}
+    <path class="lc-line" d="${path}"/>
+    ${h.map((p, i) => `<circle class="lc-dot ${p === best ? "best" : ""}" cx="${X(p)}" cy="${Y(p.w)}" r="${p === best ? 5 : 4}" data-k="${i}"/>`).join("")}
+    <text class="lc-lab" x="${Math.min(X(best), W - R - 4)}" y="${Y(best.w) - 10}" text-anchor="${X(best) > W - 60 ? "end" : "middle"}">${fmt(best.w, 1)} кг</text>
+    <line class="lc-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>
+    <rect class="lc-hit" x="${L}" y="0" width="${W - L - R}" height="${H}"/>
+  </svg>`;
+  const rows = [...h].reverse().slice(0, 8);
+  sheet(name, `<div class="lc-sum">
+      <div><b class="mono">${fmt(best.w, 1)} кг</b><span>рекорд · ${shortDay(best.d)}</span></div>
+      <div><b class="mono ${dw > 0 ? "up" : ""}">${h.length > 1 ? (dw > 0 ? "+" : "") + fmt(dw, 1) + " кг" : "—"}</b><span>${h.length > 1 ? `с ${shortDay(first.d)}` : "пока одна тренировка"}</span></div>
+      <div><b class="mono">${h.length}</b><span>${plural(h.length, "тренировка", "тренировки", "тренировок")}</span></div></div>
+    <div class="lc-wrap">${svg}<div class="lc-tip" hidden></div></div>
+    <table class="lc-table"><thead><tr><th>Дата</th><th>Лучший подход</th></tr></thead>
+      <tbody>${rows.map(p => `<tr><td>${shortDay(p.d)}</td><td class="mono">${fmt(p.w, 1)} кг${p.r ? ` × ${p.r}` : ""}${p === best ? ` <span class="pr-tag">PR</span>` : ""}</td></tr>`).join("")}</tbody></table>`, el => {
+    const svgEl = el.querySelector("svg.lc"), tip = el.querySelector(".lc-tip"), cross = el.querySelector(".lc-cross");
+    const show = ev => {
+      const r = svgEl.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W;
+      let k = 0; h.forEach((p, i) => { if (Math.abs(X(p) - x) < Math.abs(X(h[k]) - x)) k = i; });
+      const p = h[k]; cross.setAttribute("x1", X(p)); cross.setAttribute("x2", X(p)); cross.setAttribute("visibility", "visible");
+      el.querySelectorAll(".lc-dot").forEach(d => d.classList.toggle("on", +d.dataset.k === k));
+      tip.hidden = false; tip.innerHTML = `<b>${fmt(p.w, 1)} кг${p.r ? ` × ${p.r}` : ""}</b><span>${shortDay(p.d)}</span>`;
+      tip.style.left = Math.min(Math.max(X(p) / W * r.width, 50), r.width - 50) + "px";
+    };
+    const hide = () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); el.querySelectorAll(".lc-dot.on").forEach(d => d.classList.remove("on")); };
+    svgEl.addEventListener("pointermove", show); svgEl.addEventListener("pointerdown", show); svgEl.addEventListener("pointerleave", hide);
+  });
 }
 const setsText = sets => sets.filter(s => s.w != null).map(s => `${s.w != null ? fmt(s.w, 1) : "—"}×${s.r ?? "—"}`).join(" · ");
 
@@ -497,9 +641,9 @@ function exBody(e, last) {
   return `<div class="ex-body">
     ${tip ? `<p class="ex-tip">${esc(tip)}</p>` : ""}
     ${last && setsText(last.sets) ? `<p class="ex-tip">В прошлый раз, ${shortDay(last.day)}: ${esc(setsText(last.sets))}</p>` : ""}
-    <div class="sets">${(e.sets || []).map((s, i) => `
-      <div class="set ${s.done ? "done" : ""}" data-i="${i}">
-        <span class="n">${i + 1}</span>
+    <div class="sets">${(e.sets || []).map((s, i, _, pr = prSetIndex(e, dayOfWorkout(e.workout_id) || S.day)) => `
+      <div class="set ${s.done ? "done" : ""} ${i === pr ? "pr" : ""}" data-i="${i}">
+        <span class="n">${i === pr ? `<span class="pr-tag" title="Личный рекорд">PR</span>` : i + 1}</span>
         <label><input inputmode="decimal" data-field="set-w" value="${s.w ?? ""}" placeholder="—" aria-label="Вес, кг">кг</label>
         <label><input inputmode="numeric" data-field="set-r" value="${s.r ?? ""}" placeholder="—" aria-label="Повторы">раз</label>
         <button class="check sm" data-act="set-done" aria-pressed="${!!s.done}" aria-label="Подход ${i + 1} выполнен"><i>${I.check}</i></button>
@@ -507,7 +651,7 @@ function exBody(e, last) {
       </div>`).join("")}
     </div>
     <div class="ex-foot">
-      <span class="row" style="gap:16px"><button class="linkbtn" data-act="set-add">+ Подход</button><button class="linkbtn muted-link" data-act="ex-photo">История</button></span>
+      <span class="row" style="gap:16px"><button class="linkbtn" data-act="set-add">+ Подход</button><button class="linkbtn muted-link ex-chart" data-act="lift-chart" data-n="${esc(e.name)}">${I.chart}История веса</button></span>
       <button class="linkbtn muted-link" data-act="ex-del">Удалить упражнение</button>
     </div>
   </div>`;
@@ -579,16 +723,18 @@ function replaceRow(e) {
   if (li) li.outerHTML = exRow(e, 0, S.day);
   refreshDayBits();
 }
-const saveEx = e => later("ex" + e.id, () => q(sb.from("gym_exercises").update({ name: e.name, sets: e.sets, done: e.done }).eq("id", e.id)), 500);
+const saveEx = e => later("ex" + e.id, () => enqueue({ k: "gym_exercises:" + e.id, t: "gym_exercises", kind: "update", id: e.id, row: { name: e.name, sets: e.sets, done: e.done } }), 500);
 
 async function createWorkout(day, title = "", items = []) {
-  const w = await q(sb.from("gym_workouts").insert({ day, title }).select().single());
+  const now = new Date().toISOString(), w = { id: uid(), user_id: S.user.id, day, title, note: "", feeling: null, created_at: now };
   S.workouts.push(w);
-  if (items.length) {
-    const rows = items.map((it, i) => ({ workout_id: w.id, position: i, name: it.name, plan: it.plan || null, sets: (it.sets || []).map(s => ({ w: s.w ?? null, r: s.r ?? null, done: false })) }));
-    S.exercises.push(...await q(sb.from("gym_exercises").insert(rows).select()));
+  enqueue({ k: "gym_workouts:" + w.id, t: "gym_workouts", kind: "upsert", row: { id: w.id, day, title } });
+  for (const [i, it] of items.entries()) {
+    const row = { id: uid(), workout_id: w.id, position: i, name: it.name, plan: it.plan || null, sets: (it.sets || []).map(s => ({ w: s.w ?? null, r: s.r ?? null, done: false })), done: false };
+    S.exercises.push({ ...row, user_id: S.user.id, created_at: now });
+    enqueue({ k: "gym_exercises:" + row.id, t: "gym_exercises", kind: "upsert", row });
   }
-  return w;
+  return w; // отправка идёт в фоне; кто следом шлёт запрос со ссылкой на эту тренировку — сначала ждёт flush()
 }
 // Тренировка дня по плану создаётся в момент «Начать» или первого добавленного упражнения.
 let creating = null;
@@ -607,13 +753,16 @@ async function exAction(b, act) {
   switch (act) {
     case "ex-open": S.open.has(e.id) ? S.open.delete(e.id) : S.open.add(e.id); return replaceRow(e);
     case "ex-done": e.done = !e.done; e.sets = (e.sets || []).map(s => ({ ...s, done: e.done })); if (e.done) S.open.delete(e.id); replaceRow(e); return saveEx(e);
-    case "set-done": { const i = +b.closest(".set").dataset.i; e.sets[i].done = !e.sets[i].done; e.done = e.sets.length > 0 && e.sets.every(s => s.done); replaceRow(e); if (e.sets[i].done) restTimer(); return saveEx(e); }
+    case "set-done": { const i = +b.closest(".set").dataset.i; e.sets[i].done = !e.sets[i].done; e.done = e.sets.length > 0 && e.sets.every(s => s.done); replaceRow(e);
+      if (e.sets[i].done) { restTimer(); const d = dayOfWorkout(e.workout_id) || S.day;
+        if (prSetIndex(e, d) === i) toast(`Новый рекорд: ${e.name} — ${fmt(e.sets[i].w, 1)} кг (было ${fmt(bestBefore(e.name, d), 1)})`); }
+      return saveEx(e); }
     case "set-add": { const ls = e.sets.at(-1) || {}; e.sets.push({ w: ls.w ?? null, r: ls.r ?? null, done: false }); e.done = false; replaceRow(e); saveEx(e);
       return document.querySelector(`[data-ex="${e.id}"] .set:last-child input`)?.focus(); }
     case "set-del": { const i = +b.closest(".set").dataset.i; e.sets.splice(i, 1); e.done = e.sets.length > 0 && e.sets.every(s => s.done); replaceRow(e); return saveEx(e); }
     case "ex-del": {
       S.exercises.splice(S.exercises.indexOf(e), 1); document.querySelector(`[data-ex="${e.id}"]`)?.remove(); refreshDayBits();
-      const t = setTimeout(() => q(sb.from("gym_exercises").delete().eq("id", e.id)), 5000);
+      const t = setTimeout(() => flush().catch(() => {}).then(() => q(sb.from("gym_exercises").delete().eq("id", e.id))), 5000);
       return toast(`«${e.name || "Упражнение"}» удалено`, { label: "Вернуть", run: () => { clearTimeout(t); S.exercises.push(e); rerender(); } });
     }
   }
@@ -770,6 +919,7 @@ async function applyActions(actions) {
     if (w) {
       if (started(w)) return false;
       undo.removed.push({ day: w.day, title: w.title, items: exercisesOf(w.id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) });
+      await flush().catch(() => {}); // сначала дослать очередь, иначе неотправленная запись «воскреснет» после удаления
       await q(sb.from("gym_workouts").delete().eq("id", w.id));
       S.workouts = S.workouts.filter(x => x !== w); S.exercises = S.exercises.filter(x => x.workout_id !== w.id);
     }
@@ -788,6 +938,7 @@ async function applyActions(actions) {
   return undo;
 }
 async function undoActions(undo) {
+  await flush().catch(() => {});
   if (undo.created.length) await q(sb.from("gym_workouts").delete().in("id", undo.created));
   S.workouts = S.workouts.filter(w => !undo.created.includes(w.id)); S.exercises = S.exercises.filter(e => !undo.created.includes(e.workout_id));
   for (const r of undo.removed) await createWorkout(r.day, r.title, r.items);
@@ -1083,6 +1234,7 @@ function acceptSheet(sh) {
         const w = workoutOn(d);
         if (w) { // дописываем в конец существующей тренировки
           const pos = (exercisesOf(w.id).at(-1)?.position ?? -1) + 1;
+          await flush().catch(() => {}); // тренировка могла быть создана без сети и ещё не отправлена
           S.exercises.push(...await q(sb.from("gym_exercises").insert(rows.map((r, k) => ({ workout_id: w.id, position: pos + k, name: r.name, plan: r.plan, sets: r.sets.map(x => ({ ...x, done: false })) }))).select()));
         } else await createWorkout(d, sh.payload?.title || "", rows);
         await answerShare(sh, "accepted");
@@ -1258,7 +1410,7 @@ function friendView() {
     </div>
     <section class="card"><h2 class="card-t">Эта неделя</h2><div class="week">${week}</div></section>
     <section class="card"><h2 class="card-t">Рабочие веса</h2>
-      ${lifts.length ? `<ul class="lifts">${lifts.map(l => { const dw = l.last.w - l.first.w; return `<li><span class="lift-n">${esc(l.name)}</span><span class="mono">${fmt(l.last.w, 1)} кг</span><span class="lift-d ${dw > 0 ? "up" : ""}">${l.pts.length > 1 ? (dw > 0 ? `+${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : dw < 0 ? `${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : "без изменений") : shortDay(l.last.d)}</span></li>`; }).join("")}</ul>`
+      ${lifts.length ? `<ul class="lifts">${lifts.map(l => { const dw = l.last.w - l.first.w; return `<li><button class="lift-btn" data-act="lift-chart" data-u="${id}" data-n="${esc(l.name)}"><span class="lift-n">${esc(l.name)}</span><span class="mono">${fmt(l.last.w, 1)} кг</span><span class="lift-d ${dw > 0 ? "up" : ""}">${l.pts.length > 1 ? (dw > 0 ? `+${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : dw < 0 ? `${fmt(dw, 1)} кг с ${shortDay(l.first.d)}` : "без изменений") : shortDay(l.last.d)}</span></button></li>`; }).join("")}</ul>`
         : `<p class="hint">Пока нет отмеченных подходов с весом.</p>`}
     </section>
     <section class="card"><h2 class="card-t">Последние тренировки</h2>
@@ -1365,23 +1517,35 @@ function musicList() {
 }
 
 // Действия владельца: перенести трек в папку, удалить трек, создать папку, сменить обложку, удалить папку.
+// Меню трека: сверху сам трек, ниже — спокойный список действий с иконками. Перенос в папку — отдельным шагом.
 function trackMenu(i) {
   const t = M.tracks[i]; if (!t) return;
-  const inP = inProfile(t), own = isOwner();
-  sheet(t.title, `<p class="muted">${esc(t.artist)}</p>
-    <div class="pick"><button data-prof><b>${inP ? "Убрать из профиля" : "Добавить в профиль"}</b><span>${inP ? "друзья больше не увидят его у тебя" : "друзья увидят его в твоём профиле"}</span></button>
-      <button data-share><b>Поделиться</b><span>ссылка откроет трек у друга</span></button></div>
-    ${own ? `<div class="eyebrow">Перенести в папку</div>
-    <div class="pick">${[{ id: "", name: "Без папки" }, ...M.folders].map(f => `<button data-to="${f.id}" ${(t.folder_id || "") === f.id ? "disabled" : ""}><b>${esc(f.name)}</b>${(t.folder_id || "") === f.id ? "<span>сейчас здесь</span>" : ""}</button>`).join("")}</div>
-    <div class="sheet-actions"><button class="btn danger-soft" data-del>Удалить трек</button></div>` : ""}`, (el, close) => {
+  const own = isOwner(), f = folderOf(t);
+  const head = `<div class="tm-head"><span class="tm-cov">${coverHTML(f || { name: t.artist })}</span><span class="tm-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ""}</span></span></div>`;
+  const item = (act, icon, label, cls = "") => `<button class="tm-item ${cls}" data-tm="${act}">${icon}<span>${label}</span></button>`;
+  const main = () => { const inP = inProfile(t); return `${head}<div class="tm-list">
+      ${item("prof", inP ? I.check : I.plus, inP ? "Убрать из профиля" : "Добавить в профиль", inP ? "on" : "")}
+      ${item("share", I.share, "Поделиться")}
+      ${item("dl", I.download, "Скачать")}
+      ${own ? `<hr>${item("move", I.folder, `Перенести в папку<small>${esc(f?.name || "без папки")}</small>`)}${item("del", I.trash, "Удалить трек", "danger")}` : ""}
+    </div>`; };
+  const folders = () => `${head}<button class="tm-back" data-tm="back">${I.left}Назад</button><div class="tm-list">
+      ${[{ id: "", name: "Без папки" }, ...M.folders].map(x => `<button class="tm-item ${(t.folder_id || "") === x.id ? "on" : ""}" data-to="${x.id}" ${(t.folder_id || "") === x.id ? "aria-current=\"true\"" : ""}>
+        ${(t.folder_id || "") === x.id ? I.check : `<i class="tm-dot" aria-hidden="true"></i>`}<span>${esc(x.name)}</span></button>`).join("")}</div>`;
+  sheet("Трек", `<div class="tm" data-tm-box>${main()}</div>`, (el, close) => {
+    const box = el.querySelector("[data-tm-box]");
+    el.classList.add("tm-sheet");
     el.addEventListener("click", async ev => {
-      if (ev.target.closest("[data-share]")) { close(); return shareTrack(t); }
-      if (ev.target.closest("[data-prof]")) { close(); return toggleProfileTrack(t); }
-      const to = ev.target.closest("[data-to]");
+      const a = ev.target.closest("[data-tm]")?.dataset.tm, to = ev.target.closest("[data-to]");
+      if (a === "share") { close(); return shareTrack(t); }
+      if (a === "prof") { close(); return toggleProfileTrack(t); }
+      if (a === "dl") { close(); return downloadTrack(t); }
+      if (a === "move") { box.innerHTML = folders(); return; }
+      if (a === "back") { box.innerHTML = main(); return; }
       if (to) { to.disabled = true;
         try { await q(sb.from("gym_tracks").update({ folder_id: to.dataset.to || null }).eq("id", t.id)); t.folder_id = to.dataset.to || null; close(); rerender(); toast("Перенесено"); } catch { to.disabled = false; }
         return; }
-      if (!ev.target.closest("[data-del]")) return;
+      if (a !== "del") return;
       close();
       if (!await confirmSheet("Удалить трек?", `«${t.title}» исчезнет с сайта у всех. Файл на твоём компьютере останется.`)) return;
       try {
@@ -1394,6 +1558,16 @@ function trackMenu(i) {
       } catch {}
     });
   });
+}
+// Скачать трек: короткая ссылка с именем файла «Группа — Название.mp3», браузер сохраняет файл сам.
+async function downloadTrack(t) {
+  if (!t) return;
+  const name = `${t.artist ? t.artist + " — " : ""}${t.title}.mp3`.replace(/[\\/:*?"<>|]+/g, " ");
+  const { data, error } = await sb.storage.from("gym-music").createSignedUrl("tracks/" + t.file, 600, { download: name });
+  if (error || !data?.signedUrl) return toast("Не получилось скачать — попробуй ещё раз");
+  const a = document.createElement("a"); a.href = data.signedUrl; a.download = name; a.rel = "noopener";
+  document.body.append(a); a.click(); a.remove();
+  toast("Скачивание началось");
 }
 function newFolderSheet() {
   sheet("Новая папка", `<form class="music-form" data-mf>
@@ -1767,7 +1941,7 @@ function paintTime() {
 function wirePlayer(root) {
   root.addEventListener("click", ev => {
     const b = ev.target.closest("[data-p]"); if (!b) return;
-    ({ open: openFull, close: closeFull, hide: hidePlayer, share: () => shareTrack(M.tracks[M.i]), prof: () => toggleProfileTrack(M.tracks[M.i]),
+    ({ open: openFull, close: closeFull, hide: hidePlayer, share: () => shareTrack(M.tracks[M.i]), prof: () => toggleProfileTrack(M.tracks[M.i]), dl: () => downloadTrack(M.tracks[M.i]),
       prev: () => M.audio.currentTime > 5 ? (M.audio.currentTime = 0) : playAt(nextIndex(-1)),
       next: () => { const n = nextIndex(1); n >= 0 ? playAt(n) : playAt(M.queue.length ? M.tracks.findIndex(t => t.file === M.queue[0]) : 0); },
       toggle: () => { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); },
@@ -1829,7 +2003,7 @@ function openFull() {
   if (!M.full) {
     M.full = document.createElement("section"); M.full.className = "now"; M.full.setAttribute("role", "dialog"); M.full.setAttribute("aria-label", "Сейчас играет");
     M.full.innerHTML = `<div class="now-in">
-      <header class="now-head"><button class="icon-btn bare" data-p="close" aria-label="Свернуть">${I.down}</button><span class="eyebrow" data-from></span><button class="icon-btn bare" data-p="share" aria-label="Поделиться треком" title="Поделиться">${I.share}</button></header>
+      <header class="now-head"><button class="icon-btn bare" data-p="close" aria-label="Свернуть">${I.down}</button><span class="eyebrow" data-from></span><span class="now-acts"><button class="icon-btn bare" data-p="dl" aria-label="Скачать трек" title="Скачать">${I.download}</button><button class="icon-btn bare" data-p="share" aria-label="Поделиться треком" title="Поделиться">${I.share}</button></span></header>
       <div class="now-cover"></div>
       <div class="now-title"><div><h2 data-title></h2><p class="muted" data-artist></p></div><button class="icon-btn bare now-fav" data-p="fav"></button></div>
       <button class="now-prof" data-p="prof"></button>
@@ -2211,6 +2385,8 @@ function profileView() {
       <div><b>${done.length}</b><span>${plural(done.length, "тренировка", "тренировки", "тренировок")} всего</span></div>
       <div><b>${month}</b><span>в ${MON[new Date().getMonth()].replace(/я$/, "е").replace(/а$/, "е")}</span></div>
     </div>
+    ${(rec => rec.length ? `<section class="card"><div class="card-head"><h2 class="card-t">Рекорды</h2><span class="hint">лучший вес</span></div>
+      <ul class="lifts rec-list">${rec.slice(0, 6).map(r => `<li><button class="lift-btn" data-act="lift-chart" data-n="${esc(r.name)}"><span class="lift-n">${esc(r.name)}</span><span class="mono">${fmt(r.w, 1)} кг</span><span class="lift-d">${shortDay(r.d)} · ${I.chart}график</span></button></li>`).join("")}</ul></section>` : "")(records())}
     ${pfBlocks(S.user.id, true)}
     <a class="card help-link" href="#/help"><span><b>Как пользоваться сайтом</b><span class="hint">Календарь, тренировки, программы, тренер и друзья — коротко</span></span>${I.right}</a>
     ${S.people.length ? `<section class="card">
@@ -2262,6 +2438,7 @@ document.addEventListener("click", ev => {
   run(b, b.dataset.act);
 });
 async function run(b, act) {
+  if (act === "lift-chart") return liftChart(b.dataset.n, b.dataset.u); // график веса — из упражнения, рекордов и страницы друга
   if (["ex-done", "ex-open", "ex-photo", "ex-info", "set-done", "set-add", "set-del", "ex-del"].includes(act)) return exAction(b, act);
   const w = workoutOn(S.day);
   switch (act) {
@@ -2330,6 +2507,7 @@ async function run(b, act) {
       toast("Тренировка убрана с этого дня", { label: "Вернуть", run: () => { const mv = { ...S.profile.program_moves }; delete mv[d]; S.profile.program_moves = mv; saveProfile(); rerender(); } }); break; }
     case "del-w": {
       if (!await confirmSheet("Удалить тренировку?", `«${w.title || "Тренировка"}» на ${shortDay(w.day)} и все её упражнения.`)) return;
+      await flush().catch(() => {});
       await q(sb.from("gym_workouts").delete().eq("id", w.id));
       S.workouts = S.workouts.filter(x => x.id !== w.id); S.exercises = S.exercises.filter(x => x.workout_id !== w.id);
       if (sessionOn(w.day)) setRest(w.day); // иначе на этом дне снова появится план программы
@@ -2401,7 +2579,8 @@ document.addEventListener("submit", async ev => {
     const tmp = { id: uid(), workout_id: w.id, position: list.length ? list.at(-1).position + 1 : 0, name, sets, done: false };
     form.name.value = "";
     try {
-      const row = await q(sb.from("gym_exercises").insert(tmp).select().single());
+      const row = { ...tmp, plan: null, user_id: S.user.id, created_at: new Date().toISOString() };
+      enqueue({ k: "gym_exercises:" + tmp.id, t: "gym_exercises", kind: "upsert", row: tmp });
       S.exercises.push(row); S.open.add(row.id);
       const ol = document.getElementById("ex-list");
       if (ol) { ol.insertAdjacentHTML("beforeend", exRow(row, list.length, S.day)); refreshDayBits(); } else rerender();
@@ -2411,6 +2590,8 @@ document.addEventListener("submit", async ev => {
 });
 
 /* ---------- start ---------- */
+// Сам сайт (страница, скрипты, шрифты, картинки) кэшируется, чтобы открываться в зале без связи.
+if ("serviceWorker" in navigator && !import.meta.env.DEV) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 sb.auth.onAuthStateChange((event, session) => {
   const u = session?.user || null;
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
@@ -2420,7 +2601,16 @@ sb.auth.onAuthStateChange((event, session) => {
   if (!u) scrollTo({ top: 0 });
   chatEl?.remove(); chatDim.remove(); chatEl = null; stopMusic(); document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
   render();
-  if (u) loadAll().then(() => { render(); loadTracks().then(restorePos).catch(() => {}); loadPf(S.user.id).then(drawFull).catch(() => {}); }).catch(() => { app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`; });
+  if (!u) return;
+  obLoad();
+  const extras = () => { loadTracks().then(restorePos).catch(() => {}); loadPf(S.user.id).then(drawFull).catch(() => {}); };
+  // нет сети — сразу последние сохранённые данные; сеть есть, но сервер молчит 4 секунды — тоже они, а загрузка идёт дальше в фоне
+  const quick = setTimeout(() => { if (!S.loaded && fromSnapshot()) { render(); paintSync(); } }, navigator.onLine ? 4000 : 0);
+  loadAll().then(() => { clearTimeout(quick); paintSync(); render(); extras(); }).catch(() => {
+    clearTimeout(quick);
+    if (S.loaded || fromSnapshot()) { render(); paintSync(); return; }
+    app.querySelector("#main").innerHTML = `<div class="hero"><p class="muted">Не получилось загрузить данные.</p><div><button class="btn" onclick="location.reload()">Обновить</button></div></div>`;
+  });
 });
 // на вкладке, открытой с вечера, «сегодня» должно сдвинуться
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.loaded) { const t = today(); if (S._t && S._t !== t) { S.day = t; render(); } S._t = t; } });
