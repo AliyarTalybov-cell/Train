@@ -576,7 +576,7 @@ PROGRAMS.push(
     defaultDays: [0, 1, 2, 3, 4],
     place: "зал",
     about: "Пять тренировок в неделю по схеме Ли Приста — австралийского профи с одними из самых больших рук в истории. Каждая группа мышц — раз в неделю, тяжело и с большим объёмом, отдельный день на руки. Для опытных: новичку лучше начать с «Верх / низ».",
-    photo: { src: "/img/lee-priest.jpg", caption: "Ли Прист на тренировке груди", credit: "Фото: Sam's Fitness, CC BY 3.0", link: "https://commons.wikimedia.org/wiki/File:Lee_Priest_Sam%27s_Fitness_Pec_Fly.jpg", pos: "50% 25%" },
+    photo: { src: "/img/lee-priest.jpg", caption: "Ли Прист — одни из самых больших рук в истории", pos: "50% 30%" },
     diet: {
       goal: "mass",
       how: [

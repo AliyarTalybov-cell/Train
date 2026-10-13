@@ -494,7 +494,7 @@ const ATHLETES = [
     story: "Тренировался в подвальном зале в Бирмингеме, вдали от звёздных залов Калифорнии. Короткие тренировки, один подход до отказа — и шесть титулов подряд, с 1992 по 1997." },
   { id: "kai", src: "/img/kai-greene.jpg", name: "Кай Грин", title: "3 × Arnold Classic", pos: "50% 16%", prog: "kai-greene",
     story: "Вырос в приёмных семьях в Бруклине; заниматься бодибилдингом его подтолкнул школьный учитель. Трижды выиграл Arnold Classic и трижды был вторым на «Мистере Олимпия»." },
-  { id: "priest", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 30%", prog: "lee-priest",
+  { id: "priest", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 20%", prog: "lee-priest",
     story: "Начал выступать подростком, а в 21 год уже был профессионалом. Рост около 163 см — и одни из самых больших рук в истории спорта." },
   { id: "rock", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", short: ["Скала", "Джонсон"], title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
     quotes: ["Кровь, пот и уважение. Первые два ты отдаёшь, последнее — зарабатываешь."],
@@ -507,7 +507,6 @@ const ATH_CREDITS = [
   ["Фил Хит", "Kevin Laval, «Мистер Олимпия» 2012, CC0", "https://commons.wikimedia.org/wiki/File:Phil_Heath_Kai_Greene.JPG"],
   ["Джей Катлер", "Morten Skovgaard, CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Jay_Cutler_%E2%80%93_Loaded_039_(15263347890).jpg"],
   ["Кай Грин", "neverfearfailure.com, CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Kai_greene_arnold_classic.jpg"],
-  ["Ли Прист", "Sam's Fitness, CC BY 3.0", "https://commons.wikimedia.org/wiki/File:Lee_Priest_Sam%27s_Fitness_Pec_Fly.jpg"],
   ["Дуэйн «Скала» Джонсон", "Spc. Casey Brumbach, U.S. Army, общественное достояние", "https://commons.wikimedia.org/wiki/File:Dwayne_Johnson_Daytona_500_8246702.jpg"],
 ];
 function loginView(mode = "in") {
