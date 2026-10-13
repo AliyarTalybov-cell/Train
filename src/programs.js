@@ -689,7 +689,7 @@ PROGRAMS.push(
     defaultDays: [0, 1, 2, 3, 4],
     place: "зал",
     about: "Пять тренировок в неделю по схеме, с которой Фил Хит семь раз подряд выиграл «Мистера Олимпия». Его тренер Хани Рэмбод придумал FST-7: последнее упражнение каждой тренировки — 7 подходов по 10–12 повторов с отдыхом 30–45 секунд, чтобы до предела «накачать» мышцу кровью. Для опытных.",
-    photo: { src: "/img/phil-heath.jpg", caption: "Фил Хит — 7 раз «Мистер Олимпия»", credit: "Фото: Entilzha, CC0", link: "https://commons.wikimedia.org/wiki/File:Phil_Heath.JPG", pos: "50% 22%" },
+    photo: { src: "/img/phil-heath.jpg", caption: "Фил Хит на «Мистере Олимпия» 2012", credit: "Фото: Kevin Laval, CC0", link: "https://commons.wikimedia.org/wiki/File:Phil_Heath_Kai_Greene.JPG", pos: "50% 14%" },
     diet: {
       goal: "mass",
       how: [

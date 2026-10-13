@@ -421,7 +421,7 @@ async function deleteAccount() {
 // Постеры чемпионов на «стене» по бокам широкого экрана: по два с каждой стороны, как приклеенные скотчем.
 function sidePosters() {
   if (document.querySelector(".wall")) return;
-  const list = [...ATHLETES].sort(() => Math.random() - .5).slice(0, 4); // четыре места на стене, кто висит — случайно
+  const list = [...ATHLETES].sort(() => Math.random() - .5); // все восемь, по четыре с каждой стороны; порядок — случайный
   const wall = document.createElement("div"); wall.className = "wall";
   wall.innerHTML = list.map((a, k) => `<figure class="poster p${k}" data-ath="${a.id}" role="button" tabindex="0" aria-label="${esc(a.name)} — мотивация">
       <span class="tape a"></span><span class="tape b"></span>
@@ -486,7 +486,7 @@ const ATHLETES = [
     quotes: ["Все хотят быть бодибилдерами, но никто не хочет поднимать по-настоящему тяжёлые веса.", "Лёгкий вес, бэйби!"],
     from: "его фразы из зала",
     story: "Работал полицейским в Арлингтоне и тренировался после смен. Восемь раз подряд выиграл «Мистера Олимпия» — рекорд, который делит только с Ли Хейни." },
-  { id: "heath", src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 22%", prog: "phil-heath",
+  { id: "heath", src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 12%", prog: "phil-heath",
     story: "Играл в баскетбол за университет и пришёл в бодибилдинг только в 22 года. Через девять лет стал «Мистером Олимпия» — и выигрывал семь лет подряд, с 2011 по 2017." },
   { id: "cutler", src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%", prog: "cutler",
     story: "Четыре раза был вторым после Коулмана — в 2001, 2003, 2004 и 2005 годах. Не сдался и в 2006-м победил. А в 2009-м стал первым, кто вернул себе титул после того, как его потерял." },
@@ -504,7 +504,7 @@ const ATHLETES = [
 const ATH_CREDITS = [
   ["Арнольд Шварценеггер", "Madison Square Garden Center, общественное достояние", "https://commons.wikimedia.org/wiki/File:Arnold_Schwarzenegger_1974.jpg"],
   ["Ронни Коулман", "localfitness.com.au, CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:Ronnie_Coleman_8_x_Mr_Olympia_-_2009_-_4.png"],
-  ["Фил Хит", "Entilzha, CC0", "https://commons.wikimedia.org/wiki/File:Phil_Heath.JPG"],
+  ["Фил Хит", "Kevin Laval, «Мистер Олимпия» 2012, CC0", "https://commons.wikimedia.org/wiki/File:Phil_Heath_Kai_Greene.JPG"],
   ["Джей Катлер", "Morten Skovgaard, CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Jay_Cutler_%E2%80%93_Loaded_039_(15263347890).jpg"],
   ["Дориан Йейтс", "Beaverino, CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Dorian_yates.png"],
   ["Кай Грин", "neverfearfailure.com, CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Kai_greene_arnold_classic.jpg"],

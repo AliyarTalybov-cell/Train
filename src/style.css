@@ -1127,7 +1127,6 @@ body:has(.auth){padding-bottom:0}
   .p3{--r:-2deg;right:calc((100vw - var(--col)) / 4 - var(--w) / 2 + 18px);top:54vh}
   /* в тёмной теме постеры ещё тише */
   :root[data-theme="dark"] .poster{opacity:.42}
-  html.chat-open .p2,html.chat-open .p3{opacity:0}
   body:has(.auth) .wall{display:none}
   .topbar,main.wrap{position:relative;z-index:1}
 }
@@ -1245,3 +1244,23 @@ body:has(.auth){padding-bottom:0}
 .ap-body{grid-template-columns:minmax(0,1fr)}
 .ap-name{font-size:min(58px,calc((100cqw - 60px) / (var(--len) * .9)))}
 .ath{cursor:pointer}
+/* стена: все восемь постеров — по четыре с каждой стороны, два столбика, вразнобой и чуть внахлёст */
+@media (min-width:1180px){
+  .wall{--sw:calc((100vw - var(--col)) / 2)}
+  .poster{--w:clamp(92px,calc((var(--sw) - 70px) / 2),150px);padding:6px 6px 8px}
+  .poster figcaption{padding-top:5px}
+  .poster figcaption b{font-size:clamp(8.5px,.75vw,10.5px)}
+  .poster figcaption span{font-size:clamp(7.5px,.6vw,9px)}
+  .tape{width:clamp(30px,2.6vw,42px);height:14px;top:-7px}
+  .p0,.p1,.p2,.p3{right:auto}.p4,.p5,.p6,.p7{left:auto}
+  .p0{--r:-4deg;left:calc(var(--sw) * .3 - var(--w) / 2);top:8vh}
+  .p1{--r:3deg;left:calc(var(--sw) * .7 - var(--w) / 2);top:19vh}
+  .p2{--r:2deg;left:calc(var(--sw) * .28 - var(--w) / 2);top:47vh}
+  .p3{--r:-3deg;left:calc(var(--sw) * .7 - var(--w) / 2);top:56vh}
+  .p4{--r:3.5deg;right:calc(var(--sw) * .3 - var(--w) / 2);top:10vh}
+  .p5{--r:-2.5deg;right:calc(var(--sw) * .7 - var(--w) / 2);top:21vh}
+  .p6{--r:-2deg;right:calc(var(--sw) * .3 - var(--w) / 2);top:49vh}
+  .p7{--r:2.5deg;right:calc(var(--sw) * .7 - var(--w) / 2);top:57vh}
+  html.chat-open .p4,html.chat-open .p5,html.chat-open .p6,html.chat-open .p7{opacity:0}
+}
+.poster figcaption b{overflow-wrap:anywhere;hyphens:auto}
