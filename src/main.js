@@ -767,8 +767,16 @@ async function exAction(b, act) {
     }
   }
 }
+// «Утро настоящего атлета»: у котов вместо истории весов — подпись к упражнению.
+const CAT_NOTES = {
+  "проснулся": "Главное — открыть глаза. Второе главное — не закрыть их обратно. Зевок засчитывается как разминка.",
+  "покушац": "Быстрые углеводы, медленные углеводы, чужая колбаса — всё идёт в массу. Миска пуста — подход засчитан.",
+  "покурыт": "Пять минут тишины и созерцания. Техника: лёг, расслабился, смотришь вдаль с видом философа.",
+  "качат качат": "Жим лёжа по-кошачьи: спина на траве, лапы вверх. Потом растяжка на пороге. 4 подхода по 12 потягушек.",
+  "идти работат": "Самое тяжёлое упражнение дня. Рабочий вес — ноутбук. Зевать можно, уходить нельзя.",
+};
 function photoSheet(name) {
-  const m = media(name), p = sessionOn(S.day)?.ex.find(e => norm(e.name) === norm(name)), last = lastFor(name, S.day);
+  const m = media(name), p = sessionOn(S.day)?.ex.find(e => norm(e.name) === norm(name)), last = lastFor(name, S.day), cat = CAT_NOTES[norm(name)];
   sheet(name, `${m ? `<div class="photo"><img src="${m.img}" alt="Начало движения"><img src="${m.img2}" alt="Конец движения" class="b"></div>` : ""}
     <dl class="info">
       ${p ? `<div><dt>По плану</dt><dd>${p.sets} × ${p.reps}</dd></div>` : ""}
@@ -776,7 +784,7 @@ function photoSheet(name) {
       ${last && setsText(last.sets) ? `<div><dt>В прошлый раз</dt><dd>${shortDay(last.day)}: ${esc(setsText(last.sets))}</dd></div>` : ""}
       ${p?.tip ? `<div><dt>Совет</dt><dd>${esc(p.tip)}</dd></div>` : ""}
     </dl>
-    ${historyHTML(name)}`);
+    ${cat ? `<p class="cat-note">${esc(cat)}</p>` : historyHTML(name)}`);
 }
 
 // История упражнения: все прошлые записи, лучший вес по дням — тонкой линией.

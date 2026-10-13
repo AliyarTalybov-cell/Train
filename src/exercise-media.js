@@ -2,6 +2,12 @@
 // У каждого два кадра: начало и конец движения; лежат в public/ex/<id>/0.jpg и 1.jpg.
 // g — основная группа мышц, по ней считаются итоги.
 const M = {
+  // «Утро настоящего атлета» — коты с Wikimedia Commons (общественное достояние и CC0), лежат в public/ex/cat-*/
+  "Проснулся": ["cat-wake", "Котики"],
+  "Покушац": ["cat-eat", "Котики"],
+  "Покурыт": ["cat-smoke", "Котики"],
+  "Качат качат": ["cat-lift", "Котики"],
+  "Идти работат": ["cat-work", "Котики"],
   "Жим штанги лёжа": ["Barbell_Bench_Press_-_Medium_Grip", "Грудь"],
   "Жим гантелей лёжа": ["Dumbbell_Bench_Press", "Грудь"],
   "Жим штанги на наклонной скамье": ["Barbell_Incline_Bench_Press_-_Medium_Grip", "Грудь"],
@@ -145,7 +151,6 @@ const M = {
   "Скручивания на наклонной скамье": ["Decline_Crunch", "Пресс"],
   "Косые скручивания": ["Oblique_Crunches_-_On_The_Floor", "Пресс"],
   "Паллоф-жим": ["Pallof_Press", "Пресс"],
-  "Качат качат": ["Barbell_Curl", "Бицепс"],
   "Дровосек на верхнем блоке": ["Standing_Cable_Wood_Chop", "Пресс"],
 };
 const key = s => String(s || "").trim().toLowerCase().replace(/ё/g, "е");
