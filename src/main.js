@@ -124,8 +124,55 @@ function confirmSheet(title, text, ok = "Удалить") {
 const getTheme = () => { try { return localStorage.getItem("gym-theme") || "system"; } catch { return "system"; } };
 function setTheme(t) {
   try { t === "system" ? localStorage.removeItem("gym-theme") : localStorage.setItem("gym-theme", t); } catch {}
+  lookAnim();
   if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  themeColor();
 }
+// Палитра (фон, карточки, текст) и цвет кнопок — как на английской платформе. По умолчанию — «Классика» и бирюзовый
+// (без атрибута); остальное ставится на <html> как data-palette / data-accent, цвета страницы — в style.css.
+const ACCENTS = {
+  teal: { label: "Бирюзовый", l: "#0B7A75", d: "#46BFB6" }, blue: { label: "Синий", l: "#3563A8", d: "#86A9E0" },
+  lavender: { label: "Лавандовый", l: "#6B55A3", d: "#B3A1E6" }, rose: { label: "Пыльная роза", l: "#A04868", d: "#E39AB3" },
+  graphite: { label: "Графит", l: "#4A5561", d: "#AEB8C2" }, ocean: { label: "Морской", l: "#1B6A8E", d: "#7CC4E3" },
+  indigo: { label: "Индиго", l: "#3F47B5", d: "#A3A9F2" }, plum: { label: "Сливовый", l: "#7D3A79", d: "#DBA4D5" },
+  cocoa: { label: "Какао", l: "#7A5131", d: "#D8B48F" },
+};
+const PALETTES = { // [фон, карточка, текст, линия] для светлой и тёмной — для превью и цвета строки браузера
+  classic: { label: "Классика", l: ["#F3F5F2", "#FFFFFF", "#18212B", "#D9E0DC"], d: ["#11161B", "#1A2128", "#E7ECEF", "#2C3740"] },
+  paper: { label: "Бумага", l: ["#F6F1E7", "#FFFCF5", "#2B2620", "#E4DACB"], d: ["#1A1714", "#24201B", "#EDE6DA", "#3A332B"] },
+  mint: { label: "Мята", l: ["#EAF4EF", "#FFFFFF", "#15241E", "#CFE2D8"], d: ["#0F1A16", "#172520", "#E3EFE9", "#263A33"] },
+  night: { label: "Ночь", l: ["#EFF2F8", "#FFFFFF", "#161C2C", "#D6DCE8"], d: ["#0D1322", "#151D31", "#E4E9F5", "#27314A"] },
+  sand: { label: "Песок", l: ["#F2EADF", "#FBF6EF", "#2B2219", "#E2D3BF"], d: ["#1C1610", "#28201A", "#F0E5D6", "#3F3428"] },
+  sage: { label: "Шалфей", l: ["#EEF1EA", "#FAFBF7", "#1E2620", "#D6DDD2"], d: ["#131814", "#1C231D", "#E4EAE2", "#2D372E"] },
+  sepia: { label: "Сепия", l: ["#F4ECD8", "#FBF4E3", "#3B2F22", "#E3D5B8"], d: ["#1E1912", "#2A231A", "#EADCC2", "#43382A"] },
+  oled: { label: "Графит", l: ["#F2F3F5", "#FFFFFF", "#16191D", "#D8DCE1"], d: ["#000000", "#0E0F11", "#ECEEF0", "#26292D"] },
+  contrast: { label: "Контраст", l: ["#FFFFFF", "#FFFFFF", "#000000", "#5F676E"], d: ["#000000", "#0D0D0D", "#FFFFFF", "#8A949C"] },
+};
+const LOOK = { accent: ["gym-accent", ACCENTS, "teal"], palette: ["gym-palette", PALETTES, "classic"] };
+const getLook = k => { const [key, set, def] = LOOK[k]; try { const v = localStorage.getItem(key); return v && Object.hasOwn(set, v) ? v : def; } catch { return def; } };
+function setLook(k, v) {
+  const [key, set, def] = LOOK[k]; if (!Object.hasOwn(set, v)) return;
+  try { v === def ? localStorage.removeItem(key) : localStorage.setItem(key, v); } catch {}
+  lookAnim();
+  if (v === def) delete document.documentElement.dataset[k]; else document.documentElement.dataset[k] = v;
+  themeColor();
+}
+let lookTimer;
+function lookAnim() { // цвета перетекают плавно, а не щёлкают
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.documentElement.classList.add("theme-anim"); clearTimeout(lookTimer);
+  lookTimer = setTimeout(() => document.documentElement.classList.remove("theme-anim"), 320);
+}
+const darkNow = () => getTheme() === "dark" || (getTheme() === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+function themeColor() { // строка браузера и статус-бар телефона — в цвет фона палитры
+  const p = PALETTES[getLook("palette")], t = getTheme();
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
+  const add = (c, media) => { const m = document.createElement("meta"); m.name = "theme-color"; m.content = c; if (media) m.media = media; document.head.append(m); };
+  if (t === "system") { add(p.l[0], "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(p[t === "dark" ? "d" : "l"][0]);
+}
+themeColor();
+const palPreview = k => { const c = PALETTES[k][darkNow() ? "d" : "l"];
+  return `<span class="pal-prev" style="--p-bg:${c[0]};--p-surface:${c[1]};--p-ink:${c[2]};--p-line:${c[3]}" aria-hidden="true"><i></i><i></i><b><i></i><u></u></b></span>`; };
 
 /* ---------- data ---------- */
 async function loadAll() {
@@ -1202,7 +1249,8 @@ function musicList() {
       <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>
-    ${isOwner() && !fav && !M.q ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint" id="mu-st">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
+    ${isOwner() && U.items.length ? uploadPanel() : ""}
+    ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""}" data-i="${i}">
       <button class="track" data-act="mu-play" data-i="${i}">
         <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span>
@@ -1320,44 +1368,101 @@ function fromName(name) {
   return k > 0 ? { artist: base.slice(0, k).trim(), title: base.slice(k + 3).trim() } : { artist: "", title: base };
 }
 const folderKey = n => norm(n).replace(/^the\s+/, "");
-async function uploadTracks(files) {
+// Загрузка идёт по одному треку; состояние — в U, поэтому панель с прогрессом переживает переходы между разделами.
+const U = { items: [], run: false, stop: false, xhr: null };
+const mb = n => (n / 1048576).toLocaleString("ru-RU", { maximumFractionDigits: n < 10485760 ? 1 : 0 });
+// Файл уходит в хранилище через XHR — у него, в отличие от supabase-js, есть прогресс по байтам.
+async function putTrack(path, f, onPct) {
+  const { data: { session } } = await sb.auth.getSession();
+  return new Promise((res, rej) => {
+    const x = U.xhr = new XMLHttpRequest();
+    x.open("POST", `https://qgdtzpsgzlwdhlqdqwex.supabase.co/storage/v1/object/gym-music/${path.split("/").map(encodeURIComponent).join("/")}`);
+    x.setRequestHeader("Authorization", "Bearer " + session?.access_token);
+    x.setRequestHeader("apikey", "sb_publishable_rKUjSv2W8BS1_ZDXGXwU1A_jgCrjPWM");
+    x.setRequestHeader("Content-Type", "audio/mpeg"); x.setRequestHeader("x-upsert", "false");
+    x.upload.onprogress = e => e.lengthComputable && onPct(e.loaded / e.total);
+    x.onload = () => { U.xhr = null; x.status < 300 ? res() : rej(new Error(x.status + " " + x.responseText)); };
+    x.onerror = () => { U.xhr = null; rej(new Error("network")); };
+    x.onabort = () => { U.xhr = null; rej(new Error("abort")); };
+    x.send(f);
+  });
+}
+const UP_ST = { wait: "ждёт", tags: "читаю теги", up: "", ok: "готово", dup: "уже есть", fail: "не получилось", skip: "остановлено" };
+function uploadPanel() {
+  const it = U.items, n = it.length, done = it.filter(x => !["wait", "tags", "up"].includes(x.st)).length;
+  const total = it.reduce((a, x) => a + x.f.size, 0), sent = it.reduce((a, x) => a + (["ok", "dup"].includes(x.st) ? x.f.size : x.st === "up" ? x.f.size * x.pct : 0), 0);
+  const pct = total ? sent / total : 0, cur = it.find(x => x.st === "up" || x.st === "tags");
+  const c = st => it.filter(x => x.st === st).length;
+  let left = "";
+  if (U.run && U.t0 && sent > 1e5) { const sec = (Date.now() - U.t0) / 1000 * (total - sent) / sent; left = sec < 60 ? " · меньше минуты" : ` · ещё ≈ ${Math.round(sec / 60)} мин`; }
+  const head = U.run ? `Загружаю ${Math.min(done + 1, n)} из ${n}` : U.stop ? "Загрузка остановлена" : c("fail") ? "Загрузка закончена с ошибками" : "Все треки загружены";
+  const sub = U.run ? `${mb(sent)} из ${mb(total)} МБ${left}` : [`загружено ${c("ok")}`, c("dup") && `уже были ${c("dup")}`, c("fail") && `не получилось ${c("fail")}`, c("skip") && `остановлено ${c("skip")}`, U.made && `новых папок ${U.made}`].filter(Boolean).join(" · ");
+  return `<section class="mu-upl ${U.run ? "run" : ""}" id="mu-upl" aria-live="polite">
+    <div class="upl-head"><div><b>${head}</b><span class="hint">${sub}</span></div>
+      ${U.run ? `<button class="btn quiet" data-act="mu-up-stop">Остановить</button>`
+        : `<div class="row">${c("fail") || c("skip") ? `<button class="btn quiet" data-act="mu-up-retry">Повторить</button>` : ""}<button class="btn quiet" data-act="mu-up-close">Закрыть</button></div>`}</div>
+    <div class="upl-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct * 100)}" aria-label="Общий прогресс"><i style="width:${pct * 100}%"></i></div>
+    ${cur ? `<p class="upl-cur">${esc(cur.f.name)}</p>` : ""}
+    <ol class="upl-list">${it.map(x => `<li class="${x.st}"><span class="upl-ic" aria-hidden="true">${x.st === "ok" ? I.check : x.st === "fail" ? I.x : ""}</span>
+      <span class="upl-n">${esc(x.title ? `${x.artist ? x.artist + " — " : ""}${x.title}` : x.f.name)}</span>
+      <span class="upl-s mono">${x.st === "up" ? Math.round(x.pct * 100) + "%" : `${UP_ST[x.st]}${x.st === "wait" ? ` · ${mb(x.f.size)} МБ` : ""}`}</span></li>`).join("")}</ol>
+  </section>`;
+}
+let upPaint = 0;
+function paintUpload(force) { // при прогрессе — не чаще 8 раз в секунду
+  if (!force && Date.now() - upPaint < 120) return; upPaint = Date.now();
+  const el = document.getElementById("mu-upl");
+  if (el) { const st = el.querySelector(".upl-list")?.scrollTop; el.outerHTML = uploadPanel(); const nl = document.querySelector("#mu-upl .upl-list"); if (nl && st) nl.scrollTop = st; }
+}
+function uploadTracks(files) {
   files = [...files].filter(f => /\.mp3$/i.test(f.name) || f.type === "audio/mpeg");
   if (!files.length) return toast("Нужны файлы mp3");
-  const st = () => document.getElementById("mu-st"), have = new Set((M.tracks || []).map(t => t.file));
+  if (U.run) { U.items.push(...files.map(f => ({ f, st: "wait", pct: 0 }))); paintUpload(true); return toast(`Добавлено в очередь: ${files.length}`); }
+  U.items = files.map(f => ({ f, st: "wait", pct: 0 }));
+  runUpload();
+}
+async function runUpload() {
+  Object.assign(U, { run: true, stop: false, made: 0, t0: Date.now() });
+  if (route().path === "music") rerender(); // кнопка загрузки сменяется панелью
+  const have = new Set((M.tracks || []).map(t => t.file));
   const same = new Set((M.tracks || []).map(t => norm(t.artist) + "|" + norm(t.title)));
-  let ok = 0, fail = 0, dup = 0, made = 0;
-  for (const [k, f] of files.entries()) {
-    if (st()) st().textContent = `Загружаю ${k + 1} из ${files.length}: ${f.name}`;
+  for (let x; !U.stop && (x = U.items.find(y => y.st === "wait"));) {
+    const f = x.f; x.st = "tags"; paintUpload(true);
     try {
       const tag = await id3(f).catch(() => ({})), byName = fromName(f.name);
       // «Трек - Группа»: если вторая часть — уже известная группа, а первая нет, меняем местами
-      if (!tag.TPE1 && M.folders.some(x => folderKey(x.name) === folderKey(byName.title)) && !M.folders.some(x => folderKey(x.name) === folderKey(byName.artist)))
+      if (!tag.TPE1 && M.folders.some(y => folderKey(y.name) === folderKey(byName.title)) && !M.folders.some(y => folderKey(y.name) === folderKey(byName.artist)))
         [byName.artist, byName.title] = [byName.title, byName.artist];
       const artist = (tag.TPE1 || byName.artist).split(/\s*[\/;]\s*/)[0].trim(), title = tag.TIT2 || byName.title;
       const album = tag.TALB || "", track_no = parseInt(tag.TRCK || f.name.match(/^\s*(\d{1,3})\s*[.\-_)]/)?.[1]) || null;
-      if (same.has(norm(artist) + "|" + norm(title))) { dup++; continue; } // такой трек уже есть
+      Object.assign(x, { artist, title });
+      if (same.has(norm(artist) + "|" + norm(title))) { x.st = "dup"; continue; } // такой трек уже есть
       // папка: открытая сейчас, иначе папка группы; нет такой — создаётся с обложкой из трека
-      let folder = M.folders.find(x => x.id === M.folder) || (artist && M.folders.find(x => folderKey(x.name) === folderKey(artist)));
+      let folder = M.folders.find(y => y.id === M.folder) || (artist && M.folders.find(y => folderKey(y.name) === folderKey(artist)));
       if (!folder && artist) {
         const cover = tag.cover ? await uploadCover(tag.cover, artist).catch(() => null) : null;
         folder = await q(sb.from("gym_music_folders").insert({ name: artist, cover }).select().single(), { silent: true });
-        M.folders.push(folder); made++;
+        M.folders.push(folder); U.made++;
       } else if (folder && !folder.cover && tag.cover) {
         const cover = await uploadCover(tag.cover, folder.name).catch(() => null);
         if (cover) { await q(sb.from("gym_music_folders").update({ cover }).eq("id", folder.id), { silent: true }); folder.cover = cover; }
       }
       let file = slugify(`${artist} ${title}`) + ".mp3"; if (have.has(file)) file = slugify(`${artist} ${title}`) + "-" + Date.now().toString(36) + ".mp3";
       const sec = await durationOf(f);
-      const { error } = await sb.storage.from("gym-music").upload("tracks/" + file, f, { contentType: "audio/mpeg" });
-      if (error) throw error;
+      if (U.stop) throw new Error("abort");
+      x.st = "up"; x.pct = 0; paintUpload(true);
+      await putTrack("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
       await q(sb.from("gym_tracks").insert({ file, artist, title, album, track_no, sec, folder_id: folder?.id || null }), { silent: true });
-      have.add(file); same.add(norm(artist) + "|" + norm(title)); ok++;
-    } catch (e) { console.error(e); fail++; }
+      have.add(file); same.add(norm(artist) + "|" + norm(title)); x.st = "ok";
+    } catch (e) { x.st = U.stop ? "skip" : "fail"; if (!U.stop) console.error(e); }
   }
-  M.loading = null; await loadTracks().catch(() => {});
+  U.items.forEach(y => { if (y.st === "wait") y.st = "skip"; });
+  U.run = false; M.loading = null; await loadTracks().catch(() => {});
   if (route().path === "music") rerender();
-  toast([`Загружено: ${ok}`, made && `новых папок: ${made}`, dup && `уже были: ${dup}`, fail && `не получилось: ${fail}`].filter(Boolean).join(", "));
+  const ok = U.items.filter(y => y.st === "ok").length, bad = U.items.filter(y => y.st === "fail").length;
+  toast(U.stop ? `Загрузка остановлена, загружено: ${ok}` : bad ? `Загружено: ${ok}, не получилось: ${bad}` : `Загружено треков: ${ok}`);
 }
+addEventListener("beforeunload", ev => { if (U.run) ev.preventDefault(); }); // не потерять загрузку случайным закрытием вкладки
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "p-avatar") { uploadAvatar(ev.target.files[0]); ev.target.value = ""; } });
 document.addEventListener("change", ev => { if (ev.target.dataset?.field === "mu-files") { uploadTracks(ev.target.files); ev.target.value = ""; } });
 document.addEventListener("dragover", ev => { if (route().path === "music" && S.user?.id === OWNER && ev.dataTransfer?.types.includes("Files")) { ev.preventDefault(); document.documentElement.classList.add("mu-drop"); } });
@@ -1797,6 +1902,11 @@ function profileView() {
     <section class="card">
       <h2 class="card-t">Оформление</h2>
       <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div>
+      <p class="look-label" id="look-pal">Палитра</p>
+      <div class="look-pals" role="radiogroup" aria-labelledby="look-pal">${Object.entries(PALETTES).map(([k, x]) => `<button class="look-pal" role="radio" data-act="look" data-k="palette" data-v="${k}" aria-checked="${getLook("palette") === k}">${palPreview(k)}<span>${x.label}</span></button>`).join("")}</div>
+      <p class="look-label" id="look-acc">Цвет кнопок и ссылок</p>
+      <div class="look-accents" role="radiogroup" aria-labelledby="look-acc">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-act="look" data-k="accent" data-v="${k}" aria-checked="${getLook("accent") === k}" aria-label="${a.label}" title="${a.label}" style="--sw:${a.l};--sw-d:${a.d}"><i aria-hidden="true"></i></button>`).join("")}</div>
+      <p class="hint">Запоминается на этом устройстве.</p>
     </section>
     <section class="card">
       <h2 class="card-t">Аккаунт</h2>
@@ -1849,6 +1959,9 @@ async function run(b, act) {
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
     case "mu-folder-menu": folderMenu(); break;
+    case "mu-up-stop": U.stop = true; U.xhr?.abort(); break;
+    case "mu-up-close": U.items = []; document.getElementById("mu-upl")?.remove(); break;
+    case "mu-up-retry": U.items = U.items.filter(y => y.st === "fail" || y.st === "skip").map(y => ({ f: y.f, st: "wait", pct: 0 })); runUpload(); break;
     case "mu-shuffle": M.shuffle = !M.shuffle; b.setAttribute("aria-pressed", M.shuffle); break;
     case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
@@ -1910,7 +2023,9 @@ async function run(b, act) {
       if (!await confirmSheet("Убрать программу из календаря?", "Запланированные дни исчезнут. Уже записанные тренировки останутся.", "Убрать")) return;
       Object.assign(S.profile, { program_id: null, program_start: null, program_days: null, program_week: null, program_moves: {} }); saveProfile(); rerender(); break;
     }
-    case "theme": setTheme(b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b)); break;
+    case "theme": setTheme(b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b));
+      document.querySelectorAll(".look-pal").forEach(x => { x.querySelector(".pal-prev").outerHTML = palPreview(x.dataset.v); }); break; // превью — под светлую или тёмную
+    case "look": setLook(b.dataset.k, b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b)); break;
     case "logout":
       if (await confirmSheet("Выйти из аккаунта?", "Тренировки сохранены — увидишь их снова, когда войдёшь с этой почтой.", "Выйти")) await sb.auth.signOut();
       break;

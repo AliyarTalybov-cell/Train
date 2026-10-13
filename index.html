@@ -10,7 +10,7 @@
   <title>Дневник тренировок</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <script>try{var t=localStorage.getItem("gym-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+  <script>try{var r=document.documentElement,t=localStorage.getItem("gym-theme"),p=localStorage.getItem("gym-palette"),a=localStorage.getItem("gym-accent");if(t==="light"||t==="dark")r.dataset.theme=t;if(p&&/^\w+$/.test(p))r.dataset.palette=p;if(a&&/^\w+$/.test(a))r.dataset.accent=a}catch(e){}</script>
 </head>
 <body>
   <div class="netbar" id="netbar"></div>
