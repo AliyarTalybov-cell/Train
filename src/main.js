@@ -1622,11 +1622,14 @@ function ytSection() {
       <button class="btn" type="submit">Добавить</button>
     </form>
     <p class="hint yt-hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, скопируй ссылку и вставь сюда. Если видео не играет — его автор запретил показ на других сайтах.</p>
-    ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => `<li class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""}">
+    ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => `<li data-i="${i}" class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""}">
         <button class="track" data-act="yt-play" data-i="${i}">
           <span class="yt-th">${x.kind === "video" ? `<img src="${ytThumb(x)}" alt="" loading="lazy">` : `<span class="yt-pl">${I.note}<small>плейлист</small></span>`}</span>
           <span class="tr-t"><b>${esc(x.title || "Видео YouTube")}</b><span>${esc(x.author || "")}</span></span></button>
-        ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}</li>`).join("")}</ol>`
+        ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}
+        ${i === YT.i && x.kind === "playlist" ? (YT.pl?.length ? `<ol class="yt-sub">${YT.pl.map((id, k) => `<li data-k="${k}" class="${k === YT.plk ? "cur" : ""}"><button data-act="yt-at" data-k="${k}">
+            <span class="yt-n mono">${k + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" loading="lazy"><span class="tr-t"><b>${esc(YT_T[id]?.t || "…")}</b><span>${esc(YT_T[id]?.a || "")}</span></span></button></li>`).join("")}</ol>`
+          : `<p class="hint yt-sub-wait">Загружаю список видео плейлиста…</p>`) : ""}</li>`).join("")}</ol>`
       : `<p class="hint mu-empty">Пока пусто — добавь первое видео или плейлист.</p>`}`;
 }
 async function addYt(form) {
@@ -1654,7 +1657,7 @@ function ytApi() {
 async function ytPlay(i) {
   const x = YT.list?.[i]; if (!x) return;
   M.audio.pause(); // одновременно играет что-то одно
-  YT.i = i; ytDock(); ytPaintDock();
+  YT.i = i; YT.pl = null; YT.plk = -1; YT.shuffle = false; ytDock(); ytPaintDock();
   try { await ytApi(); } catch { return toast("YouTube не загрузился — проверь интернет или VPN"); }
   const load = () => x.kind === "video" ? YT.player.loadVideoById(x.yt_id) : YT.player.loadPlaylist({ list: x.yt_id, listType: "playlist" });
   // через 12 секунд видео так и не пошло — честно говорим, а не крутим молча (в России YouTube часто замедлен)
@@ -1680,38 +1683,88 @@ function ytNext(d) {
   if (x?.kind === "playlist" && YT.player) return d > 0 ? YT.player.nextVideo() : YT.player.previousVideo();
   const n = YT.i + d; if (n >= 0 && n < YT.list.length) ytPlay(n); else { YT.playing = false; ytPaintDock(); }
 }
+// Мини-плеер YouTube: видео (нажатие — развернуть), название, кнопки, полоса перемотки со временем
 function ytDock() {
   if (YT.dock) return;
   const el = YT.dock = document.createElement("div"); el.className = "yt-dock"; el.setAttribute("aria-label", "Плеер YouTube");
-  el.innerHTML = `<div class="yt-vid"><div class="yt-frame"></div></div>
-    <div class="yt-info"><b></b><span></span></div>
-    <button class="icon-btn bare" data-y="prev" aria-label="Предыдущее">${I.prev}</button>
-    <button class="pl-play" data-y="toggle" aria-label="Играть или пауза">${I.pause}</button>
-    <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
-    <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube">${I.x}</button>`;
+  el.innerHTML = `<button class="yt-vid" data-y="big" aria-label="Развернуть или свернуть видео"><div class="yt-frame"></div></button>
+    <div class="yt-main">
+      <div class="yt-row">
+        <div class="yt-info"><b></b><span></span></div>
+        <div class="yt-ctrl">
+          <button class="icon-btn bare yt-sh" data-y="shuffle" aria-label="Перемешать плейлист" aria-pressed="false">${I.shuffle}</button>
+          <button class="icon-btn bare" data-y="prev" aria-label="Предыдущее">${I.prev}</button>
+          <button class="icon-btn bare yt-wide" data-y="back" aria-label="Назад на 10 секунд">${I.back10}</button>
+          <button class="pl-play" data-y="toggle" aria-label="Играть или пауза">${I.pause}</button>
+          <button class="icon-btn bare yt-wide" data-y="fwd" aria-label="Вперёд на 10 секунд">${I.fwd10}</button>
+          <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
+          <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube">${I.x}</button>
+        </div>
+      </div>
+      <div class="yt-seek"><span class="mono" data-t0>0:00</span><input type="range" min="0" max="1000" value="0" data-yseek aria-label="Перемотка"><span class="mono" data-t1>0:00</span></div>
+    </div>`;
   el.addEventListener("click", ev => {
-    const a = ev.target.closest("[data-y]")?.dataset.y; if (!a) return;
-    if (a === "toggle") { if (!YT.player?.getPlayerState) return; YT.playing ? YT.player.pauseVideo() : (M.audio.pause(), YT.player.playVideo()); }
+    const a = ev.target.closest("[data-y]")?.dataset.y, P = YT.player; if (!a) return;
+    if (a === "big") { el.classList.toggle("big"); return; }
+    if (a === "close") return ytClose();
+    if (!P?.getPlayerState) return;
+    if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), P.playVideo());
     if (a === "prev") ytNext(-1);
     if (a === "next") ytNext(1);
-    if (a === "close") ytClose();
+    if (a === "back" || a === "fwd") P.seekTo(Math.max(0, P.getCurrentTime() + (a === "fwd" ? 10 : -10)), true);
+    if (a === "shuffle") { YT.shuffle = !YT.shuffle; P.setShuffle(YT.shuffle); YT.pl = null; ytPaintDock(); toast(YT.shuffle ? "Плейлист перемешан" : "Плейлист по порядку"); }
   });
+  const seek = el.querySelector("[data-yseek]");
+  seek.addEventListener("input", () => { YT.drag = true; const d = YT.player?.getDuration?.() || 0; el.querySelector("[data-t0]").textContent = mmss(seek.value / 1000 * d); seek.style.setProperty("--p", seek.value / 10 + "%"); });
+  seek.addEventListener("change", () => { const d = YT.player?.getDuration?.() || 0; if (d) YT.player.seekTo(seek.value / 1000 * d, true); YT.drag = false; });
   document.body.append(el); document.documentElement.classList.add("has-yt");
   requestAnimationFrame(() => el.classList.add("on"));
+  clearInterval(YT.tick); YT.tick = setInterval(ytTick, 500); // время, перемотка, текущее видео плейлиста
 }
+function ytTick() {
+  const P = YT.player; if (!YT.dock || !P?.getCurrentTime) return;
+  const t = P.getCurrentTime() || 0, d = P.getDuration() || 0;
+  if (!YT.drag) {
+    const seek = YT.dock.querySelector("[data-yseek]"), v = d ? Math.round(t / d * 1000) : 0;
+    seek.value = v; seek.style.setProperty("--p", v / 10 + "%");
+    YT.dock.querySelector("[data-t0]").textContent = mmss(t);
+  }
+  YT.dock.querySelector("[data-t1]").textContent = d ? mmss(d) : "0:00";
+  // плейлист: список видео и текущее — для раскрытого списка в разделе
+  if (YT.list?.[YT.i]?.kind === "playlist") {
+    const ids = P.getPlaylist?.() || [], k = P.getPlaylistIndex?.() ?? -1;
+    if (ids.length && ids.join() !== (YT.pl || []).join()) { YT.pl = ids; ytTitles(ids); ytRepaintList(); }
+    if (k !== YT.plk) { YT.plk = k; ytPaintDock(); refreshYtList(); }
+  }
+}
+// названия видео плейлиста — через oEmbed, по несколько за раз, с запоминанием
+const YT_T = (() => { try { return JSON.parse(localStorage.getItem("gym-yt-titles") || "{}"); } catch { return {}; } })();
+async function ytTitles(ids) {
+  const need = ids.filter(id => !YT_T[id]).slice(0, 80);
+  for (let k = 0; k < need.length; k += 6) {
+    await Promise.all(need.slice(k, k + 6).map(id => fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent("https://www.youtube.com/watch?v=" + id)}&format=json`)
+      .then(r => r.ok ? r.json() : null).then(m => { YT_T[id] = m ? { t: m.title, a: m.author_name } : { t: "Видео недоступно", a: "" }; }).catch(() => {})));
+    ytRepaintList();
+  }
+  try { localStorage.setItem("gym-yt-titles", JSON.stringify(YT_T)); } catch {}
+}
+const ytRepaintList = () => { if (route().path === "music" && M.folder === "yt") { const box = document.getElementById("mu-list"); if (box) box.innerHTML = musicList(); } };
 function ytPaintDock() {
   const x = YT.list?.[YT.i]; if (!YT.dock || !x) return;
-  const data = YT.player?.getVideoData?.() || {};
+  const data = YT.player?.getVideoData?.() || {}, pl = x.kind === "playlist";
   YT.dock.querySelector(".yt-info b").textContent = data.title || x.title || "YouTube";
-  YT.dock.querySelector(".yt-info span").textContent = data.author || x.author || "";
-  const t = YT.dock.querySelector("[data-y=toggle]"); t.innerHTML = YT.playing ? I.pause : I.play;
+  YT.dock.querySelector(".yt-info span").textContent = pl ? `${x.title}${YT.pl?.length ? ` · ${(YT.plk ?? 0) + 1} из ${YT.pl.length}` : ""}` : data.author || x.author || "";
+  YT.dock.querySelector("[data-y=toggle]").innerHTML = YT.playing ? I.pause : I.play;
+  YT.dock.classList.toggle("pl", pl);
+  YT.dock.querySelector("[data-y=shuffle]").setAttribute("aria-pressed", !!YT.shuffle);
 }
 function refreshYtList() {
-  document.querySelectorAll(".yt-list li").forEach((li, k) => { li.classList.toggle("cur", k === YT.i); li.classList.toggle("playing", k === YT.i && YT.playing); });
+  document.querySelectorAll(".yt-list > li").forEach(li => { const k = +li.dataset.i; li.classList.toggle("cur", k === YT.i); li.classList.toggle("playing", k === YT.i && YT.playing); });
+  document.querySelectorAll(".yt-sub li").forEach(li => li.classList.toggle("cur", +li.dataset.k === YT.plk));
 }
 function ytClose() {
   try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
-  YT.player = null; YT.playing = false; YT.i = -1;
+  YT.player = null; YT.playing = false; YT.i = -1; YT.pl = null; YT.plk = -1; clearInterval(YT.tick);
   const el = YT.dock; YT.dock = null; el?.classList.remove("on"); setTimeout(() => el?.remove(), 260);
   document.documentElement.classList.remove("has-yt"); refreshYtList();
 }
@@ -2793,6 +2846,7 @@ async function run(b, act) {
     case "mu-fav": toggleFav(+b.dataset.i); break;
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;
+    case "yt-at": YT.player?.playVideoAt?.(+b.dataset.k); break;
     case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;

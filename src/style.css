@@ -1377,3 +1377,41 @@ html.has-yt body{padding-bottom:calc(220px + env(safe-area-inset-bottom,0px))}
 html.has-yt.has-player body{padding-bottom:calc(290px + env(safe-area-inset-bottom,0px))}
 html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 @media (min-width:760px){html.has-yt .coach-fab,html.has-yt .rest{bottom:96px}html.has-yt body{padding-bottom:170px}}
+/* мини-плеер YouTube: видео слева, справа — название, кнопки и полоса перемотки */
+.yt-dock{align-items:stretch;gap:10px;padding:8px}
+.yt-vid{flex:none;align-self:center;width:112px;height:63px;padding:0;border:0;border-radius:10px;overflow:hidden;background:#000;cursor:zoom-in}
+.yt-vid iframe{pointer-events:none} /* нажатие по видео — развернуть, а не пауза внутри YouTube */
+.yt-main{flex:1;min-width:0;display:grid;gap:2px;align-content:center}
+.yt-row{display:flex;align-items:center;gap:4px;min-width:0}
+.yt-info{flex:1;min-width:0}
+.yt-ctrl{flex:none;display:flex;align-items:center}
+.yt-ctrl .icon-btn{width:34px;height:34px}
+.yt-ctrl .pl-play{width:40px;height:40px}
+.yt-sh{display:none!important}
+.yt-dock.pl .yt-sh{display:grid!important}
+.yt-sh[aria-pressed="true"]{color:var(--accent)!important}
+.yt-wide{display:none!important}
+@media (min-width:560px){.yt-wide{display:grid!important}}
+.yt-seek{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.yt-seek input{-webkit-appearance:none;appearance:none;width:100%;height:18px;margin:0;background:transparent;cursor:pointer;--p:0%}
+.yt-seek input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,#e53935 var(--p),var(--chip) var(--p))}
+.yt-seek input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,#e53935 var(--p),var(--chip) var(--p))}
+.yt-seek input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-4.5px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.yt-seek input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}
+/* развёрнутое видео: большое сверху, кнопки — под ним */
+.yt-dock.big{flex-direction:column;max-width:640px}
+.yt-dock.big .yt-vid{width:100%;height:auto;aspect-ratio:16/9;cursor:zoom-out}
+.yt-dock.big .yt-wide{display:grid!important}
+@media (max-width:559px){.yt-dock .yt-info span{display:none}.yt-vid{width:88px;height:50px}}
+/* плейлист раскрывается списком под своей строкой */
+.yt-list>li{flex-wrap:wrap}
+.yt-sub,.yt-sub-wait{flex-basis:100%}
+.yt-sub{list-style:none;margin:4px 0 8px;padding:0 0 0 12px;border-left:2px solid var(--line);display:grid;gap:1px;max-height:420px;overflow-y:auto;overscroll-behavior:contain}
+.yt-sub button{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:4px 8px;border:0;border-radius:10px;background:none;color:var(--ink);text-align:left}
+@media (hover:hover){.yt-sub button:hover{background:var(--chip)}}
+.yt-sub img{flex:none;width:56px;height:32px;object-fit:cover;border-radius:5px;background:var(--chip)}
+.yt-n{flex:none;width:22px;font-size:11px;color:var(--muted);text-align:right}
+.yt-sub .tr-t b{font-size:14px;font-weight:500}
+.yt-sub li.cur .tr-t b{color:#e53935;font-weight:600}
+.yt-sub li.cur .yt-n{color:#e53935}
+.yt-sub-wait{padding:6px 0 10px 12px}
