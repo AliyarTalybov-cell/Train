@@ -61,6 +61,9 @@ const I = {
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+  shrink: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
+  chevDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-6"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
@@ -1596,7 +1599,7 @@ function musicView() {
     <div id="mu-list">${musicList()}</div>`;
 }
 // ---------- YouTube в «Музыке»: общий список по ссылкам, играет официальный плеер YouTube в мини-плеере внизу ----------
-const YT = { list: null, loading: null, i: -1, player: null, ready: null, dock: null, playing: false };
+const YT = { list: null, loading: null, i: -1, player: null, ready: null, dock: null, playing: false, subOpen: (() => { try { return localStorage.getItem("gym-yt-sub") !== "0"; } catch { return true; } })() };
 function loadYt() {
   return YT.loading ||= q(sb.from("gym_yt").select("*").order("created_at", { ascending: false }), { silent: true })
     .then(r => { YT.list = r; }).catch(() => { YT.list = YT.list || []; }).finally(() => { YT.loading = null; });
@@ -1621,14 +1624,15 @@ function ytSection() {
       <input class="inp" name="url" inputmode="url" placeholder="Вставь ссылку на видео или плейлист YouTube" autocomplete="off" aria-label="Ссылка YouTube">
       <button class="btn" type="submit">Добавить</button>
     </form>
-    <p class="hint yt-hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, скопируй ссылку и вставь сюда. Если видео не играет — его автор запретил показ на других сайтах.</p>
+    <details class="yt-how"><summary>Как добавить?${I.chevDown}</summary><p class="hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, нажми «Поделиться» → «Копировать ссылку» и вставь сюда. Подходят и видео, и плейлисты. Если видео не играет — его автор запретил показ на других сайтах, оно пропустится само.</p></details>
     ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => `<li data-i="${i}" class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""}">
         <button class="track" data-act="yt-play" data-i="${i}">
           <span class="yt-th">${x.kind === "video" ? `<img src="${ytThumb(x)}" alt="" loading="lazy">` : `<span class="yt-pl">${I.note}<small>плейлист</small></span>`}</span>
           <span class="tr-t"><b>${esc(x.title || "Видео YouTube")}</b><span>${esc(x.author || "")}</span></span></button>
         ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}
-        ${i === YT.i && x.kind === "playlist" ? (YT.pl?.length ? `<ol class="yt-sub">${YT.pl.map((id, k) => `<li data-k="${k}" class="${k === YT.plk ? "cur" : ""}"><button data-act="yt-at" data-k="${k}">
-            <span class="yt-n mono">${k + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" loading="lazy"><span class="tr-t"><b>${esc(YT_T[id]?.t || "…")}</b><span>${esc(YT_T[id]?.a || "")}</span></span></button></li>`).join("")}</ol>`
+        ${i === YT.i && x.kind === "playlist" ? (YT.pl?.length ? `<div class="yt-subwrap"><button class="yt-subhead" data-act="yt-sub" aria-expanded="${YT.subOpen !== false}"><span>Видео в плейлисте · ${YT.pl.length}</span><span class="yt-subtog">${YT.subOpen !== false ? "Свернуть" : "Показать"}${I.chevDown}</span></button>
+          ${YT.subOpen === false ? "" : `<ol class="yt-sub">${YT.pl.map((id, k) => `<li data-k="${k}" class="${k === YT.plk ? "cur" : ""}"><button data-act="yt-at" data-k="${k}">
+            <span class="yt-n mono">${k + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" loading="lazy"><span class="tr-t"><b>${esc(YT_T[id]?.t || "…")}</b><span>${esc(YT_T[id]?.a || "")}</span></span></button></li>`).join("")}</ol>`}</div>`
           : `<p class="hint yt-sub-wait">Загружаю список видео плейлиста…</p>`) : ""}</li>`).join("")}</ol>`
       : `<p class="hint mu-empty">Пока пусто — добавь первое видео или плейлист.</p>`}`;
 }
@@ -1687,7 +1691,7 @@ function ytNext(d) {
 function ytDock() {
   if (YT.dock) return;
   const el = YT.dock = document.createElement("div"); el.className = "yt-dock"; el.setAttribute("aria-label", "Плеер YouTube");
-  el.innerHTML = `<button class="yt-vid" data-y="big" aria-label="Развернуть или свернуть видео"><div class="yt-frame"></div></button>
+  el.innerHTML = `<button class="yt-vid" data-y="big" aria-label="Развернуть видео" title="Развернуть видео"><div class="yt-frame"></div><span class="yt-vid-ic" aria-hidden="true">${I.expand}</span><span class="yt-vid-lab">${I.shrink}Свернуть видео</span></button>
     <div class="yt-main">
       <div class="yt-row">
         <div class="yt-info"><b></b><span></span></div>
@@ -1698,14 +1702,16 @@ function ytDock() {
           <button class="pl-play" data-y="toggle" aria-label="Играть или пауза">${I.pause}</button>
           <button class="icon-btn bare yt-wide" data-y="fwd" aria-label="Вперёд на 10 секунд">${I.fwd10}</button>
           <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
-          <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube">${I.x}</button>
+          <button class="icon-btn bare yt-min" data-y="min" aria-label="Свернуть плеер" title="Свернуть плеер — музыка продолжит играть">${I.chevDown}</button>
+          <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube" title="Закрыть YouTube">${I.x}</button>
         </div>
       </div>
       <div class="yt-seek"><span class="mono" data-t0>0:00</span><input type="range" min="0" max="1000" value="0" data-yseek aria-label="Перемотка"><span class="mono" data-t1>0:00</span></div>
     </div>`;
   el.addEventListener("click", ev => {
     const a = ev.target.closest("[data-y]")?.dataset.y, P = YT.player; if (!a) return;
-    if (a === "big") { el.classList.toggle("big"); return; }
+    if (a === "big") { const big = el.classList.toggle("big"); el.classList.remove("mini"); const b = el.querySelector(".yt-vid"); b.title = big ? "Свернуть видео" : "Развернуть видео"; b.setAttribute("aria-label", b.title); return; }
+    if (a === "min") { const mini = el.classList.toggle("mini"); el.classList.remove("big"); const b = el.querySelector(".yt-min"); b.setAttribute("aria-label", mini ? "Развернуть плеер" : "Свернуть плеер"); b.title = mini ? "Развернуть плеер" : "Свернуть плеер — музыка продолжит играть"; return; }
     if (a === "close") return ytClose();
     if (!P?.getPlayerState) return;
     if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), P.playVideo());
@@ -2847,6 +2853,7 @@ async function run(b, act) {
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;
     case "yt-at": YT.player?.playVideoAt?.(+b.dataset.k); break;
+    case "yt-sub": YT.subOpen = YT.subOpen === false; try { localStorage.setItem("gym-yt-sub", YT.subOpen ? "1" : "0"); } catch {} ytRepaintList(); break;
     case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;

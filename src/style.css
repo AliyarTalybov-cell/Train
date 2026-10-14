@@ -1415,3 +1415,30 @@ html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset
 .yt-sub li.cur .tr-t b{color:#e53935;font-weight:600}
 .yt-sub li.cur .yt-n{color:#e53935}
 .yt-sub-wait{padding:6px 0 10px 12px}
+/* понятно, как свернуть: подсказка «Как добавить?», шапка списка плейлиста, значки на видео, свёрнутый плеер */
+.yt-how{margin-top:8px}
+.yt-how summary{display:inline-flex;align-items:center;gap:4px;min-height:32px;font-size:13px;color:var(--muted);cursor:pointer;list-style:none}
+.yt-how summary::-webkit-details-marker{display:none}
+.yt-how summary svg{width:14px;height:14px;transition:transform var(--t2) ease}
+.yt-how[open] summary svg{transform:rotate(180deg)}
+.yt-how .hint{font-size:13px;padding-bottom:4px}
+.yt-subwrap{flex-basis:100%;margin:2px 0 8px}
+.yt-subhead{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:40px;padding:6px 10px;border:0;border-radius:10px;background:var(--chip);color:var(--ink);font-size:13px;font-weight:600}
+.yt-subtog{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-weight:500}
+.yt-subtog svg{width:16px;height:16px;transition:transform var(--t2) ease}
+.yt-subhead[aria-expanded="true"] .yt-subtog svg{transform:rotate(180deg)}
+.yt-subwrap .yt-sub{margin-top:4px}
+.yt-vid{position:relative}
+.yt-vid-ic{position:absolute;right:4px;bottom:4px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:rgba(0,0,0,.6);color:#fff}
+.yt-vid-ic svg{width:13px;height:13px}
+.yt-vid-lab{display:none}
+.yt-dock.big .yt-vid-ic{display:none}
+.yt-dock.big .yt-vid-lab{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 12px 4px 9px;border-radius:999px;background:rgba(0,0,0,.65);color:#fff;font-size:12.5px;font-weight:600}
+.yt-dock.big .yt-vid-lab svg{width:14px;height:14px}
+.yt-min svg{transition:transform var(--t2) ease}
+/* свёрнутый плеер: маленькая плашка, музыка играет дальше */
+.yt-dock.mini{left:auto;right:12px;max-width:min(360px,calc(100% - 24px));padding:6px}
+.yt-dock.mini .yt-vid{width:56px;height:32px}
+.yt-dock.mini .yt-vid-ic,.yt-dock.mini .yt-seek,.yt-dock.mini .yt-info span,.yt-dock.mini [data-y=prev],.yt-dock.mini [data-y=next],.yt-dock.mini .yt-wide,.yt-dock.mini .yt-sh,.yt-dock.mini .pl-x{display:none!important}
+.yt-dock.mini .yt-min svg{transform:rotate(180deg)}
+.yt-dock.mini .yt-ctrl .pl-play{width:36px;height:36px}
