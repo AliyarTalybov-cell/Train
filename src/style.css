@@ -1350,7 +1350,7 @@ body:has(.auth){padding-bottom:0}
 .nav a::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:10px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08);opacity:0;transform-origin:left center;transition:opacity var(--t2) ease}
 .nav a[aria-current="page"]::before{opacity:1}
 /* YouTube в «Музыке» */
-.cover-tile.yt{background:linear-gradient(135deg,#e53935,#8e1414);color:#fff}
+.cover-tile.yt{background:linear-gradient(135deg,#2a2a2e,#121214);color:#fff}
 .cover-tile.yt svg{width:34px;height:34px}
 .yt-add{display:flex;gap:8px;margin-top:16px}
 .yt-add .inp{flex:1}
@@ -1394,8 +1394,8 @@ html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset
 @media (min-width:560px){.yt-wide{display:grid!important}}
 .yt-seek{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
 .yt-seek input{-webkit-appearance:none;appearance:none;width:100%;height:18px;margin:0;background:transparent;cursor:pointer;--p:0%}
-.yt-seek input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,#e53935 var(--p),var(--chip) var(--p))}
-.yt-seek input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,#e53935 var(--p),var(--chip) var(--p))}
+.yt-seek input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
+.yt-seek input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
 .yt-seek input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-4.5px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .yt-seek input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}
 /* развёрнутое видео: большое сверху, кнопки — под ним */
@@ -1412,8 +1412,8 @@ html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset
 .yt-sub img{flex:none;width:56px;height:32px;object-fit:cover;border-radius:5px;background:var(--chip)}
 .yt-n{flex:none;width:22px;font-size:11px;color:var(--muted);text-align:right}
 .yt-sub .tr-t b{font-size:14px;font-weight:500}
-.yt-sub li.cur .tr-t b{color:#e53935;font-weight:600}
-.yt-sub li.cur .yt-n{color:#e53935}
+.yt-sub li.cur .tr-t b{color:var(--accent);font-weight:600}
+.yt-sub li.cur .yt-n{color:var(--accent)}
 .yt-sub-wait{padding:6px 0 10px 12px}
 /* понятно, как свернуть: подсказка «Как добавить?», шапка списка плейлиста, значки на видео, свёрнутый плеер */
 .yt-how{margin-top:8px}
@@ -1478,13 +1478,39 @@ html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset
 .yt-it .tr-t b{font-size:14px;font-weight:500}
 .yt-st{flex:none;display:grid;place-items:center;width:28px;height:28px;color:var(--muted)}
 .yt-st svg{width:14px;height:14px}
-.yt-items li.cur{background:color-mix(in srgb,#e53935 9%,transparent)}
-.yt-items li.cur .tr-t b{color:#e53935;font-weight:600}
+.yt-items li.cur{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.yt-items li.cur .tr-t b{color:var(--accent);font-weight:600}
 .yt-st .eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
-.yt-st .eq b{width:3px;height:40%;background:#e53935;border-radius:1px}
+.yt-st .eq b{width:3px;height:40%;background:var(--accent);border-radius:1px}
 .yt-items li.playing .yt-st .eq b{animation:eq .9s ease-in-out infinite}
 .yt-items li.playing .yt-st .eq b:nth-child(2){animation-delay:-.3s}.yt-items li.playing .yt-st .eq b:nth-child(3){animation-delay:-.6s}
 @media (prefers-reduced-motion: reduce){.yt-body{transition:none}.yt-items.appear{animation:none}}
 .yt-list .yt-items li .tr-t b{color:var(--ink)}
-.yt-list .yt-items li.cur .tr-t b{color:#e53935}
+.yt-list .yt-items li.cur .tr-t b{color:var(--accent)}
 @media (hover:none){.yt-thb .yt-eye{opacity:1;inset:auto;top:3px;right:3px;width:18px;height:18px;border-radius:5px;background:rgba(0,0,0,.6)}.yt-thb .yt-eye svg{width:11px;height:11px}}
+
+/* YouTube-карточка: тёмная, красная кнопка как у YouTube — не сливается с «Избранным» */
+.cover-tile.yt .yt-logo{display:grid;place-items:center;width:56px;height:40px;border-radius:12px;background:#ff0033}
+.cover-tile.yt .yt-logo svg{width:20px;height:20px;color:#fff}
+/* плееры внизу — ровно по ширине колонки с контентом; на виду только тот, что играет */
+@media (min-width:760px){.player,.yt-dock{max-width:calc(var(--col) - 0px);left:16px;right:16px}}
+.yt-dock.mini{left:auto;right:max(16px,calc((100vw - var(--col)) / 2));max-width:340px}
+html.yt-front .player{opacity:0;transform:translateY(12px);pointer-events:none}
+html.yt-front .yt-dock{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){html.yt-front .yt-dock{bottom:20px}}
+html.has-yt:not(.yt-front).has-player .yt-dock.mini{bottom:calc(146px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){html.has-yt:not(.yt-front).has-player .yt-dock.mini{bottom:92px}}
+html.has-yt.has-player.yt-front .yt-dock,html.has-yt.yt-front .yt-dock{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){html.has-yt.has-player.yt-front .yt-dock,html.has-yt.yt-front .yt-dock{bottom:20px}}
+html.has-yt.yt-front.has-player body{padding-bottom:calc(220px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){html.has-yt.yt-front.has-player body{padding-bottom:170px}}
+/* YouTube-плеер на телефоне: главное — ▶ ⏭ свернуть закрыть; остальное — в развёрнутом виде */
+@media (max-width:559px){
+  .yt-dock:not(.big) .yt-sh,.yt-dock:not(.big) [data-y=prev]{display:none!important}
+  .yt-dock:not(.big) .yt-vid{width:64px;height:36px}
+  .yt-dock{gap:8px}
+  .yt-ctrl .icon-btn{width:32px;height:34px}
+  .yt-add .inp{font-size:15px}
+}
+/* логотип: слово — строчно-блочный элемент, иначе сдвиг при появлении не работает */
+.brand-t,.auth-logo .brand-t{display:inline-block}

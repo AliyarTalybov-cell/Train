@@ -414,6 +414,7 @@ function render() {
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
   if (!introDone && S.loaded && !calm()) { introDone = true; app.querySelector(".brand").classList.add("intro"); } // логотип проявляется один раз за открытие сайта
+  if (scrambleNext) { scrambleNext = false; setTimeout(() => scramble(app.querySelector(".brand .brand-t")), 30); }
   if (S.loaded) { const main = document.getElementById("main"); slidePills(oldPills); staggerIn(main); countUp(main); }
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
@@ -517,7 +518,14 @@ function scramble(el) {
   };
   tick();
 }
-document.addEventListener("click", ev => { const h = ev.target.closest(".brand, [data-scramble]"); if (h) scramble(h.querySelector(".brand-t")); });
+// Нажатие на логотип в шапке ведёт на главную и перерисовывает шапку — перебор запускаем уже на новом логотипе.
+let scrambleNext = false;
+document.addEventListener("click", ev => {
+  const h = ev.target.closest(".brand, [data-scramble]"); if (!h) return;
+  if (!h.classList.contains("brand")) return scramble(h.querySelector(".brand-t"));
+  scrambleNext = true;
+  setTimeout(() => { if (scrambleNext) { scrambleNext = false; scramble(document.querySelector(".brand .brand-t")); } }, 160); // если перерисовки не было
+});
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
 const ATHLETES = [
   { id: "arnold", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%",
@@ -1591,7 +1599,7 @@ function musicView() {
     <div class="folders" role="list">
       ${card(null, "Все треки", M.tracks.length, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`)}
       ${card("fav", "Избранное", M.favs.size, `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`)}
-      <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true">${I.play}</span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
+      <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true"><i class="yt-logo">${I.play}</i></span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
       ${M.folders.map(x => card(x.id, x.name, count(x.id), coverHTML(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
     </div>
@@ -1687,7 +1695,7 @@ function ytSection() {
   return `<section class="mu-head"><div class="mu-title"><div><h2>YouTube</h2><p class="muted">${YT.list.length} ${plural(YT.list.length, "видео", "видео", "видео")} · общий список</p></div></div>
       <div class="row"><button class="btn" data-act="yt-all" ${YT.list.length ? "" : "disabled"}>${I.play}Слушать</button></div></section>
     <form class="yt-add" data-yt-form>
-      <input class="inp" name="url" inputmode="url" placeholder="Вставь ссылку на видео или плейлист YouTube" autocomplete="off" aria-label="Ссылка YouTube">
+      <input class="inp" name="url" inputmode="url" placeholder="Ссылка на видео или плейлист YouTube" autocomplete="off" aria-label="Ссылка YouTube">
       <button class="btn" type="submit">Добавить</button>
     </form>
     <details class="yt-how"><summary>Как добавить?${I.chevDown}</summary><p class="hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, нажми «Поделиться» → «Копировать ссылку» и вставь сюда. Подходят и видео, и плейлисты. Если видео не играет — его автор запретил показ на других сайтах, оно пропустится само.</p></details>
@@ -1731,6 +1739,7 @@ function ytApi() {
 async function ytPlay(i, k = 0) {
   const x = YT.list?.[i]; if (!x) return;
   M.audio.pause(); // одновременно играет что-то одно
+  document.documentElement.classList.add("yt-front"); YT.dock?.classList.remove("mini");
   YT.i = i; YT.plk = x.kind === "playlist" ? k : -1; YT.shuffle = false; YT.loaded = null; ytDock(); ytPaintDock(); refreshYtList();
   if (x.kind === "playlist") ytListOf(x.yt_id).then(() => ytPaintDock()); // для «3 из 25» в плеере
   try { await ytApi(); } catch { return toast("YouTube не загрузился — проверь интернет или VPN"); }
@@ -1782,10 +1791,10 @@ function ytDock() {
   el.addEventListener("click", ev => {
     const a = ev.target.closest("[data-y]")?.dataset.y, P = YT.player; if (!a) return;
     if (a === "big") { const big = el.classList.toggle("big"); el.classList.remove("mini"); const b = el.querySelector(".yt-vid"); b.title = big ? "Свернуть видео" : "Развернуть видео"; b.setAttribute("aria-label", b.title); return; }
-    if (a === "min") { const mini = el.classList.toggle("mini"); el.classList.remove("big"); const b = el.querySelector(".yt-min"); b.setAttribute("aria-label", mini ? "Развернуть плеер" : "Свернуть плеер"); b.title = mini ? "Развернуть плеер" : "Свернуть плеер — музыка продолжит играть"; return; }
+    if (a === "min") { const mini = el.classList.toggle("mini"); if (!mini) document.documentElement.classList.add("yt-front"); el.classList.remove("big"); const b = el.querySelector(".yt-min"); b.setAttribute("aria-label", mini ? "Развернуть плеер" : "Свернуть плеер"); b.title = mini ? "Развернуть плеер" : "Свернуть плеер — музыка продолжит играть"; return; }
     if (a === "close") return ytClose();
     if (!P?.getPlayerState) return;
-    if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), P.playVideo());
+    if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), document.documentElement.classList.add("yt-front"), P.playVideo());
     if (a === "prev") ytNext(-1);
     if (a === "next") ytNext(1);
     if (a === "back" || a === "fwd") P.seekTo(Math.max(0, P.getCurrentTime() + (a === "fwd" ? 10 : -10)), true);
@@ -1840,10 +1849,13 @@ function ytClose() {
   try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
   YT.player = null; YT.playing = false; YT.i = -1; YT.plk = -1; YT.loaded = null; clearInterval(YT.tick);
   const el = YT.dock; YT.dock = null; el?.classList.remove("on"); setTimeout(() => el?.remove(), 260);
-  document.documentElement.classList.remove("has-yt"); refreshYtList();
+  document.documentElement.classList.remove("has-yt", "yt-front"); refreshYtList();
 }
 // включили наш mp3 — YouTube на паузу
-M.audio.addEventListener("play", () => { if (YT.playing) YT.player?.pauseVideo(); });
+M.audio.addEventListener("play", () => { // включили наш mp3 — YouTube на паузу и в маленькую плашку, на виду наш плеер
+  if (YT.playing) YT.player?.pauseVideo();
+  if (YT.dock) { YT.dock.classList.add("mini"); YT.dock.classList.remove("big"); document.documentElement.classList.remove("yt-front"); }
+});
 document.addEventListener("submit", ev => { if (ev.target.matches("[data-yt-form]")) { ev.preventDefault(); addYt(ev.target); } });
 const searchBox = () => `<label class="mu-search">${I.search}<input type="search" data-field="mu-q" value="${esc(M.q || "")}" placeholder="Найти трек или группу" autocomplete="off" enterkeyhint="search" aria-label="Поиск по трекам">${M.q ? `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>` : ""}</label>`;
 function musicList() {
