@@ -1547,7 +1547,7 @@ function loadTracks() {
     for (const u of urls || []) if (u.signedUrl) {
       if (u.path.startsWith("covers/")) M.covers[u.path.slice(7)] = u.signedUrl; else M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
     }
-    if (M.folder && M.folder !== "fav" && !folders.some(f => f.id === M.folder)) M.folder = null;
+    if (M.folder && M.folder !== "fav" && M.folder !== "yt" && !folders.some(f => f.id === M.folder)) M.folder = null;
     M.tracks = M.tracks.filter(t => M.urls[t.file]);
     if (cur) M.i = M.tracks.findIndex(t => t.file === cur);
   })().catch(e => { M.loading = null; throw e; });
@@ -1588,13 +1588,139 @@ function musicView() {
     <div class="folders" role="list">
       ${card(null, "Все треки", M.tracks.length, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`)}
       ${card("fav", "Избранное", M.favs.size, `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`)}
+      <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true">${I.play}</span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
       ${M.folders.map(x => card(x.id, x.name, count(x.id), coverHTML(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
     </div>
-    <label class="mu-search">${I.search}<input type="search" data-field="mu-q" value="${esc(M.q || "")}" placeholder="Найти трек или группу" autocomplete="off" enterkeyhint="search" aria-label="Поиск по трекам">${M.q ? `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>` : ""}</label>
+    ${M.folder === "yt" ? "" : searchBox()}
     <div id="mu-list">${musicList()}</div>`;
 }
+// ---------- YouTube в «Музыке»: общий список по ссылкам, играет официальный плеер YouTube в мини-плеере внизу ----------
+const YT = { list: null, loading: null, i: -1, player: null, ready: null, dock: null, playing: false };
+function loadYt() {
+  return YT.loading ||= q(sb.from("gym_yt").select("*").order("created_at", { ascending: false }), { silent: true })
+    .then(r => { YT.list = r; }).catch(() => { YT.list = YT.list || []; }).finally(() => { YT.loading = null; });
+}
+// ссылка → видео или плейлист: youtu.be/ID, watch?v=ID, shorts/ID, music.youtube.com, playlist?list=ID
+function parseYt(url) {
+  let u; try { u = new URL(url.trim()); } catch { return null; }
+  if (!/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(u.hostname)) return null;
+  const v = u.hostname.endsWith("youtu.be") ? u.pathname.slice(1) : u.searchParams.get("v") || u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/)?.[1];
+  const list = u.searchParams.get("list");
+  if (v && /^[\w-]{11}$/.test(v)) return { kind: "video", yt_id: v };
+  if (list && /^[\w-]{10,64}$/.test(list)) return { kind: "playlist", yt_id: list };
+  return null;
+}
+const ytThumb = x => x.kind === "video" ? `https://i.ytimg.com/vi/${x.yt_id}/mqdefault.jpg` : "";
+function ytSection() {
+  if (!YT.list) { loadYt().then(() => { if (route().path === "music" && M.folder === "yt") rerender(); }); return `<div class="skel" style="height:180px;margin-top:16px"></div>`; }
+  const cur = YT.list[YT.i];
+  return `<section class="mu-head"><div class="mu-title"><div><h2>YouTube</h2><p class="muted">${YT.list.length} ${plural(YT.list.length, "видео", "видео", "видео")} · общий список</p></div></div>
+      <div class="row"><button class="btn" data-act="yt-all" ${YT.list.length ? "" : "disabled"}>${I.play}Слушать</button></div></section>
+    <form class="yt-add" data-yt-form>
+      <input class="inp" name="url" inputmode="url" placeholder="Вставь ссылку на видео или плейлист YouTube" autocomplete="off" aria-label="Ссылка YouTube">
+      <button class="btn" type="submit">Добавить</button>
+    </form>
+    <p class="hint yt-hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, скопируй ссылку и вставь сюда. Если видео не играет — его автор запретил показ на других сайтах.</p>
+    ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => `<li class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""}">
+        <button class="track" data-act="yt-play" data-i="${i}">
+          <span class="yt-th">${x.kind === "video" ? `<img src="${ytThumb(x)}" alt="" loading="lazy">` : `<span class="yt-pl">${I.note}<small>плейлист</small></span>`}</span>
+          <span class="tr-t"><b>${esc(x.title || "Видео YouTube")}</b><span>${esc(x.author || "")}</span></span></button>
+        ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}</li>`).join("")}</ol>`
+      : `<p class="hint mu-empty">Пока пусто — добавь первое видео или плейлист.</p>`}`;
+}
+async function addYt(form) {
+  const x = parseYt(form.url.value), btn = form.querySelector("[type=submit]");
+  if (!x) return toast("Нужна ссылка на видео или плейлист YouTube");
+  if ((YT.list || []).some(y => y.kind === x.kind && y.yt_id === x.yt_id)) return toast("Это уже есть в списке");
+  btn.classList.add("loading"); btn.disabled = true;
+  try {
+    const url = x.kind === "video" ? `https://www.youtube.com/watch?v=${x.yt_id}` : `https://www.youtube.com/playlist?list=${x.yt_id}`;
+    const meta = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    const row = await q(sb.from("gym_yt").insert({ ...x, title: (meta.title || "").slice(0, 200), author: (meta.author_name || "").slice(0, 100) }).select().single());
+    YT.list = [row, ...(YT.list || [])]; if (YT.i >= 0) YT.i++;
+    form.url.value = ""; rerender(); toast("Добавлено");
+  } catch { btn.classList.remove("loading"); btn.disabled = false; }
+}
+// Плеер: официальный IFrame API YouTube, живёт вне страниц — музыка не прерывается при переходах
+function ytApi() {
+  return YT.ready ||= new Promise((res, rej) => {
+    if (window.YT?.Player) return res();
+    window.onYouTubeIframeAPIReady = () => res();
+    const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; s.onerror = () => { YT.ready = null; rej(new Error("yt")); };
+    document.head.append(s);
+  });
+}
+async function ytPlay(i) {
+  const x = YT.list?.[i]; if (!x) return;
+  M.audio.pause(); // одновременно играет что-то одно
+  YT.i = i; ytDock(); ytPaintDock();
+  try { await ytApi(); } catch { return toast("YouTube не загрузился — проверь интернет или VPN"); }
+  const load = () => x.kind === "video" ? YT.player.loadVideoById(x.yt_id) : YT.player.loadPlaylist({ list: x.yt_id, listType: "playlist" });
+  // через 12 секунд видео так и не пошло — честно говорим, а не крутим молча (в России YouTube часто замедлен)
+  clearTimeout(YT.watch); const want = i;
+  YT.watch = setTimeout(() => { if (YT.i === want && !YT.playing && !(YT.player?.getCurrentTime?.() > 0)) toast("YouTube не грузится — без VPN он часто тормозит. Попробуй с VPN или включи наши треки"); }, 12000);
+  if (YT.player) return load();
+  YT.player = new window.YT.Player(YT.dock.querySelector(".yt-frame"), {
+    width: 160, height: 90, host: "https://www.youtube-nocookie.com", // с обычного youtube.com часть сайтов получает «показ запрещён» (ошибка 150)
+    playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+    ...(x.kind === "video" ? { videoId: x.yt_id } : {}),
+    events: {
+      onReady: e => { if (x.kind === "playlist") load(); else e.target.playVideo(); },
+      onStateChange: e => {
+        YT.playing = e.data === 1; ytPaintDock(); refreshYtList();
+        if (e.data === 0 && YT.list[YT.i]?.kind === "video") ytNext(1); // видео закончилось — следующее
+      },
+      onError: () => { toast("Это видео нельзя включить на других сайтах — пропускаю"); ytNext(1); },
+    },
+  });
+}
+function ytNext(d) {
+  const x = YT.list?.[YT.i];
+  if (x?.kind === "playlist" && YT.player) return d > 0 ? YT.player.nextVideo() : YT.player.previousVideo();
+  const n = YT.i + d; if (n >= 0 && n < YT.list.length) ytPlay(n); else { YT.playing = false; ytPaintDock(); }
+}
+function ytDock() {
+  if (YT.dock) return;
+  const el = YT.dock = document.createElement("div"); el.className = "yt-dock"; el.setAttribute("aria-label", "Плеер YouTube");
+  el.innerHTML = `<div class="yt-vid"><div class="yt-frame"></div></div>
+    <div class="yt-info"><b></b><span></span></div>
+    <button class="icon-btn bare" data-y="prev" aria-label="Предыдущее">${I.prev}</button>
+    <button class="pl-play" data-y="toggle" aria-label="Играть или пауза">${I.pause}</button>
+    <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
+    <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube">${I.x}</button>`;
+  el.addEventListener("click", ev => {
+    const a = ev.target.closest("[data-y]")?.dataset.y; if (!a) return;
+    if (a === "toggle") { if (!YT.player?.getPlayerState) return; YT.playing ? YT.player.pauseVideo() : (M.audio.pause(), YT.player.playVideo()); }
+    if (a === "prev") ytNext(-1);
+    if (a === "next") ytNext(1);
+    if (a === "close") ytClose();
+  });
+  document.body.append(el); document.documentElement.classList.add("has-yt");
+  requestAnimationFrame(() => el.classList.add("on"));
+}
+function ytPaintDock() {
+  const x = YT.list?.[YT.i]; if (!YT.dock || !x) return;
+  const data = YT.player?.getVideoData?.() || {};
+  YT.dock.querySelector(".yt-info b").textContent = data.title || x.title || "YouTube";
+  YT.dock.querySelector(".yt-info span").textContent = data.author || x.author || "";
+  const t = YT.dock.querySelector("[data-y=toggle]"); t.innerHTML = YT.playing ? I.pause : I.play;
+}
+function refreshYtList() {
+  document.querySelectorAll(".yt-list li").forEach((li, k) => { li.classList.toggle("cur", k === YT.i); li.classList.toggle("playing", k === YT.i && YT.playing); });
+}
+function ytClose() {
+  try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
+  YT.player = null; YT.playing = false; YT.i = -1;
+  const el = YT.dock; YT.dock = null; el?.classList.remove("on"); setTimeout(() => el?.remove(), 260);
+  document.documentElement.classList.remove("has-yt"); refreshYtList();
+}
+// включили наш mp3 — YouTube на паузу
+M.audio.addEventListener("play", () => { if (YT.playing) YT.player?.pauseVideo(); });
+document.addEventListener("submit", ev => { if (ev.target.matches("[data-yt-form]")) { ev.preventDefault(); addYt(ev.target); } });
+const searchBox = () => `<label class="mu-search">${I.search}<input type="search" data-field="mu-q" value="${esc(M.q || "")}" placeholder="Найти трек или группу" autocomplete="off" enterkeyhint="search" aria-label="Поиск по трекам">${M.q ? `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>` : ""}</label>`;
 function musicList() {
+  if (M.folder === "yt") return ytSection();
   const list = visibleTracks(), fav = M.folder === "fav" && !M.q, f = !M.q && M.folders.find(x => x.id === M.folder), playing = !M.audio.paused;
   const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
   return `
@@ -2665,6 +2791,10 @@ async function run(b, act) {
       break;
     }
     case "mu-fav": toggleFav(+b.dataset.i); break;
+    case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
+    case "yt-all": ytPlay(0); break;
+    case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
+      try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
     case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;

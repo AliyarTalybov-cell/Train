@@ -13,7 +13,7 @@ const json = (body: unknown, status = 200) =>
 
 // дочерние таблицы раньше родительских (упражнения ссылаются на тренировки)
 const TABLES = ["gym_exercises", "gym_workouts", "gym_days", "gym_meals", "gym_foods", "gym_body", "gym_templates",
-  "gym_photos", "gym_progress", "gym_profile_tracks", "gym_track_favs", "gym_profile"];
+  "gym_photos", "gym_progress", "gym_yt", "gym_profile_tracks", "gym_track_favs", "gym_profile"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
