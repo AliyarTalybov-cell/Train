@@ -427,11 +427,18 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 @media (min-width:760px){body{padding-bottom:110px}}
 /* на компьютере чат — панель сбоку, сайт рядом остаётся живым и сдвигается влево */
 .chat:not(.open){pointer-events:none}
-@media (min-width:760px){
-  .topbar,main.wrap{transition:margin var(--t3) var(--ease-out)}
-  html.chat-open .topbar,html.chat-open main.wrap{margin-left:max(16px,calc((100vw - 428px - var(--col)) / 2));margin-right:428px}
+/* Сайт сдвигается ровно настолько, чтобы чат его не перекрыл (на широком экране — на пару десятков точек, а не на полэкрана);
+   двигаем через translate — без перерасчёта раскладки, плавно. Шапка, контент и плееры внизу едут вместе. */
+@media (min-width:1140px){
+  :root{--chat-shift:max(0px,calc(380px + 24px + 16px - (100vw - var(--col)) / 2))}
+  .topbar,main.wrap,.player,.yt-dock{transition:translate var(--t3) var(--ease-out),opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
+  html.chat-open .topbar,html.chat-open main.wrap,html.chat-open .player,html.chat-open .yt-dock:not(.mini){translate:calc(-1 * var(--chat-shift)) 0}
 }
-@media (min-width:760px) and (max-width:1199px){html.chat-open .topbar,html.chat-open main.wrap{margin-left:0}}
+/* экран поуже: места под чат нет — сайт на месте, чат поверх с лёгким затемнением */
+@media (min-width:760px) and (max-width:1139px){
+  .chat-dim{display:block}
+  html.chat-open .chat-dim{opacity:.35}
+}
 /* профиль */
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .btn.danger-soft{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 35%,transparent);color:var(--bad);--spin:var(--bad)}
@@ -1524,3 +1531,16 @@ html.has-yt.yt-front.has-player body{padding-bottom:calc(220px + env(safe-area-i
   .player .vol input{flex:none;width:0;opacity:0;transition:width var(--t3) var(--ease-out),opacity var(--t2) ease}
   .player .vol:hover input,.player .vol:focus-within input{width:96px;opacity:1}
 }
+/* громкость в YouTube-плеере: на компьютере — значок, ползунок выезжает при наведении; на телефоне — кнопками телефона */
+.yt-vol{display:none;width:auto}
+@media (min-width:760px){
+  .yt-vol{display:flex;align-items:center}
+  .yt-vol input{flex:none;width:0;opacity:0;transition:width var(--t3) var(--ease-out),opacity var(--t2) ease}
+  .yt-vol:hover input,.yt-vol:focus-within input{width:84px;opacity:1}
+  .yt-dock.mini .yt-vol{display:none}
+}
+.yt-vol input{-webkit-appearance:none;appearance:none;height:18px;margin:0;background:transparent;cursor:pointer;--p:100%}
+.yt-vol input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
+.yt-vol input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
+.yt-vol input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-4.5px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.yt-vol input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}

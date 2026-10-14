@@ -1753,7 +1753,7 @@ async function ytPlay(i, k = 0) {
     playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
     ...(x.kind === "video" ? { videoId: x.yt_id } : {}),
     events: {
-      onReady: e => { if (x.kind === "playlist") load(); else e.target.playVideo(); },
+      onReady: e => { e.target.setVolume(ytVol()); if (x.kind === "playlist") load(); else e.target.playVideo(); },
       onStateChange: e => {
         YT.playing = e.data === 1; ytPaintDock(); refreshYtList();
         if (e.data === 0 && YT.list[YT.i]?.kind === "video") ytNext(1); // видео закончилось — следующее
@@ -1782,6 +1782,7 @@ function ytDock() {
           <button class="pl-play" data-y="toggle" aria-label="Играть или пауза">${I.pause}</button>
           <button class="icon-btn bare yt-wide" data-y="fwd" aria-label="Вперёд на 10 секунд">${I.fwd10}</button>
           <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
+          <div class="vol yt-vol yt-wide-v"><button class="icon-btn bare" data-y="mute" aria-label="Выключить звук" title="Громкость">${I.vol}</button><input type="range" min="0" max="100" value="${ytVol()}" data-yvol aria-label="Громкость YouTube"></div>
           <button class="icon-btn bare yt-min" data-y="min" aria-label="Свернуть плеер" title="Свернуть плеер — музыка продолжит играть">${I.chevDown}</button>
           <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube" title="Закрыть YouTube">${I.x}</button>
         </div>
@@ -1797,15 +1798,26 @@ function ytDock() {
     if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), document.documentElement.classList.add("yt-front"), P.playVideo());
     if (a === "prev") ytNext(-1);
     if (a === "next") ytNext(1);
+    if (a === "mute") { P.isMuted() ? P.unMute() : P.mute(); ytPaintVol(); return; }
     if (a === "back" || a === "fwd") P.seekTo(Math.max(0, P.getCurrentTime() + (a === "fwd" ? 10 : -10)), true);
     if (a === "shuffle") { YT.shuffle = !YT.shuffle; P.setShuffle(YT.shuffle); ytPaintDock(); toast(YT.shuffle ? "Плейлист перемешан" : "Плейлист по порядку"); }
   });
+  const vol = el.querySelector("[data-yvol]");
+  vol.style.setProperty("--p", vol.value + "%");
+  vol.addEventListener("input", () => { const v = +vol.value; vol.style.setProperty("--p", v + "%"); YT.player?.setVolume?.(v); if (v > 0) YT.player?.unMute?.(); try { localStorage.setItem("gym-yt-vol", v); } catch {} ytPaintVol(); });
   const seek = el.querySelector("[data-yseek]");
   seek.addEventListener("input", () => { YT.drag = true; const d = YT.player?.getDuration?.() || 0; el.querySelector("[data-t0]").textContent = mmss(seek.value / 1000 * d); seek.style.setProperty("--p", seek.value / 10 + "%"); });
   seek.addEventListener("change", () => { const d = YT.player?.getDuration?.() || 0; if (d) YT.player.seekTo(seek.value / 1000 * d, true); YT.drag = false; });
   document.body.append(el); document.documentElement.classList.add("has-yt");
   requestAnimationFrame(() => el.classList.add("on"));
   clearInterval(YT.tick); YT.tick = setInterval(ytTick, 500); // время, перемотка, текущее видео плейлиста
+}
+// громкость YouTube — своя, запоминается; значок показывает «без звука»
+const ytVol = () => { try { const v = +localStorage.getItem("gym-yt-vol"); return localStorage.getItem("gym-yt-vol") == null ? 100 : Math.max(0, Math.min(100, v)); } catch { return 100; } };
+function ytPaintVol() {
+  const b = YT.dock?.querySelector("[data-y=mute]"); if (!b || !YT.player?.isMuted) return;
+  const off = YT.player.isMuted() || YT.player.getVolume() === 0;
+  b.innerHTML = off ? I.volOff : I.vol; b.setAttribute("aria-label", off ? "Включить звук" : "Выключить звук");
 }
 function ytTick() {
   const P = YT.player; if (!YT.dock || !P?.getCurrentTime) return;
