@@ -1306,3 +1306,46 @@ body:has(.auth){padding-bottom:0}
 .pg-pick button.on{color:var(--ink);font-weight:600}
 .pg-pick button:disabled{opacity:.35}
 .pg-box{display:grid;gap:12px}
+
+/* ---------- анимации: только transform и opacity, короткие; при «уменьшить движение» — выключены ---------- */
+@media (prefers-reduced-motion: no-preference){
+  /* экран: целиком больше не «всплывает» — блоки появляются волной */
+  .screen{animation:none}
+  .stg{animation:stgIn .46s var(--ease-out) backwards;animation-delay:calc(var(--i,0) * 38ms)}
+  @keyframes stgIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+
+  /* переходы между разделами (View Transitions): старое гаснет, шапка и меню — отдельными слоями */
+  ::view-transition{pointer-events:none}
+  ::view-transition-old(root){animation:vtOut .14s ease both}
+  ::view-transition-new(root){animation:none}
+  html.vt .topbar{view-transition-name:topbar}
+  html.vt .tabbar{view-transition-name:tabbar}
+  ::view-transition-old(topbar),::view-transition-new(topbar),::view-transition-old(tabbar),::view-transition-new(tabbar){animation:none}
+  @keyframes vtOut{to{opacity:0;transform:translateY(-4px)}}
+
+  /* подсветка активного раздела переезжает к новому пункту */
+  .tabbar a.slide::before{animation:pillTab .38s var(--ease-out)}
+  @keyframes pillTab{from{opacity:1;transform:translateX(var(--from))}}
+  .nav a.slide::before{animation:pillNav .38s var(--ease-out)}
+  @keyframes pillNav{from{transform:translateX(var(--from)) scaleX(var(--sx,1))}}
+
+  /* логотип: слово проявляется слева направо, точка впрыгивает */
+  .intro .brand-t{animation:logoIn .7s var(--ease-out) backwards}
+  .brand.intro>span:last-child,.auth-logo.intro em{display:inline-block;animation:dotIn .55s cubic-bezier(.3,1.6,.5,1) .55s backwards}
+  @keyframes logoIn{from{clip-path:inset(0 100% 0 0);transform:translateX(-6px)}to{clip-path:inset(0 0 0 0);transform:none}}
+  @keyframes dotIn{0%{opacity:0;transform:translateY(-14px) scale(.4)}60%{opacity:1;transform:translateY(2px) scale(1.25)}100%{opacity:1;transform:none}}
+  .brand>span:last-child,.auth-logo em{display:inline-block;transition:transform .3s cubic-bezier(.3,1.6,.5,1)}
+  @media (hover:hover){.brand:hover>span:last-child,.auth-logo:hover em{transform:translateY(-4px) scale(1.2)}}
+
+  /* карточки на компьютере чуть приподнимаются под курсором */
+  @media (hover:hover){
+    .prog,.wk-day,.card-link,.help-link,.person{transition:transform var(--t2) var(--ease-out),border-color var(--t2) ease,box-shadow var(--t2) ease}
+    .prog:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.08)}
+    .wk-day:hover{transform:translateX(2px)}
+  }
+}
+/* подсветка пункта в шапке — отдельной «таблеткой», чтобы её можно было двигать */
+.nav a{position:relative;isolation:isolate}
+.nav a[aria-current="page"]{background:none;box-shadow:none}
+.nav a::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:10px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08);opacity:0;transform-origin:left center;transition:opacity var(--t2) ease}
+.nav a[aria-current="page"]::before{opacity:1}

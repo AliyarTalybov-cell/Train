@@ -368,10 +368,41 @@ const route = () => {
   return ROUTES.find(r => r.path === h) || ROUTES[0];
 };
 
+// ---------- анимации: только transform и opacity, короткие, без бесконечных циклов ----------
+const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+let introDone = false;
+// подсветка активного раздела переезжает со старого пункта на новый (FLIP: запомнили где была — сдвинули — отпустили)
+function pillRects() { return [...document.querySelectorAll(".nav, .tabbar")].map(n => n.querySelector('[aria-current="page"]')?.getBoundingClientRect() || null); }
+function slidePills(old) {
+  if (calm()) return;
+  document.querySelectorAll(".nav, .tabbar").forEach((n, k) => {
+    const a = n.querySelector('[aria-current="page"]'), o = old[k]; if (!a || !o) return;
+    const r = a.getBoundingClientRect(), dx = o.left - r.left; if (Math.abs(dx) < 1) return;
+    a.style.setProperty("--from", dx + "px"); a.style.setProperty("--sx", n.classList.contains("nav") ? o.width / r.width : 1);
+    a.classList.remove("slide"); void a.offsetWidth; a.classList.add("slide");
+  });
+}
+// блоки экрана появляются волной: прямые дети экрана и строки недели, не больше дюжины
+function staggerIn(main) {
+  if (!main || calm()) return;
+  const items = [...main.children].slice(0, 12);
+  main.querySelectorAll(".week > *, .progs > *, .stats > *").forEach(x => items.length < 24 && items.push(x));
+  items.forEach((x, i) => { x.classList.add("stg"); x.style.setProperty("--i", Math.min(i, 11)); });
+}
+// числа в плитках набегают от нуля
+function countUp(main) {
+  if (!main || calm() || document.hidden) return; // вкладка в фоне не рисует кадры — оставляем готовые числа
+  main.querySelectorAll(".stats b").forEach(el => {
+    const to = parseInt(el.textContent, 10); if (!(to > 0)) return;
+    const t0 = performance.now(), dur = 700;
+    const step = t => { const p = Math.min(1, (t - t0) / dur); el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    el.textContent = "0"; requestAnimationFrame(step);
+  });
+}
 function render() {
   if (!S.user) return loginView();
   sidePosters();
-  const r = route();
+  const r = route(), oldPills = pillRects();
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; paintBadge(); }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
@@ -379,6 +410,8 @@ function render() {
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
+  if (!introDone && S.loaded && !calm()) { introDone = true; app.querySelector(".brand").classList.add("intro"); } // логотип проявляется один раз за открытие сайта
+  if (S.loaded) { const main = document.getElementById("main"); slidePills(oldPills); staggerIn(main); countUp(main); }
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
   queueMicrotask(paintBadge);
@@ -389,7 +422,14 @@ function rerender() { // перерисовать экран без анимац
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
 }
-window.addEventListener("hashchange", () => { S.moving = null; S.friends = {}; S.wkSel = null; render(); scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => {
+  S.moving = null; S.friends = {}; S.wkSel = null;
+  const go = () => { render(); scrollTo({ top: 0 }); };
+  // старый экран быстро гаснет, новый поднимается волной; шапка и нижнее меню — отдельными слоями, не мигают
+  if (!document.startViewTransition || calm() || document.hidden || !S.user) return go();
+  const root = document.documentElement; root.classList.add("vt");
+  document.startViewTransition(go).finished.finally(() => root.classList.remove("vt"));
+});
 
 /* ---------- login ---------- */
 const FN_SIGNUP = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-signup";
@@ -518,7 +558,7 @@ function loginView(mode = "in") {
       <section class="auth-card">
       <div class="auth-brand">
         <span class="eyebrow">Дневник тренировок</span>
-        <h1 class="auth-logo" data-scramble><span class="brand-t">Train</span><em>.</em></h1>
+        <h1 class="auth-logo intro" data-scramble><span class="brand-t">Train</span><em>.</em></h1>
         <p class="lead">Тренируйся по программам чемпионов: календарь, рабочие веса и тренер, который видит твой прогресс.</p>
       </div>
       <div class="seg full" role="radiogroup" aria-label="Вход или регистрация">
