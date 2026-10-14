@@ -1442,3 +1442,49 @@ html.has-yt .coach-fab,html.has-yt .rest{bottom:calc(150px + env(safe-area-inset
 .yt-dock.mini .yt-vid-ic,.yt-dock.mini .yt-seek,.yt-dock.mini .yt-info span,.yt-dock.mini [data-y=prev],.yt-dock.mini [data-y=next],.yt-dock.mini .yt-wide,.yt-dock.mini .yt-sh,.yt-dock.mini .pl-x{display:none!important}
 .yt-dock.mini .yt-min svg{transform:rotate(180deg)}
 .yt-dock.mini .yt-ctrl .pl-play{width:36px;height:36px}
+/* YouTube: строки списка, раскрывающийся плейлист, скелетоны, треки */
+.yt-list>li{display:block}
+.yt-line{display:flex;align-items:center;min-width:0}
+.yt-line .track{flex:1;min-width:0}
+.yt-chev{flex:none;display:grid;place-items:center;width:28px;color:var(--muted);transition:transform var(--t3) var(--ease-out)}
+.yt-chev svg{width:18px;height:18px}
+[data-act=yt-exp][aria-expanded="true"] .yt-chev{transform:rotate(180deg);color:var(--ink)}
+.yt-list>li.is-pl:has([aria-expanded="true"]){background:var(--surface);border-radius:14px}
+.yt-all1 svg{width:16px;height:16px}
+.yt-body{overflow:hidden;transition:height .34s var(--ease-out),opacity .25s ease}
+.yt-body.closing{opacity:0}
+.yt-skel{display:grid;gap:6px;padding:4px 10px 12px}
+.yt-sk{display:flex;align-items:center;gap:10px;height:46px}
+.yt-sk>i{flex:none;width:72px;height:40px;border-radius:7px}
+.yt-sk span{flex:1;display:grid;gap:7px}
+.yt-sk span i{height:10px;border-radius:5px;width:70%}
+.yt-sk span i+i{width:40%;height:8px}
+.yt-skel .hint{font-size:12.5px;padding-top:2px}
+.yt-err{padding:6px 12px 14px;font-size:13.5px}
+.yt-items{list-style:none;margin:0;padding:2px 6px 10px;display:grid;gap:2px;max-height:min(60vh,480px);overflow-y:auto;overscroll-behavior:contain}
+.yt-items.appear{animation:ytIn .32s var(--ease-out) both}
+@keyframes ytIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.yt-items li{display:flex;align-items:center;gap:10px;min-height:52px;padding:4px 4px 4px 4px;border-radius:10px;transition:background-color var(--t2) ease}
+@media (hover:hover){.yt-items li:hover{background:var(--chip)}}
+.yt-thb{position:relative;flex:none;width:72px;height:40px;padding:0;border:0;border-radius:7px;overflow:hidden;background:var(--chip);cursor:zoom-in}
+.yt-thb.one{width:64px;height:36px;margin:0 2px 0 10px}
+.yt-thb img{width:100%;height:100%;object-fit:cover;display:block}
+.yt-len{position:absolute;right:3px;bottom:3px;padding:0 4px;border-radius:4px;background:rgba(0,0,0,.75);color:#fff;font-size:10px;line-height:15px}
+.yt-eye{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff;opacity:0;transition:opacity var(--t2) ease}
+.yt-eye svg{width:16px;height:16px}
+@media (hover:hover){.yt-thb:hover .yt-eye{opacity:1}}
+@media (hover:none){.yt-thb .yt-eye{opacity:.0}}
+.yt-it{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 6px 0 0;border:0;background:none;text-align:left;color:var(--ink)}
+.yt-it .tr-t b{font-size:14px;font-weight:500}
+.yt-st{flex:none;display:grid;place-items:center;width:28px;height:28px;color:var(--muted)}
+.yt-st svg{width:14px;height:14px}
+.yt-items li.cur{background:color-mix(in srgb,#e53935 9%,transparent)}
+.yt-items li.cur .tr-t b{color:#e53935;font-weight:600}
+.yt-st .eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.yt-st .eq b{width:3px;height:40%;background:#e53935;border-radius:1px}
+.yt-items li.playing .yt-st .eq b{animation:eq .9s ease-in-out infinite}
+.yt-items li.playing .yt-st .eq b:nth-child(2){animation-delay:-.3s}.yt-items li.playing .yt-st .eq b:nth-child(3){animation-delay:-.6s}
+@media (prefers-reduced-motion: reduce){.yt-body{transition:none}.yt-items.appear{animation:none}}
+.yt-list .yt-items li .tr-t b{color:var(--ink)}
+.yt-list .yt-items li.cur .tr-t b{color:#e53935}
+@media (hover:none){.yt-thb .yt-eye{opacity:1;inset:auto;top:3px;right:3px;width:18px;height:18px;border-radius:5px;background:rgba(0,0,0,.6)}.yt-thb .yt-eye svg{width:11px;height:11px}}

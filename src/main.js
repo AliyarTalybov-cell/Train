@@ -1615,6 +1615,72 @@ function parseYt(url) {
   return null;
 }
 const ytThumb = x => x.kind === "video" ? `https://i.ytimg.com/vi/${x.yt_id}/mqdefault.jpg` : "";
+// Плейлист раскрывается под своей строкой: сначала аккуратные «скелетоны», потом плавно — список треков.
+// Треки берёт серверная функция gym-yt-list (одним запросом, с названиями и длительностью); список запоминается на 12 часов.
+const YTL = {}; // id плейлиста → { st: "load" | "ok" | "err", items: [] }
+async function ytListOf(id) {
+  if (YTL[id]?.st === "ok" || YTL[id]?.st === "load") return YTL[id];
+  try { const c = JSON.parse(localStorage.getItem("gym-ytpl-" + id) || "null"); if (c && Date.now() - c.at < 12 * 3600e3) return YTL[id] = { st: "ok", items: c.items }; } catch {}
+  YTL[id] = { st: "load", items: [] };
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(`https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-yt-list?list=${encodeURIComponent(id)}`, { headers: { Authorization: "Bearer " + session?.access_token, apikey: "sb_publishable_rKUjSv2W8BS1_ZDXGXwU1A_jgCrjPWM" } }).then(x => x.json());
+    if (!r.items?.length) throw new Error("empty");
+    YTL[id] = { st: "ok", items: r.items };
+    try { localStorage.setItem("gym-ytpl-" + id, JSON.stringify({ at: Date.now(), items: r.items })); } catch {}
+  } catch { YTL[id] = { st: "err", items: [] }; }
+  return YTL[id];
+}
+const ytSkel = () => `<div class="yt-skel" aria-hidden="true">${Array.from({ length: 5 }, () => `<div class="yt-sk"><i class="skel"></i><span><i class="skel"></i><i class="skel"></i></span></div>`).join("")}<p class="hint">Загружаю треки с YouTube…</p></div>`;
+function ytItemsHTML(i) {
+  const x = YT.list[i], L = YTL[x.yt_id];
+  if (!L || L.st === "load") return ytSkel();
+  if (L.st === "err") return `<p class="hint yt-err">Не получилось загрузить список — можно просто нажать ▶ и слушать плейлист целиком.</p>`;
+  const curK = YT.i === i ? YT.plk : -1;
+  return `<ol class="yt-items">${L.items.map((v, k) => `<li data-k="${k}" class="${k === curK ? "cur" : ""} ${k === curK && YT.playing ? "playing" : ""}">
+      <button class="yt-thb" data-act="yt-watch" data-i="${i}" data-k="${k}" aria-label="Открыть видео «${esc(v.t)}»" title="Открыть видео">
+        <img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" alt="" loading="lazy" decoding="async">${v.len ? `<span class="yt-len mono">${esc(v.len)}</span>` : ""}<span class="yt-eye" aria-hidden="true">${I.expand}</span></button>
+      <button class="yt-it" data-act="yt-at" data-i="${i}" data-k="${k}">
+        <span class="tr-t"><b>${esc(v.t || "Видео")}</b><span>${esc(v.a || "")}</span></span>
+        <span class="yt-st" aria-hidden="true">${k === curK ? `<i class="eq"><b></b><b></b><b></b></i>` : I.play}</span></button></li>`).join("")}</ol>`;
+}
+// плавно поменять содержимое и высоту блока (без скачков): было h0 → стало h1
+function ytMorph(body, html) {
+  const h0 = body.getBoundingClientRect().height;
+  body.innerHTML = html;
+  if (calm()) { body.style.height = ""; return; }
+  const h1 = body.scrollHeight;
+  body.style.height = h0 + "px"; void body.offsetHeight; body.style.height = h1 + "px";
+  clearTimeout(body._t); body._t = setTimeout(() => { body.style.height = ""; }, 380);
+}
+async function ytToggle(i) {
+  const x = YT.list[i], li = document.querySelector(`.yt-list > li[data-i="${i}"]`); if (!li) return;
+  let body = li.querySelector(".yt-body"), btn = li.querySelector("[data-act=yt-exp]");
+  if (YT.exp === x.yt_id && body) { // свернуть
+    YT.exp = null; btn.setAttribute("aria-expanded", "false");
+    body.style.height = body.getBoundingClientRect().height + "px"; void body.offsetHeight; body.style.height = "0px"; body.classList.add("closing");
+    setTimeout(() => body.remove(), 330); return;
+  }
+  document.querySelectorAll(".yt-list .yt-body").forEach(b => b.remove()); // открыт только один плейлист
+  document.querySelectorAll(".yt-list [data-act=yt-exp]").forEach(b => b.setAttribute("aria-expanded", "false"));
+  YT.exp = x.yt_id; btn.setAttribute("aria-expanded", "true");
+  body = document.createElement("div"); body.className = "yt-body"; body.style.height = "0px"; li.append(body);
+  const ready = YTL[x.yt_id]?.st === "ok";
+  ytMorph(body, ready ? ytItemsHTML(i) : ytSkel());
+  if (ready) return;
+  await ytListOf(x.yt_id);
+  if (YT.exp === x.yt_id && body.isConnected) { ytMorph(body, ytItemsHTML(i)); body.querySelector(".yt-items")?.classList.add("appear"); }
+  const n = YTL[x.yt_id]?.items?.length, sub = li.querySelector(".yt-line .tr-t span");
+  if (n && sub && !sub.textContent.includes("·")) sub.textContent += ` · ${n} ${plural(n, "трек", "трека", "треков")}`;
+}
+// включить трек плейлиста; big — сразу развернуть видео
+async function ytPlayAt(i, k, big) {
+  const x = YT.list[i];
+  if (YT.i === i && YT.player?.playVideoAt && YT.loaded === x.yt_id) { M.audio.pause(); YT.player.playVideoAt(k); }
+  else await ytPlay(i, k);
+  if (big && YT.dock) { YT.dock.classList.add("big"); YT.dock.classList.remove("mini"); }
+  YT.plk = k; YT.want = { k, until: Date.now() + 4000 }; refreshYtList(); ytPaintDock();
+}
 function ytSection() {
   if (!YT.list) { loadYt().then(() => { if (route().path === "music" && M.folder === "yt") rerender(); }); return `<div class="skel" style="height:180px;margin-top:16px"></div>`; }
   const cur = YT.list[YT.i];
@@ -1625,15 +1691,19 @@ function ytSection() {
       <button class="btn" type="submit">Добавить</button>
     </form>
     <details class="yt-how"><summary>Как добавить?${I.chevDown}</summary><p class="hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, нажми «Поделиться» → «Копировать ссылку» и вставь сюда. Подходят и видео, и плейлисты. Если видео не играет — его автор запретил показ на других сайтах, оно пропустится само.</p></details>
-    ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => `<li data-i="${i}" class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""}">
-        <button class="track" data-act="yt-play" data-i="${i}">
-          <span class="yt-th">${x.kind === "video" ? `<img src="${ytThumb(x)}" alt="" loading="lazy">` : `<span class="yt-pl">${I.note}<small>плейлист</small></span>`}</span>
-          <span class="tr-t"><b>${esc(x.title || "Видео YouTube")}</b><span>${esc(x.author || "")}</span></span></button>
-        ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}
-        ${i === YT.i && x.kind === "playlist" ? (YT.pl?.length ? `<div class="yt-subwrap"><button class="yt-subhead" data-act="yt-sub" aria-expanded="${YT.subOpen !== false}"><span>Видео в плейлисте · ${YT.pl.length}</span><span class="yt-subtog">${YT.subOpen !== false ? "Свернуть" : "Показать"}${I.chevDown}</span></button>
-          ${YT.subOpen === false ? "" : `<ol class="yt-sub">${YT.pl.map((id, k) => `<li data-k="${k}" class="${k === YT.plk ? "cur" : ""}"><button data-act="yt-at" data-k="${k}">
-            <span class="yt-n mono">${k + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" loading="lazy"><span class="tr-t"><b>${esc(YT_T[id]?.t || "…")}</b><span>${esc(YT_T[id]?.a || "")}</span></span></button></li>`).join("")}</ol>`}</div>`
-          : `<p class="hint yt-sub-wait">Загружаю список видео плейлиста…</p>`) : ""}</li>`).join("")}</ol>`
+    ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => { const pl = x.kind === "playlist", open = pl && YT.exp === x.yt_id, n = YTL[x.yt_id]?.items?.length;
+      return `<li data-i="${i}" class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""} ${pl ? "is-pl" : ""}">
+        <div class="yt-line">
+          ${pl ? `<button class="track" data-act="yt-exp" data-i="${i}" aria-expanded="${open}">
+              <span class="yt-th yt-pl">${I.note}<small>плейлист</small></span>
+              <span class="tr-t"><b>${esc(x.title || "Плейлист YouTube")}</b><span>${esc(x.author || "")}${n ? ` · ${n} ${plural(n, "трек", "трека", "треков")}` : ""}</span></span>
+              <span class="yt-chev" aria-hidden="true">${I.chevDown}</span></button>
+            <button class="tr-more yt-all1" data-act="yt-play" data-i="${i}" aria-label="Слушать плейлист целиком" title="Слушать всё">${I.play}</button>`
+          : `<button class="yt-thb one" data-act="yt-watch" data-i="${i}" data-k="-1" aria-label="Открыть видео" title="Открыть видео"><img src="${ytThumb(x)}" alt="" loading="lazy"><span class="yt-eye" aria-hidden="true">${I.expand}</span></button>
+            <button class="track" data-act="yt-play" data-i="${i}"><span class="tr-t"><b>${esc(x.title || "Видео YouTube")}</b><span>${esc(x.author || "")}</span></span></button>`}
+          ${x.user_id === S.user.id ? `<button class="tr-more" data-act="yt-del" data-i="${i}" aria-label="Убрать из списка" title="Убрать">${I.x}</button>` : ""}
+        </div>
+        ${open ? `<div class="yt-body">${ytItemsHTML(i)}</div>` : ""}</li>`; }).join("")}</ol>`
       : `<p class="hint mu-empty">Пока пусто — добавь первое видео или плейлист.</p>`}`;
 }
 async function addYt(form) {
@@ -1658,12 +1728,13 @@ function ytApi() {
     document.head.append(s);
   });
 }
-async function ytPlay(i) {
+async function ytPlay(i, k = 0) {
   const x = YT.list?.[i]; if (!x) return;
   M.audio.pause(); // одновременно играет что-то одно
-  YT.i = i; YT.pl = null; YT.plk = -1; YT.shuffle = false; ytDock(); ytPaintDock();
+  YT.i = i; YT.plk = x.kind === "playlist" ? k : -1; YT.shuffle = false; YT.loaded = null; ytDock(); ytPaintDock(); refreshYtList();
+  if (x.kind === "playlist") ytListOf(x.yt_id).then(() => ytPaintDock()); // для «3 из 25» в плеере
   try { await ytApi(); } catch { return toast("YouTube не загрузился — проверь интернет или VPN"); }
-  const load = () => x.kind === "video" ? YT.player.loadVideoById(x.yt_id) : YT.player.loadPlaylist({ list: x.yt_id, listType: "playlist" });
+  const load = () => { YT.loaded = x.yt_id; x.kind === "video" ? YT.player.loadVideoById(x.yt_id) : YT.player.loadPlaylist({ list: x.yt_id, listType: "playlist", index: k }); };
   // через 12 секунд видео так и не пошло — честно говорим, а не крутим молча (в России YouTube часто замедлен)
   clearTimeout(YT.watch); const want = i;
   YT.watch = setTimeout(() => { if (YT.i === want && !YT.playing && !(YT.player?.getCurrentTime?.() > 0)) toast("YouTube не грузится — без VPN он часто тормозит. Попробуй с VPN или включи наши треки"); }, 12000);
@@ -1718,7 +1789,7 @@ function ytDock() {
     if (a === "prev") ytNext(-1);
     if (a === "next") ytNext(1);
     if (a === "back" || a === "fwd") P.seekTo(Math.max(0, P.getCurrentTime() + (a === "fwd" ? 10 : -10)), true);
-    if (a === "shuffle") { YT.shuffle = !YT.shuffle; P.setShuffle(YT.shuffle); YT.pl = null; ytPaintDock(); toast(YT.shuffle ? "Плейлист перемешан" : "Плейлист по порядку"); }
+    if (a === "shuffle") { YT.shuffle = !YT.shuffle; P.setShuffle(YT.shuffle); ytPaintDock(); toast(YT.shuffle ? "Плейлист перемешан" : "Плейлист по порядку"); }
   });
   const seek = el.querySelector("[data-yseek]");
   seek.addEventListener("input", () => { YT.drag = true; const d = YT.player?.getDuration?.() || 0; el.querySelector("[data-t0]").textContent = mmss(seek.value / 1000 * d); seek.style.setProperty("--p", seek.value / 10 + "%"); });
@@ -1736,41 +1807,38 @@ function ytTick() {
     YT.dock.querySelector("[data-t0]").textContent = mmss(t);
   }
   YT.dock.querySelector("[data-t1]").textContent = d ? mmss(d) : "0:00";
-  // плейлист: список видео и текущее — для раскрытого списка в разделе
+  // плейлист: какой трек играет сейчас — подсветка в раскрытом списке и «N из M» в плеере
   if (YT.list?.[YT.i]?.kind === "playlist") {
-    const ids = P.getPlaylist?.() || [], k = P.getPlaylistIndex?.() ?? -1;
-    if (ids.length && ids.join() !== (YT.pl || []).join()) { YT.pl = ids; ytTitles(ids); ytRepaintList(); }
-    if (k !== YT.plk) { YT.plk = k; ytPaintDock(); refreshYtList(); }
+    const k = P.getPlaylistIndex?.() ?? -1;
+    if (YT.want) { if (k === YT.want.k || Date.now() > YT.want.until) YT.want = null; else return; } // ждём, пока YouTube переключится на выбранный трек — без мигания подсветки
+    if (k >= 0 && k !== YT.plk) { YT.plk = k; ytPaintDock(); refreshYtList(); }
   }
-}
-// названия видео плейлиста — через oEmbed, по несколько за раз, с запоминанием
-const YT_T = (() => { try { return JSON.parse(localStorage.getItem("gym-yt-titles") || "{}"); } catch { return {}; } })();
-async function ytTitles(ids) {
-  const need = ids.filter(id => !YT_T[id]).slice(0, 80);
-  for (let k = 0; k < need.length; k += 6) {
-    await Promise.all(need.slice(k, k + 6).map(id => fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent("https://www.youtube.com/watch?v=" + id)}&format=json`)
-      .then(r => r.ok ? r.json() : null).then(m => { YT_T[id] = m ? { t: m.title, a: m.author_name } : { t: "Видео недоступно", a: "" }; }).catch(() => {})));
-    ytRepaintList();
-  }
-  try { localStorage.setItem("gym-yt-titles", JSON.stringify(YT_T)); } catch {}
 }
 const ytRepaintList = () => { if (route().path === "music" && M.folder === "yt") { const box = document.getElementById("mu-list"); if (box) box.innerHTML = musicList(); } };
 function ytPaintDock() {
   const x = YT.list?.[YT.i]; if (!YT.dock || !x) return;
   const data = YT.player?.getVideoData?.() || {}, pl = x.kind === "playlist";
   YT.dock.querySelector(".yt-info b").textContent = data.title || x.title || "YouTube";
-  YT.dock.querySelector(".yt-info span").textContent = pl ? `${x.title}${YT.pl?.length ? ` · ${(YT.plk ?? 0) + 1} из ${YT.pl.length}` : ""}` : data.author || x.author || "";
+  const n = YTL[x.yt_id]?.items?.length;
+  YT.dock.querySelector(".yt-info span").textContent = pl ? `${x.title}${n && YT.plk >= 0 ? ` · ${YT.plk + 1} из ${n}` : ""}` : data.author || x.author || "";
   YT.dock.querySelector("[data-y=toggle]").innerHTML = YT.playing ? I.pause : I.play;
   YT.dock.classList.toggle("pl", pl);
   YT.dock.querySelector("[data-y=shuffle]").setAttribute("aria-pressed", !!YT.shuffle);
 }
 function refreshYtList() {
   document.querySelectorAll(".yt-list > li").forEach(li => { const k = +li.dataset.i; li.classList.toggle("cur", k === YT.i); li.classList.toggle("playing", k === YT.i && YT.playing); });
-  document.querySelectorAll(".yt-sub li").forEach(li => li.classList.toggle("cur", +li.dataset.k === YT.plk));
+  document.querySelectorAll(".yt-list > li").forEach(li => {
+    const mine = +li.dataset.i === YT.i;
+    li.querySelectorAll(".yt-items > li").forEach(t => {
+      const cur = mine && +t.dataset.k === YT.plk; if (t.classList.contains("cur") === cur && t.classList.contains("playing") === (cur && YT.playing)) return;
+      t.classList.toggle("cur", cur); t.classList.toggle("playing", cur && YT.playing);
+      t.querySelector(".yt-st").innerHTML = cur ? `<i class="eq"><b></b><b></b><b></b></i>` : I.play;
+    });
+  });
 }
 function ytClose() {
   try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
-  YT.player = null; YT.playing = false; YT.i = -1; YT.pl = null; YT.plk = -1; clearInterval(YT.tick);
+  YT.player = null; YT.playing = false; YT.i = -1; YT.plk = -1; YT.loaded = null; clearInterval(YT.tick);
   const el = YT.dock; YT.dock = null; el?.classList.remove("on"); setTimeout(() => el?.remove(), 260);
   document.documentElement.classList.remove("has-yt"); refreshYtList();
 }
@@ -2852,8 +2920,9 @@ async function run(b, act) {
     case "mu-fav": toggleFav(+b.dataset.i); break;
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;
-    case "yt-at": YT.player?.playVideoAt?.(+b.dataset.k); break;
-    case "yt-sub": YT.subOpen = YT.subOpen === false; try { localStorage.setItem("gym-yt-sub", YT.subOpen ? "1" : "0"); } catch {} ytRepaintList(); break;
+    case "yt-exp": ytToggle(+b.dataset.i); break;
+    case "yt-at": { const i = +b.dataset.i, k = +b.dataset.k; if (i === YT.i && k === YT.plk && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlayAt(i, k); break; }
+    case "yt-watch": { const i = +b.dataset.i, k = +b.dataset.k; if (k < 0) { await ytPlay(i); if (YT.dock) { YT.dock.classList.add("big"); YT.dock.classList.remove("mini"); } } else ytPlayAt(i, k, true); break; }
     case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
