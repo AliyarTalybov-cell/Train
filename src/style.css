@@ -1514,3 +1514,13 @@ html.has-yt.yt-front.has-player body{padding-bottom:calc(220px + env(safe-area-i
 }
 /* логотип: слово — строчно-блочный элемент, иначе сдвиг при появлении не работает */
 .brand-t,.auth-logo .brand-t{display:inline-block}
+/* мини-плеер: кнопка ⏮ — по центру своего кружка (служебный pl-wide делал её flex без центровки) */
+@media (min-width:760px){
+  .icon-btn.pl-wide{display:inline-grid;place-items:center}
+  .pl-info{flex:0 1 210px}
+  .pl-seek{min-width:180px}
+  /* громкость в мини-плеере: в покое — только значок, ползунок выезжает при наведении; перемотке — больше места */
+  .player .vol{width:auto}
+  .player .vol input{flex:none;width:0;opacity:0;transition:width var(--t3) var(--ease-out),opacity var(--t2) ease}
+  .player .vol:hover input,.player .vol:focus-within input{width:96px;opacity:1}
+}
