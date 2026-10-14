@@ -13,7 +13,7 @@ const json = (body: unknown, status = 200) =>
 
 // дочерние таблицы раньше родительских (упражнения ссылаются на тренировки)
 const TABLES = ["gym_exercises", "gym_workouts", "gym_days", "gym_meals", "gym_foods", "gym_body", "gym_templates",
-  "gym_photos", "gym_profile_tracks", "gym_track_favs", "gym_profile"];
+  "gym_photos", "gym_progress", "gym_profile_tracks", "gym_track_favs", "gym_profile"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -34,6 +34,10 @@ Deno.serve(async (req) => {
     const paths = (files || []).filter(f => f.id).map(f => `${dir}/${f.name}`);
     if (paths.length) await admin.storage.from("gym-avatars").remove(paths);
   }
+  // фото прогресса — в своём закрытом бакете, в папке <uid>/
+  const { data: prog } = await admin.storage.from("gym-progress").list(uid, { limit: 1000 });
+  const progPaths = (prog || []).filter(f => f.id).map(f => `${uid}/${f.name}`);
+  if (progPaths.length) await admin.storage.from("gym-progress").remove(progPaths);
   for (const t of TABLES) {
     const { error } = await admin.from(t).delete().eq("user_id", uid);
     if (error) return json({ error: "failed", table: t }, 500);

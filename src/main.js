@@ -1877,6 +1877,105 @@ function pickProfileTracks() {
   });
   if (M.tracks) go(); else loadTracks().then(go).catch(() => toast("Не получилось загрузить треки"));
 }
+// ---------- Прогресс фигуры: фото «до / после» — видит только владелец (закрытый бакет gym-progress) ----------
+const PG = { list: null, urls: {}, loading: null, open: false, busy: false };
+function loadProgress() {
+  return PG.loading ||= (async () => {
+    const rows = await q(sb.from("gym_progress").select("*").eq("user_id", S.user.id).order("day").order("created_at"), { silent: true }).catch(() => []);
+    const need = rows.map(r => r.path).filter(p => !PG.urls[p]);
+    if (need.length) { const { data } = await sb.storage.from("gym-progress").createSignedUrls(need, 6 * 3600).catch(() => ({ data: [] })); for (const d of data || []) if (d.signedUrl) PG.urls[d.path] = d.signedUrl; }
+    PG.list = rows;
+  })().finally(() => { PG.loading = null; });
+}
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+// «до» для быстрого сравнения: снимок не позже чем за n дней до последнего (или самый ранний)
+function beforeFor(n) {
+  const L = PG.list || [], last = L.at(-1); if (!last || L.length < 2) return null;
+  if (n === "first") return L[0];
+  const lim = addDays(last.day, -n); return [...L].reverse().find(x => x.day <= lim && x !== last) || null;
+}
+function progressBlock() {
+  const L = PG.list;
+  if (!L && PG.open) loadProgress().then(() => { if (route().path === "me") rerender(); });
+  const last = L?.at(-1);
+  const quick = L && L.length > 1 ? [[14, "2 недели"], [30, "месяц"], [90, "3 месяца"], ["first", "с первого"]].filter(([n]) => beforeFor(n)) : [];
+  return `<details class="card prog-fold" ${PG.open ? "open" : ""} data-pg-fold>
+    <summary><span><b>Прогресс фигуры</b><span class="hint">фото «до / после» · видишь только ты</span></span>${I.right}</summary>
+    ${!PG.open ? "" : !L ? `<div class="skel" style="height:120px"></div>` : `
+      ${quick.length ? `<div class="pg-quick"><span class="hint">Сравнить:</span>${quick.map(([n, l]) => `<button class="chip-btn" data-act="pg-cmp" data-n="${n}">${l}</button>`).join("")}</div>` : ""}
+      <div class="pg-grid">
+        <label class="ph-add pg-add ${PG.busy ? "busy" : ""}">${PG.busy ? `<span class="spin" aria-hidden="true"></span><span>Загружаю</span>` : `${I.camera}<span>Добавить фото</span>`}<input type="file" accept="image/*" hidden data-field="pg-file" ${PG.busy ? "disabled" : ""}></label>
+        ${[...L].reverse().map(x => `<button class="pg-item" data-act="pg-open" data-id="${x.id}"><img src="${PG.urls[x.path] || ""}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')"><span>${shortDay(x.day)}${x.weight_kg ? ` · ${fmt(x.weight_kg, 1)} кг` : ""}</span></button>`).join("")}
+      </div>
+      ${!L.length ? `<p class="hint">Снимай в одной позе, при одном свете и в одно время — тогда разница видна честно. Например, раз в две недели.</p>` : L.length === 1 ? `<p class="hint">Добавь ещё одно фото позже — и можно будет сравнить «до» и «после».</p>` : ""}`}
+  </details>`;
+}
+// добавить фото: дата и вес (по умолчанию — сегодня и вес из профиля)
+function addProgress(file) {
+  if (!file || !/^image\//.test(file.type)) return toast("Нужна картинка");
+  const url = URL.createObjectURL(file);
+  sheet("Фото прогресса", `<form class="pg-form" data-pg-form>
+      <div class="pg-preview"><img src="${url}" alt=""></div>
+      <div class="grid2">
+        <label class="field"><span>Дата</span><input class="inp" type="date" name="day" value="${today()}" max="${today()}" required></label>
+        <label class="field"><span>Вес, кг</span><input class="inp" name="w" inputmode="decimal" value="${S.profile?.weight_kg ?? ""}" placeholder="необязательно"></label>
+      </div>
+      <p class="err" role="alert"></p>
+      <div class="sheet-actions"><button class="btn quiet" type="button" data-close>Отмена</button><button class="btn" type="submit">Сохранить</button></div>
+    </form>`, (el, close) => {
+    const f = el.querySelector("form");
+    f.onsubmit = async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const btn = f.querySelector("[type=submit]"); btn.classList.add("loading"); btn.disabled = true;
+      try {
+        const { blob, w, h } = await fitJpeg(file, 1600), path = `${S.user.id}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`;
+        const { error } = await sb.storage.from("gym-progress").upload(path, blob, { contentType: "image/jpeg" }); if (error) throw error;
+        const row = await q(sb.from("gym_progress").insert({ path, day: f.day.value || today(), weight_kg: num(f.w.value), w, h }).select().single(), { silent: true });
+        PG.urls[path] = URL.createObjectURL(blob); PG.list = [...(PG.list || []), row].sort((a, b) => a.day.localeCompare(b.day) || a.created_at.localeCompare(b.created_at));
+        close(); rerender(); toast("Фото добавлено");
+      } catch (e) { console.error(e); btn.classList.remove("loading"); btn.disabled = false; f.querySelector(".err").textContent = "Не получилось — проверь интернет и попробуй ещё раз"; }
+    };
+  }, () => URL.revokeObjectURL(url));
+}
+// Сравнение: «после» поверх «до», шторку тянешь пальцем или мышью; снизу — выбор снимков
+function compareProgress(a, b) {
+  const L = PG.list || []; if (L.length < 2) return;
+  let A = a || L[0], B = b || L.at(-1);
+  const pick = (cur, side) => `<div class="pg-pick" data-side="${side}">${L.map(x => `<button class="${x === cur ? "on" : ""}" data-id="${x.id}" ${(side === "a" ? x === B : x === A) ? "disabled" : ""}><img src="${PG.urls[x.path]}" alt=""><span>${shortDay(x.day)}</span></button>`).join("")}</div>`;
+  const body = () => { const d = daysBetween(A.day, B.day), dw = A.weight_kg != null && B.weight_kg != null ? +B.weight_kg - +A.weight_kg : null;
+    return `<p class="pg-sum"><b>${Math.abs(d)} ${plural(Math.abs(d), "день", "дня", "дней")}</b>${dw != null ? ` · <b class="${dw < 0 ? "down" : dw > 0 ? "up" : ""}">${dw > 0 ? "+" : dw < 0 ? "−" : ""}${fmt(Math.abs(dw), 1)} кг</b>` : ""}</p>
+      <div class="pg-cmp" style="--x:50%">
+        <img src="${PG.urls[A.path]}" alt="До"><img class="after" src="${PG.urls[B.path]}" alt="После">
+        <span class="pg-tag l">До · ${shortDay(A.day)}${A.weight_kg ? ` · ${fmt(A.weight_kg, 1)} кг` : ""}</span><span class="pg-tag r">После · ${shortDay(B.day)}${B.weight_kg ? ` · ${fmt(B.weight_kg, 1)} кг` : ""}</span>
+        <i class="pg-line" aria-hidden="true"><b></b></i>
+        <input type="range" min="0" max="100" value="50" aria-label="Шторка «до / после»">
+      </div>
+      <div class="eyebrow">До</div>${pick(A, "a")}<div class="eyebrow">После</div>${pick(B, "b")}`; };
+  sheet("До и после", `<div class="pg-box">${body()}</div>`, el => {
+    const box = el.querySelector(".pg-box");
+    box.addEventListener("input", ev => { if (ev.target.type === "range") ev.target.closest(".pg-cmp").style.setProperty("--x", ev.target.value + "%"); });
+    box.addEventListener("click", ev => {
+      const b = ev.target.closest(".pg-pick button"); if (!b || b.disabled) return;
+      const x = L.find(r => r.id === b.dataset.id); if (b.closest("[data-side]").dataset.side === "a") A = x; else B = x;
+      if (A.day > B.day) [A, B] = [B, A];
+      box.innerHTML = body();
+    });
+  });
+}
+// одно фото: крупно, удалить
+function openProgress(id) {
+  const x = (PG.list || []).find(r => r.id === id); if (!x) return;
+  sheet(`${shortDay(x.day)}${x.weight_kg ? ` · ${fmt(x.weight_kg, 1)} кг` : ""}`, `<div class="pg-one"><img src="${PG.urls[x.path]}" alt=""></div>
+    <div class="sheet-actions">${PG.list.length > 1 ? `<button class="btn quiet" data-cmp>Сравнить</button>` : ""}<button class="btn danger-soft" data-del>Удалить фото</button></div>`, (el, close) => {
+    el.querySelector("[data-cmp]")?.addEventListener("click", () => { close(); const other = x === PG.list[0] ? PG.list.at(-1) : PG.list[0]; compareProgress(...[x, other].sort((a, b) => a.day.localeCompare(b.day))); });
+    el.querySelector("[data-del]").addEventListener("click", async () => {
+      close(); if (!await confirmSheet("Удалить фото?", "Снимок пропадёт насовсем.")) return;
+      try { await q(sb.from("gym_progress").delete().eq("id", x.id)); sb.storage.from("gym-progress").remove([x.path]); PG.list = PG.list.filter(r => r !== x); rerender(); toast("Фото удалено"); } catch {}
+    });
+  });
+}
+document.addEventListener("change", ev => { if (ev.target.dataset?.field === "pg-file") { addProgress(ev.target.files[0]); ev.target.value = ""; } });
+document.addEventListener("toggle", ev => { if (ev.target.matches?.("[data-pg-fold]")) { const was = PG.open; PG.open = ev.target.open; if (PG.open && !was && !PG.list) rerender(); } }, true);
 // Фото уменьшается до 1600 точек по длинной стороне и сохраняется в JPEG — чётко, но не мегабайты.
 function fitJpeg(file, max = 1600) {
   return new Promise((res, rej) => {
@@ -2447,6 +2546,7 @@ function profileView() {
     ${(rec => rec.length ? `<section class="card"><div class="card-head"><h2 class="card-t">Рекорды</h2><span class="hint">лучший вес</span></div>
       <ul class="lifts rec-list">${rec.slice(0, 6).map(r => `<li><button class="lift-btn" data-act="lift-chart" data-n="${esc(r.name)}"><span class="lift-n">${esc(r.name)}</span><span class="mono">${fmt(r.w, 1)} кг</span><span class="lift-d">${shortDay(r.d)} · ${I.chart}график</span></button></li>`).join("")}</ul></section>` : "")(records())}
     ${pfBlocks(S.user.id, true)}
+    ${progressBlock()}
     <a class="card help-link" href="#/help"><span><b>Как пользоваться сайтом</b><span class="hint">Календарь, тренировки, программы, тренер и друзья — коротко</span></span>${I.right}</a>
     ${S.people.length ? `<section class="card">
       <h2 class="card-t">Друзья</h2>
@@ -2533,6 +2633,8 @@ async function run(b, act) {
     case "ph-open": { const uid = b.dataset.u; lightbox(PF.photos[uid].map(x => ({ ...x, src: PF.urls[x.path] })), +b.dataset.k, uid === S.user.id); break; }
     case "ph-ava": lightbox([{ src: S.avatars[b.dataset.u] }]); break;
     case "pf-pick": pickProfileTracks(); break;
+    case "pg-open": openProgress(b.dataset.id); break;
+    case "pg-cmp": { const B = PG.list.at(-1), A = beforeFor(b.dataset.n === "first" ? "first" : +b.dataset.n); if (A) compareProgress(A, B); break; }
     case "pf-play": { const i = +b.dataset.i; if (i === M.i) { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); break; }
       const uid = b.dataset.u; M.queue = (PF.tracks[uid] || []).map(id => M.tracks.find(t => t.id === id)?.file).filter(Boolean); playAt(i); break; }
     case "mu-share": shareTrack(M.tracks[+b.dataset.i]); break;
@@ -2656,6 +2758,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (S.started && (u?.id ?? null) === (S.user?.id ?? null)) return; // обновление токена — не перерисовываем
   S.started = true;
   S.user = u; S.loaded = false;
+  Object.assign(PG, { list: null, urls: {}, open: false }); // фото прогресса — только свои, у другого аккаунта их не показываем
   document.querySelectorAll(".sheet-backdrop, .lb").forEach(x => x.remove()); document.documentElement.classList.remove("lb-open"); // окна прошлого аккаунта не остаются
   if (!u) scrollTo({ top: 0 });
   chatEl?.remove(); chatDim.remove(); chatEl = null; stopMusic(); document.documentElement.classList.remove("chat-open"); // чат другого аккаунта не показываем
