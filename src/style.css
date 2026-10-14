@@ -1544,3 +1544,10 @@ html.has-yt.yt-front.has-player body{padding-bottom:calc(220px + env(safe-area-i
 .yt-vol input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
 .yt-vol input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-4.5px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .yt-vol input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}
+/* перенос музыки в R2 — панель владельца */
+.mig{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+.mig>div{display:grid;gap:2px;min-width:0;flex:1}
+.mig b{font-weight:600}
+.mig .hint{font-size:13px}
+.mig .upl-bar{flex-basis:100%}
+.mig-hint{margin-top:12px;font-size:13px}
