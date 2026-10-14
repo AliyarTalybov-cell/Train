@@ -1553,13 +1553,8 @@ function loadTracks() {
       q(sb.from("gym_track_favs").select("track_id,created_at").eq("user_id", S.user.id).order("created_at", { ascending: false }), { silent: true }).catch(() => []),
     ]);
     M.tracks = tracks; M.folders = folders; M.favs = new Set(favs.map(f => f.track_id)); M.favOrder = favs.map(f => f.track_id);
-    const paths = [...M.tracks.filter(t => !t.r2).map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover)];
-    const inR2 = M.tracks.filter(t => t.r2).map(t => "tracks/" + t.file);
-    const [{ data: urls }, r2urls] = await Promise.all([
-      paths.length ? sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600) : { data: [] },
-      inR2.length ? r2call("get", { keys: inR2 }).then(r => r.urls || {}).catch(() => ({})) : {},
-    ]);
-    for (const [k, u] of Object.entries(r2urls)) M.urls[k.replace(/^tracks\//, "")] = u;
+    const paths = [...M.tracks.map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover)];
+    const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600);
     for (const u of urls || []) if (u.signedUrl) {
       if (u.path.startsWith("covers/")) M.covers[u.path.slice(7)] = u.signedUrl; else M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
     }
@@ -1885,7 +1880,6 @@ function musicList() {
       <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>
-    ${migCard()}
     ${isOwner() && U.items.length ? uploadPanel() : ""}
     ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
@@ -1932,7 +1926,7 @@ function trackMenu(i) {
       if (!await confirmSheet("Удалить трек?", `«${t.title}» исчезнет с сайта у всех. Файл на твоём компьютере останется.`)) return;
       try {
         await q(sb.from("gym_tracks").delete().eq("id", t.id));
-        if (t.r2) await r2call("delete", { keys: ["tracks/" + t.file] }).catch(() => {}); else await sb.storage.from("gym-music").remove(["tracks/" + t.file]);
+        await sb.storage.from("gym-music").remove(["tracks/" + t.file]);
         if (M.i === i) { M.audio.pause(); M.audio.removeAttribute("src"); }
         const cur = M.tracks[M.i]?.file; M.tracks.splice(i, 1); M.i = cur ? M.tracks.findIndex(x => x.file === cur) : -1;
         if (M.i < 0) { M.bar?.remove(); M.bar = null; document.documentElement.classList.remove("has-player"); }
@@ -1945,11 +1939,9 @@ function trackMenu(i) {
 async function downloadTrack(t) {
   if (!t) return;
   const name = `${t.artist ? t.artist + " — " : ""}${t.title}.mp3`.replace(/[\\/:*?"<>|]+/g, " ");
-  let href = null;
-  if (t.r2) href = await r2call("download", { key: "tracks/" + t.file, name }).then(j => j.url).catch(() => null);
-  else { const { data } = await sb.storage.from("gym-music").createSignedUrl("tracks/" + t.file, 600, { download: name }); href = data?.signedUrl; }
-  if (!href) return toast("Не получилось скачать — попробуй ещё раз");
-  const a = document.createElement("a"); a.href = href; a.download = name; a.rel = "noopener";
+  const { data, error } = await sb.storage.from("gym-music").createSignedUrl("tracks/" + t.file, 600, { download: name });
+  if (error || !data?.signedUrl) return toast("Не получилось скачать — попробуй ещё раз");
+  const a = document.createElement("a"); a.href = data.signedUrl; a.download = name; a.rel = "noopener";
   document.body.append(a); a.click(); a.remove();
   toast("Скачивание началось");
 }
@@ -2038,71 +2030,6 @@ const folderKey = n => norm(n).replace(/^the\s+/, "");
 const U = { items: [], run: false, stop: false, xhr: null };
 const mb = n => (n / 1048576).toLocaleString("ru-RU", { maximumFractionDigits: n < 10485760 ? 1 : 0 });
 // Файл уходит в хранилище через XHR — у него, в отличие от supabase-js, есть прогресс по байтам.
-// Перенос музыки в R2 — панель для владельца в «Все треки»: перенести → прогресс → освободить место в Supabase
-const MIG = { run: false, done: 0, total: 0, fail: 0, left: null, freeing: false };
-function migCard() {
-  if (!isOwner() || M.folder || M.q) return "";
-  if (M.r2v === undefined) { r2Status().then(v => { M.r2v = v; if (route().path === "music") rerender(); }); return ""; }
-  if (!M.r2v) return `<p class="hint mig-hint">Cloudflare R2 ещё не подключена — после ключей здесь появится перенос треков.</p>`;
-  const left = M.tracks.filter(t => !t.r2).length;
-  if (MIG.left === null) { sb.storage.from("gym-music").list("tracks", { limit: 1000 }).then(({ data }) => { MIG.left = (data || []).filter(f => f.id).length; if (route().path === "music") rerender(); }); }
-  if (MIG.run) { const p = MIG.total ? MIG.done / MIG.total : 0;
-    return `<section class="mig"><div><b>${MIG.freeing ? "Освобождаю место в Supabase" : "Переношу треки в Cloudflare R2"}</b><span class="hint">${MIG.done} из ${MIG.total}${MIG.fail ? ` · не получилось: ${MIG.fail}` : ""} — можно слушать дальше, не закрывай вкладку</span></div>
-      <div class="upl-bar"><i style="width:${p * 100}%"></i></div></section>`; }
-  if (left) return `<section class="mig"><div><b>Перенести треки в Cloudflare R2</b><span class="hint">${left} ${plural(left, "трек", "трека", "треков")} ещё в Supabase. В R2 — 10 ГБ бесплатно и без лимита на прослушивания</span></div>
-    <button class="btn" data-act="mig-go">Перенести</button></section>`;
-  if (MIG.left > 0) return `<section class="mig"><div><b>Все треки уже в R2</b><span class="hint">В Supabase остались старые копии: ${MIG.left} ${plural(MIG.left, "файл", "файла", "файлов")}. Удалим — освободится место</span></div>
-    <button class="btn" data-act="mig-free">Освободить место</button></section>`;
-  return "";
-}
-async function migGo() {
-  const todo = M.tracks.filter(t => !t.r2); if (!todo.length || MIG.run) return;
-  Object.assign(MIG, { run: true, done: 0, total: todo.length, fail: 0, freeing: false }); rerender();
-  const paint = () => { if (route().path === "music" && !M.folder) { const el = document.querySelector(".mig"); if (el) el.outerHTML = migCard(); } };
-  for (let k = 0; k < todo.length; k += 2) { // по два трека за раз
-    await Promise.all(todo.slice(k, k + 2).map(t => r2call("copy", { file: t.file }).then(() => { t.r2 = true; }).catch(() => { MIG.fail++; })));
-    MIG.done = Math.min(todo.length, k + 2); paint();
-  }
-  MIG.run = false; MIG.left = null; M.loading = null; await loadTracks().catch(() => {}); rerender();
-  toast(MIG.fail ? `Перенесено ${MIG.total - MIG.fail} из ${MIG.total} — оставшиеся можно перенести ещё раз` : "Все треки в Cloudflare R2 — играют уже оттуда");
-}
-async function migFree() {
-  if (!await confirmSheet("Удалить копии из Supabase?", "Треки уже лежат в Cloudflare R2 и играют оттуда. Копии в Supabase больше не нужны.", "Удалить копии")) return;
-  const r2files = new Set(M.tracks.filter(t => t.r2).map(t => t.file));
-  const { data } = await sb.storage.from("gym-music").list("tracks", { limit: 1000 });
-  const paths = (data || []).filter(f => f.id && r2files.has(f.name)).map(f => "tracks/" + f.name); // только то, что точно есть в R2
-  Object.assign(MIG, { run: true, freeing: true, done: 0, total: paths.length, fail: 0 }); rerender();
-  for (let k = 0; k < paths.length; k += 25) {
-    const { error } = await sb.storage.from("gym-music").remove(paths.slice(k, k + 25)); if (error) MIG.fail += Math.min(25, paths.length - k);
-    MIG.done = Math.min(paths.length, k + 25); const el = document.querySelector(".mig"); if (el) el.outerHTML = migCard();
-  }
-  MIG.run = false; MIG.freeing = false; MIG.left = null; rerender();
-  toast(MIG.fail ? "Часть копий не удалилась — попробуй ещё раз" : `Место освобождено: удалено ${paths.length} ${plural(paths.length, "файл", "файла", "файлов")}`);
-}
-// Cloudflare R2: ссылки, загрузка, удаление — через нашу функцию gym-r2 (ключи R2 — только на сервере)
-async function r2call(action, body = {}) {
-  const { data: { session } } = await sb.auth.getSession();
-  const r = await fetch("https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-r2", { method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session?.access_token, apikey: "sb_publishable_rKUjSv2W8BS1_ZDXGXwU1A_jgCrjPWM" },
-    body: JSON.stringify({ action, ...body }) });
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.status); return j;
-}
-// готова ли R2 (ключи вписаны) — один раз за открытие; владельцу заодно настраиваем CORS корзины для загрузки с сайта
-function r2Status() {
-  return M.r2 ||= r2call("status").then(j => { if (j.ready && isOwner()) r2call("cors").catch(() => {}); return !!j.ready; }).catch(() => false);
-}
-// загрузка прямо в R2 по временной ссылке, с прогрессом
-async function putTrackR2(key, f, onPct) {
-  const { url } = await r2call("put", { key });
-  return new Promise((res, rej) => {
-    const x = U.xhr = new XMLHttpRequest(); x.open("PUT", url); x.setRequestHeader("Content-Type", "audio/mpeg");
-    x.upload.onprogress = e => e.lengthComputable && onPct(e.loaded / e.total);
-    x.onload = () => { U.xhr = null; x.status < 300 ? res() : rej(new Error(x.status + " " + x.responseText)); };
-    x.onerror = () => { U.xhr = null; rej(new Error("network")); };
-    x.onabort = () => { U.xhr = null; rej(new Error("abort")); };
-    x.send(f);
-  });
-}
 async function putTrack(path, f, onPct) {
   const { data: { session } } = await sb.auth.getSession();
   return new Promise((res, rej) => {
@@ -2182,10 +2109,8 @@ async function runUpload() {
       const sec = await durationOf(f);
       if (U.stop) throw new Error("abort");
       x.st = "up"; x.pct = 0; paintUpload(true);
-      const toR2 = await r2Status(); // R2 подключена — новые треки сразу туда
-      if (toR2) await putTrackR2("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
-      else await putTrack("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
-      await q(sb.from("gym_tracks").insert({ file, artist, title, album, track_no, sec, folder_id: folder?.id || null, r2: toR2 }), { silent: true });
+      await putTrack("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
+      await q(sb.from("gym_tracks").insert({ file, artist, title, album, track_no, sec, folder_id: folder?.id || null }), { silent: true });
       have.add(file); same.add(norm(artist) + "|" + norm(title)); x.st = "ok";
     } catch (e) { x.st = U.stop ? "skip" : "fail"; if (!U.stop) console.error(e); }
   }
@@ -3036,8 +2961,6 @@ async function run(b, act) {
     case "pg-cmp": { const B = PG.list.at(-1), A = beforeFor(b.dataset.n === "first" ? "first" : +b.dataset.n); if (A) compareProgress(A, B); break; }
     case "pf-play": { const i = +b.dataset.i; if (i === M.i) { M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); break; }
       const uid = b.dataset.u; M.queue = (PF.tracks[uid] || []).map(id => M.tracks.find(t => t.id === id)?.file).filter(Boolean); playAt(i); break; }
-    case "mig-go": migGo(); break;
-    case "mig-free": migFree(); break;
     case "mu-share": shareTrack(M.tracks[+b.dataset.i]); break;
     case "mu-up-stop": U.stop = true; U.xhr?.abort(); break;
     case "mu-up-close": U.items = []; document.getElementById("mu-upl")?.remove(); break;
