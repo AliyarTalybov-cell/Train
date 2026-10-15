@@ -1952,7 +1952,7 @@ function musicList() {
     ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
       <button class="track" data-act="mu-play" data-i="${i}">
-        <span class="tr-art ${coverOf(artOf(t)) ? "img" : ""}">${coverOf(artOf(t)) ? coverHTML(artOf(t)) : ""}<span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span></span>
+        <span class="tr-art ${M.tcov[t.file] ? "img" : ""}">${M.tcov[t.file] ? coverHTML(artOf(t)) : ""}<span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span></span>
         <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
         <span class="tr-d mono">${mmss(t.sec)}</span></button>
       <button class="tr-fav" data-act="mu-fav" data-i="${i}" aria-pressed="${M.favs.has(t.id)}" aria-label="${M.favs.has(t.id) ? "Убрать из избранного" : "В избранное"}">${M.favs.has(t.id) ? I.heartFill : I.heart}</button>
@@ -2109,11 +2109,23 @@ async function backfillCovers() {
   if (!isOwner() || M.bf || !M.tracks) return; M.bf = true; // раз за открытие сайта
   let tried; try { tried = new Set(JSON.parse(localStorage.getItem("gym-cov-tried") || "[]")); } catch { tried = new Set(); }
   const mark = f => { tried.add(f); try { localStorage.setItem("gym-cov-tried", JSON.stringify([...tried])); } catch {} };
-  let made = 0;
-  for (const t of M.tracks.filter(x => !M.tcov[x.file] && !tried.has(x.file) && M.urls[x.file])) {
-    try { const tag = await id3(remoteFile(M.urls[t.file])); if (tag.cover) { await putTrackCover(t, tag.cover); made++; } mark(t.file); } catch {}
-  }
-  if (made) { M.loading = null; await loadTracks().catch(() => {}); if (route().path === "music") rerender(); }
+  const todo = M.tracks.filter(x => !M.tcov[x.file] && !tried.has(x.file) && M.urls[x.file]);
+  const one = async t => {
+    try {
+      const tag = await id3(remoteFile(M.urls[t.file]));
+      if (tag.cover) { await putTrackCover(t, tag.cover); await showTrackCover(t); }
+      mark(t.file);
+    } catch (e) { console.warn("обложка", t.file, e); }
+  };
+  await Promise.all([0, 1, 2].map(async () => { for (let t; (t = todo.shift());) await one(t); })); // по три трека сразу
+}
+// обложка появилась — подставить её в строку трека и в плеер, не перерисовывая страницу
+async function showTrackCover(t) {
+  const { data } = await sb.storage.from("gym-music").createSignedUrl(tcovPath(t), 6 * 3600); if (!data?.signedUrl) return;
+  M.tcov[t.file] = data.signedUrl;
+  const i = M.tracks.indexOf(t), art = document.querySelector(`.tracks:not(.yt-list) li[data-i="${i}"] .tr-art`);
+  if (art && !art.classList.contains("img")) { art.classList.add("img"); art.insertAdjacentHTML("afterbegin", coverHTML(artOf(t))); }
+  if (i === M.i) { if (M.bar) { M.bar.dataset.cov = ""; drawBar(); } if (M.full) { M.full.dataset.cov = ""; drawFull(); } }
 }
 // «01. Группа - Трек [audiovk.com]» → исполнитель и название без номеров и приписок
 function fromName(name) {
