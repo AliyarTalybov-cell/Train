@@ -146,9 +146,12 @@ h2{font-family:var(--display);font-weight:500;font-size:clamp(19px,5vw,22px);lin
 @media (min-width:760px){.nav{display:flex;gap:2px;padding:3px;border-radius:13px;background:var(--chip)}}
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));
   background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line)}
-.tabbar a{position:relative;display:grid;justify-items:center;gap:3px;padding:6px 0;min-height:54px;color:var(--muted);text-decoration:none;font-size:11.5px;font-weight:500;transition:color var(--t2) ease}
-.tabbar a svg{position:relative;width:22px;height:22px}
-.tabbar a::before{content:"";position:absolute;top:3px;left:50%;width:52px;height:30px;margin-left:-26px;border-radius:15px;background:var(--accent-soft);opacity:0;transform:scale(.6);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
+.tabbar a{position:relative;display:grid;place-items:center;padding:0 2px;min-height:54px;color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:500;letter-spacing:-.01em;transition:color var(--t2) ease}
+.tabbar a svg{display:none} /* на телефоне — только названия, без значков */
+.tabbar a span{position:relative}
+.tabbar a::before{content:"";position:absolute;z-index:-1;top:50%;left:4px;right:4px;height:38px;margin-top:-19px;border-radius:19px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 16%,var(--surface)),color-mix(in srgb,var(--accent) 24%,var(--surface)));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 22%,transparent);opacity:0;transform:scale(.8);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
 .tabbar a[aria-current="page"]{color:var(--accent);font-weight:600}
 .tabbar a[aria-current="page"]::before{opacity:1;transform:none}
 @media (min-width:760px){.tabbar{display:none}}
@@ -820,6 +823,8 @@ a.has-badge{position:relative}
 a.has-badge>svg{overflow:visible}
 a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px var(--surface)}
 .nav a.has-badge::after{top:6px;left:24px}
+.tabbar a.has-badge::after{display:none} /* в меню без значков — точка сразу после названия */
+.tabbar a.has-badge span::after{content:"";display:inline-block;width:7px;height:7px;margin-left:5px;vertical-align:2px;border-radius:50%;background:#E5484D}
 .sheet{grid-template-columns:minmax(0,1fr)}
 .sheet>*{min-width:0}
 .pick-row>span:not(.share-thumbs)>span{font-size:13px;color:var(--muted);line-height:1.35}
@@ -1335,14 +1340,13 @@ body:has(.auth){padding-bottom:0}
   .tabbar a.slide::before{animation:pillTab .5s cubic-bezier(.3,.9,.35,1)}
   @keyframes pillTab{
     0%{opacity:1;transform:translateX(var(--from)) scale(1,1)}
-    35%{transform:translateX(calc(var(--from) * .45)) scale(1.45,.86)}
-    70%{transform:translateX(calc(var(--from) * -.05)) scale(.94,1.06)}
+    35%{transform:translateX(calc(var(--from) * .45)) scale(1.22,.9)}
+    70%{transform:translateX(calc(var(--from) * -.05)) scale(.96,1.05)}
     100%{transform:none}}
-  .tabbar a.slide svg{animation:tabIcon .45s cubic-bezier(.3,1.4,.5,1)}
-  @keyframes tabIcon{0%{transform:scale(.8)}55%{transform:translateY(-2px) scale(1.12)}100%{transform:none}}
-  .tabbar a svg,.tabbar a span{transition:transform .18s var(--ease-out)}
-  .tabbar a:active svg{transform:scale(.86)}
-  .tabbar a:active span{transform:scale(.95)}
+  .tabbar a.slide span{animation:tabLabel .42s cubic-bezier(.3,1.4,.5,1)}
+  @keyframes tabLabel{0%{transform:scale(.9)}55%{transform:scale(1.06)}100%{transform:none}}
+  .tabbar a span{transition:transform .18s var(--ease-out)}
+  .tabbar a:active span{transform:scale(.92)}
   /* смена вкладки: старый экран уходит в сторону, новые блоки приходят с другой стороны */
   html.tabdir::view-transition-old(root){animation:vtSide .2s ease both}
   @keyframes vtSide{to{opacity:0;transform:translateX(calc(var(--dir) * -28px))}}
