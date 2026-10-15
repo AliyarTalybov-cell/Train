@@ -272,6 +272,9 @@ function paintSync() {
 }
 const workoutOn = day => S.workouts.find(w => w.day === day);
 const exercisesOf = wid => S.exercises.filter(e => e.workout_id === wid).sort((a, b) => a.position - b.position);
+// без своего названия тренировка называется по группам мышц: «Грудь, трицепс»
+const autoTitle = ex => { const g = [...new Set(ex.map(e => media(e.name)?.group).filter(Boolean))].slice(0, 3); return g.length ? g.map((x, i) => i ? x.toLowerCase() : x).join(", ") : ""; };
+const wTitle = w => w.title || autoTitle(exercisesOf(w.id)) || "Тренировка";
 const dayOfWorkout = wid => S.workouts.find(w => w.id === wid)?.day;
 const saveProfile = () => later("profile", () => { const { user_id, updated_at, ...rest } = S.profile; q(sb.from("gym_profile").update({ ...rest, updated_at: new Date().toISOString() }).eq("user_id", S.user.id)); });
 
@@ -372,6 +375,15 @@ const route = () => {
   return ROUTES.find(r => r.path === h) || ROUTES[0];
 };
 
+// Кнопка «Тренер» на телефоне уходит при прокрутке вниз (не закрывает текст) и возвращается при прокрутке вверх
+{ let y0 = scrollY, acc = 0;
+  addEventListener("scroll", () => {
+    const y = scrollY, dy = y - y0; y0 = y;
+    acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy;
+    const root = document.documentElement;
+    if (y < 80 || acc < -24) root.classList.remove("fab-away");
+    else if (acc > 24 && innerWidth < 760) root.classList.add("fab-away");
+  }, { passive: true }); }
 // ---------- анимации: только transform и opacity, короткие, без бесконечных циклов ----------
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 let introDone = false;
@@ -637,7 +649,7 @@ function dayStatus(d) {
   if (w && ex.length && done === ex.length) st = "done";
   else if (w && done) st = "partial";
   else if (w || plan) st = d < today() ? "missed" : "planned";
-  return { w, ex, plan, done, st, title: w ? (w.title || "Тренировка") : plan?.title || "" };
+  return { w, ex, plan, done, st, title: w ? wTitle(w) : plan?.title || "" };
 }
 
 function dayCell(d, outside) {
@@ -801,7 +813,7 @@ function dayPanel() {
       <div class="row links"><button class="linkbtn muted-link" data-act="move">Перенести на другой день</button><button class="linkbtn muted-link" data-act="skip">Убрать с этого дня</button></div>`;
   }
   return `${head}
-    <input class="day-title title-inp" data-field="w-title" value="${esc(s.w.title)}" placeholder="Название тренировки" aria-label="Название тренировки" maxlength="80">
+    <input class="day-title title-inp" data-field="w-title" value="${esc(s.w.title)}" placeholder="${esc(autoTitle(s.ex) || "Название тренировки")}" aria-label="Название тренировки" maxlength="80">
     <p class="day-sub"><span id="day-sub">${subLine(s)}</span>${sessionOn(d) ? ` · ${progLine(d)}` : ""}</p>
     ${s.ex.length ? workoutMeta(s.ex.map(e => ({ name: e.name, sets: e.sets?.length || 0 }))) : ""}
     <ol class="ex-list" id="ex-list">${s.ex.map((e, i) => exRow(e, i, d)).join("")}</ol>
@@ -827,6 +839,11 @@ const subLine = s => !s.ex.length ? "Добавь упражнения ниже"
 function refreshDayBits() { // подпись и отметка дня — без перерисовки полей ввода
   const s = dayStatus(S.day);
   const sub = document.getElementById("day-sub"); if (sub) sub.textContent = subLine(s);
+  const ti = document.querySelector(".day-title"); if (ti && s.ex) ti.placeholder = autoTitle(s.ex) || "Название тренировки";
+  const meta = document.querySelector("#day-panel .w-meta");
+  if (s.w && s.ex.length) { const html = workoutMeta(s.ex.map(e => ({ name: e.name, sets: e.sets?.length || 0 })));
+    if (meta) meta.outerHTML = html; else document.querySelector("#day-panel .day-sub")?.insertAdjacentHTML("afterend", html); }
+  else if (s.w) meta?.remove(); // у плана (тренировка ещё не начата) метки свои — их не трогаем
   const cell = document.querySelector(`.day[data-day="${S.day}"],.wk-day[data-day="${S.day}"]`);
   if (cell) { const tmp = document.createElement("div"); tmp.innerHTML = cell.classList.contains("wk-day") ? weekRow(S.day) : dayCell(S.day, cell.classList.contains("outside")); cell.replaceWith(tmp.firstElementChild); }
 }
@@ -975,7 +992,7 @@ const sessionsOf = pr => pr.sessionsFor ? pr.sessionsFor(0) : pr.sessions;
 function examplePicker() {
   const seen = new Set(), past = [...S.workouts].filter(w => w.day < S.day && exercisesOf(w.id).length).sort((a, b) => b.day.localeCompare(a.day))
     .filter(w => { const k = norm(w.title) || w.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
-  const pastHTML = past.length ? `<div class="eyebrow">Повторить прошлую</div><div class="pick">${past.map(w => `<button data-copy="${w.id}"><b>${esc(w.title || "Тренировка")}</b><span>${shortDay(w.day)} · ${esc(exercisesOf(w.id).map(e => e.name).join(", "))}</span></button>`).join("")}</div>` : "";
+  const pastHTML = past.length ? `<div class="eyebrow">Повторить прошлую</div><div class="pick">${past.map(w => `<button data-copy="${w.id}"><b>${esc(wTitle(w))}</b><span>${shortDay(w.day)} · ${esc(exercisesOf(w.id).map(e => e.name).join(", "))}</span></button>`).join("")}</div>` : "";
   const groups = pastHTML + PROGRAMS.map(pr => `<div class="eyebrow">${esc(pr.title)}</div><div class="pick">${sessionsOf(pr).map((s, i) => `<button data-prog="${pr.id}" data-i="${i}"><b>${esc(s.title)}</b><span>${s.ex.length} ${exWord(s.ex.length)}: ${esc(s.ex.slice(0, 3).map(e => e.n[0]).join(", "))}…</span></button>`).join("")}</div>`).join("");
   sheet("Что записать на этот день", `<div class="pick-groups">${groups}</div>`, (el, close) => {
     el.addEventListener("click", async ev => {
@@ -1344,7 +1361,7 @@ function acceptSheet(sh) {
     const ok = el.querySelector("[data-ok]"), busy = el.querySelector(".share-busy");
     wireDay(el, d => { // день занят — упражнения добавятся к той тренировке
       const w = d && workoutOn(d);
-      busy.hidden = !w; if (w) busy.textContent = `На ${shortDay(d)} уже есть «${w.title || "Тренировка"}» — упражнения добавятся к ней.`;
+      busy.hidden = !w; if (w) busy.textContent = `На ${shortDay(d)} уже есть «${wTitle(w)}» — упражнения добавятся к ней.`;
       ok.textContent = w ? "Добавить к тренировке" : "Добавить в календарь";
     });
     ok.onclick = async () => {
@@ -1383,7 +1400,7 @@ function sendWorkoutSheet(to, tab) {
   sheet(`Тренировка для ${name}`, `
     <div class="seg full" role="radiogroup" aria-label="Откуда тренировка">
       <button role="radio" data-tab="mine" aria-checked="${tab === "mine"}">Мои тренировки</button><button role="radio" data-tab="prog" aria-checked="${tab === "prog"}">Из программ</button></div>
-    <div data-pane="mine" ${tab === "mine" ? "" : "hidden"}>${mine.length ? `<div class="pick">${mine.map(w => { const ex = exercisesOf(w.id); return `<button class="pick-row" data-w="${w.id}">${thumbsHTML(ex.map(e => e.name))}<span><b>${esc(w.title || "Тренировка")}</b><span>${shortDay(w.day)} · ${ex.length} ${exWord(ex.length)}</span></span>${I.right}</button>`; }).join("")}</div>`
+    <div data-pane="mine" ${tab === "mine" ? "" : "hidden"}>${mine.length ? `<div class="pick">${mine.map(w => { const ex = exercisesOf(w.id); return `<button class="pick-row" data-w="${w.id}">${thumbsHTML(ex.map(e => e.name))}<span><b>${esc(wTitle(w))}</b><span>${shortDay(w.day)} · ${ex.length} ${exWord(ex.length)}</span></span>${I.right}</button>`; }).join("")}</div>`
       : `<p class="hint">Записанных тренировок пока нет — выбери из программ.</p>`}</div>
     <div data-pane="prog" ${tab === "prog" ? "" : "hidden"}>
       <div class="chips scroll">${progs.map(pr => `<button type="button" class="chip" data-pr="${pr.id}" aria-pressed="${pr.id === prog}">${esc(pr.title)}</button>`).join("")}</div>
@@ -1396,7 +1413,7 @@ function sendWorkoutSheet(to, tab) {
       const b = ev.target.closest("[data-w],[data-prog]"); if (!b) return;
       let title, items;
       if (b.dataset.w) {
-        const w = S.workouts.find(x => x.id === b.dataset.w); title = w.title || "Тренировка";
+        const w = S.workouts.find(x => x.id === b.dataset.w); title = wTitle(w);
         items = exercisesOf(w.id).map(e => ({ name: e.name, s: e.sets?.length || 3, r: repsOf(e.plan) || String(e.sets?.[0]?.r ?? ""), w: Math.max(0, ...(e.sets || []).map(x => +x.w || 0)) || null }));
       } else {
         const s = sessionsOf(programById(b.dataset.prog))[+b.dataset.i]; title = s.title;
@@ -1494,7 +1511,7 @@ function friendView() {
   const st = (d, w) => {
     const ex = w ? exOf(w.id) : [], done = ex.filter(e => e.done).length, plan = w ? null : sessionFor(u, d, { parse, monday });
     const s = w && ex.length && done === ex.length ? "done" : w && done ? "partial" : (w || plan) ? (d < t ? "missed" : "planned") : "rest";
-    return { st: s, title: w ? (w.title || "Тренировка") : plan?.title || "", n: w ? ex.length : plan?.ex.length || 0, done };
+    return { st: s, title: w ? (w.title || autoTitle(ex) || "Тренировка") : plan?.title || "", n: w ? ex.length : plan?.ex.length || 0, done };
   };
   const doneW = f.workouts.filter(w => w.day <= t && st(w.day, w).st === "done");
   const month = doneW.filter(w => w.day.slice(0, 7) === t.slice(0, 7)).length;
@@ -1535,7 +1552,7 @@ function friendView() {
         : `<p class="hint">Пока нет отмеченных подходов с весом.</p>`}
     </section>
     <section class="card"><h2 class="card-t">Последние тренировки</h2>
-      ${recent.length ? `<ul class="hist-list recent">${recent.map(w => `<li><span>${shortDay(w.day)}</span><span class="recent-t"><b>${esc(w.title || "Тренировка")}</b> ${esc(exOf(w.id).map(e => e.name).join(", "))}</span></li>`).join("")}</ul>`
+      ${recent.length ? `<ul class="hist-list recent">${recent.map(w => `<li><span>${shortDay(w.day)}</span><span class="recent-t"><b>${esc(w.title || autoTitle(exOf(w.id)) || "Тренировка")}</b> ${esc(exOf(w.id).map(e => e.name).join(", "))}</span></li>`).join("")}</ul>`
         : `<p class="hint">Пока ничего не отмечено.</p>`}
     </section>
     ${sent.length ? `<section class="card"><h2 class="card-t">Твои предложения</h2><ul class="sent-list">${sent.map(x => `<li>
@@ -1549,7 +1566,7 @@ function friendView() {
 // Загружать новые может только владелец сайта.
 const OWNER = "63719d65-7465-436c-b3e0-0fd943771228";
 // Плеер живёт вне страниц: музыка не прерывается при переходах и отметках подходов.
-const M = { tracks: null, folders: [], covers: {}, favs: new Set(), folder: null, queue: [], i: -1, urls: {}, shuffle: false, repeat: "all", audio: new Audio(), bar: null, full: null, loading: null };
+const M = { tracks: null, folders: [], covers: {}, tcov: {}, favs: new Set(), folder: null, queue: [], i: -1, urls: {}, shuffle: false, repeat: "all", audio: new Audio(), bar: null, full: null, loading: null };
 try { const v = parseFloat(localStorage.getItem("gym-volume")); if (v >= 0 && v <= 1) M.audio.volume = v; } catch {}
 // на iPhone громкость задаётся только кнопками телефона — там ползунок не показываем
 const canVolume = (() => { const a = new Audio(); a.volume = 0.5; return a.volume === 0.5; })();
@@ -1564,10 +1581,13 @@ function loadTracks() {
       q(sb.from("gym_track_favs").select("track_id,created_at").eq("user_id", S.user.id).order("created_at", { ascending: false }), { silent: true }).catch(() => []),
     ]);
     M.tracks = tracks; M.folders = folders; M.favs = new Set(favs.map(f => f.track_id)); M.favOrder = favs.map(f => f.track_id);
-    const paths = [...M.tracks.map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover)];
+    const tpaths = new Map(M.tracks.map(t => [tcovPath(t), t.file])); // своих обложек может и не быть — тогда ссылки просто не будет
+    const paths = [...M.tracks.map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover), ...tpaths.keys()];
     const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600);
+    M.tcov = {};
     for (const u of urls || []) if (u.signedUrl) {
-      if (u.path.startsWith("covers/")) M.covers[u.path.slice(7)] = u.signedUrl; else M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
+      if (tpaths.has(u.path)) M.tcov[tpaths.get(u.path)] = u.signedUrl;
+      else if (u.path.startsWith("covers/")) M.covers[u.path.slice(7)] = u.signedUrl; else M.urls[u.path.replace(/^tracks\//, "")] = u.signedUrl;
     }
     if (M.folder && M.folder !== "fav" && M.folder !== "yt" && !folders.some(f => f.id === M.folder)) M.folder = null;
     M.tracks = M.tracks.filter(t => M.urls[t.file]);
@@ -1576,10 +1596,13 @@ function loadTracks() {
   return M.loading;
 }
 const folderOf = t => M.folders.find(f => f.id === t?.folder_id);
-const coverOf = f => f?.cover ? M.covers[f.cover] : null;
+const coverOf = f => f?.url || (f?.cover ? M.covers[f.cover] : null);
+// обложка трека: своя (из тегов mp3, лежит в gym-music/covers/t/<файл>.jpg), иначе — обложка папки
+const tcovPath = t => "covers/t/" + t.file.replace(/\.mp3$/i, "") + ".jpg";
+const artOf = t => M.tcov[t?.file] ? { id: "t:" + t.file, name: folderOf(t)?.name || t.artist, url: M.tcov[t.file] } : (folderOf(t) || { name: t?.artist });
 // обложка-заглушка: первая буква на цветном фоне, цвет зависит от названия
 const tileHue = name => [...String(name || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17);
-const coverHTML = (f, cls = "") => coverOf(f) ? `<img class="cov ${cls}" style="--h:${tileHue(f?.name)}" src="${coverOf(f)}" alt="" decoding="async" onload="this.classList.add('ok')">`
+const coverHTML = (f, cls = "") => coverOf(f) ? `<img class="cov ${cls}" style="--h:${tileHue(f?.name)}" src="${coverOf(f)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')">`
   : `<span class="cover-tile ${cls}" style="--h:${tileHue(f?.name)}" aria-hidden="true">${esc(initial(f?.name || "♪"))}</span>`;
 // внутри папки — по альбомам и номерам треков, во «Все треки» — по порядку добавления
 const visibleTracks = () => {
@@ -1600,7 +1623,7 @@ function musicView() {
       .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
     return skeleton();
   }
-  openShared();
+  openShared(); setTimeout(backfillCovers, 2000);
   const count = id => M.tracks.filter(t => t.folder_id === id).length;
   let ci = 0;
   const card = (id, name, n, cover) => `<button style="--i:${Math.min(ci++, 8)}" class="fold-card ${M.folder === id && !M.q ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
@@ -1929,7 +1952,7 @@ function musicList() {
     ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
       <button class="track" data-act="mu-play" data-i="${i}">
-        <span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span>
+        <span class="tr-art ${coverOf(artOf(t)) ? "img" : ""}">${coverOf(artOf(t)) ? coverHTML(artOf(t)) : ""}<span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span></span>
         <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
         <span class="tr-d mono">${mmss(t.sec)}</span></button>
       <button class="tr-fav" data-act="mu-fav" data-i="${i}" aria-pressed="${M.favs.has(t.id)}" aria-label="${M.favs.has(t.id) ? "Убрать из избранного" : "В избранное"}">${M.favs.has(t.id) ? I.heartFill : I.heart}</button>
@@ -1942,7 +1965,7 @@ function musicList() {
 function trackMenu(i) {
   const t = M.tracks[i]; if (!t) return;
   const own = isOwner(), f = folderOf(t);
-  const head = `<div class="tm-head"><span class="tm-cov">${coverHTML(f || { name: t.artist })}</span><span class="tm-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ""}</span></span></div>`;
+  const head = `<div class="tm-head"><span class="tm-cov">${coverHTML(artOf(t))}</span><span class="tm-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ""}</span></span></div>`;
   const item = (act, icon, label, cls = "") => `<button class="tm-item ${cls}" data-tm="${act}">${icon}<span>${label}</span></button>`;
   const main = () => { const inP = inProfile(t); return `${head}<div class="tm-list">
       ${item("prof", inP ? I.check : I.plus, inP ? "Убрать из профиля" : "Добавить в профиль", inP ? "on" : "")}
@@ -1971,7 +1994,7 @@ function trackMenu(i) {
       if (!await confirmSheet("Удалить трек?", `«${t.title}» исчезнет с сайта у всех. Файл на твоём компьютере останется.`)) return;
       try {
         await q(sb.from("gym_tracks").delete().eq("id", t.id));
-        await sb.storage.from("gym-music").remove(["tracks/" + t.file]);
+        await sb.storage.from("gym-music").remove(["tracks/" + t.file, tcovPath(t)]);
         if (M.i === i) { M.audio.pause(); M.audio.removeAttribute("src"); }
         const cur = M.tracks[M.i]?.file; M.tracks.splice(i, 1); M.i = cur ? M.tracks.findIndex(x => x.file === cur) : -1;
         if (M.i < 0) { M.bar?.remove(); M.bar = null; document.documentElement.classList.remove("has-player"); }
@@ -2058,11 +2081,39 @@ async function id3(file) {
     if (id === "APIC" && !out.cover) {
       const enc = body[0]; let j = body.indexOf(0, 1); const mime = dec(0, body.slice(1, j)) || "image/jpeg"; j += 2;
       if (enc === 1 || enc === 2) { while (j < body.length && (body[j] || body[j + 1])) j += 2; j += 2; } else j = body.indexOf(0, j) + 1;
-      if (body.length - j > 1000) out.cover = new Blob([body.slice(j)], { type: /png/.test(mime) ? "image/png" : "image/jpeg" });
+      if (body.length - j > 1000) out.cover = new Blob([body.slice(j)], { type: /png/.test(mime) ? "image/png" : /webp/.test(mime) ? "image/webp" : "image/jpeg" });
     }
     i += 10 + sz;
   }
   return out;
+}
+// Обложка трека — уменьшенный jpeg (до 400 px) из картинки в тегах mp3
+async function smallJpeg(blob, size = 400) {
+  const img = await createImageBitmap(blob), k = Math.min(1, size / Math.max(img.width, img.height)), c = document.createElement("canvas");
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); img.close?.();
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("jpeg")), "image/jpeg", 0.82));
+}
+async function putTrackCover(t, blob) {
+  const { error } = await sb.storage.from("gym-music").upload(tcovPath(t), await smallJpeg(blob), { contentType: "image/jpeg" });
+  if (error && !/exists|duplicate/i.test(error.message)) throw error;
+}
+// mp3 из хранилища как «файл» для id3(): качается только кусок с тегами (Range), а не весь трек
+const remoteFile = url => ({ slice: (a, b) => ({ arrayBuffer: async () => {
+  const r = await fetch(url, { headers: { Range: `bytes=${a}-${b - 1}` } }); if (!r.ok) throw new Error("range");
+  const buf = await r.arrayBuffer(); return r.status === 206 ? buf : buf.slice(a, b);
+} }) });
+// Уже загруженные треки без своей обложки: у владельца сайт сам достаёт её из тегов, по одному треку, в фоне.
+// Трек без картинки в тегах запоминается на этом устройстве, чтобы не качать его начало снова.
+async function backfillCovers() {
+  if (!isOwner() || M.bf || !M.tracks) return; M.bf = true; // раз за открытие сайта
+  let tried; try { tried = new Set(JSON.parse(localStorage.getItem("gym-cov-tried") || "[]")); } catch { tried = new Set(); }
+  const mark = f => { tried.add(f); try { localStorage.setItem("gym-cov-tried", JSON.stringify([...tried])); } catch {} };
+  let made = 0;
+  for (const t of M.tracks.filter(x => !M.tcov[x.file] && !tried.has(x.file) && M.urls[x.file])) {
+    try { const tag = await id3(remoteFile(M.urls[t.file])); if (tag.cover) { await putTrackCover(t, tag.cover); made++; } mark(t.file); } catch {}
+  }
+  if (made) { M.loading = null; await loadTracks().catch(() => {}); if (route().path === "music") rerender(); }
 }
 // «01. Группа - Трек [audiovk.com]» → исполнитель и название без номеров и приписок
 function fromName(name) {
@@ -2155,6 +2206,7 @@ async function runUpload() {
       if (U.stop) throw new Error("abort");
       x.st = "up"; x.pct = 0; paintUpload(true);
       await putTrack("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
+      if (tag.cover) await putTrackCover({ file }, tag.cover).catch(() => {});
       await q(sb.from("gym_tracks").insert({ file, artist, title, album, track_no, sec, folder_id: folder?.id || null }), { silent: true });
       have.add(file); same.add(norm(artist) + "|" + norm(title)); x.st = "ok";
     } catch (e) { x.st = U.stop ? "skip" : "fail"; if (!U.stop) console.error(e); }
@@ -2199,7 +2251,7 @@ function pfBlocks(uid, own) {
       <div class="card-head"><h2 class="card-t">${own ? "Мои треки" : "Треки"}</h2>${own ? `<button class="linkbtn" data-act="pf-pick">${I.plus}Добавить</button>` : ""}</div>
       ${idx.length ? `<ol class="tracks pf-tracks">${idx.map(i => { const t = M.tracks[i], f = folderOf(t) || { name: t.artist };
         return `<li class="${i === M.i ? "cur" : ""} ${i === M.i && !M.audio.paused ? "playing" : ""}" data-i="${i}"><button class="track" data-act="pf-play" data-u="${uid}" data-i="${i}">
-          <span class="pf-cov">${coverHTML(f)}<span class="pf-ic" aria-hidden="true">${i === M.i && !M.audio.paused ? I.pause : I.play}</span></span>
+          <span class="pf-cov">${coverHTML(artOf(t))}<span class="pf-ic" aria-hidden="true">${i === M.i && !M.audio.paused ? I.pause : I.play}</span></span>
           <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span><span class="tr-d mono">${mmss(t.sec)}</span></button></li>`; }).join("")}</ol>`
         : `<p class="hint">Выставь сюда треки, которые хочешь показать друзьям: кнопкой «Добавить» или в «Музыке» через ⋯ у трека.</p>`}
     </section>` : "";
@@ -2221,7 +2273,7 @@ async function toggleProfileTrack(t, quiet) {
   return true;
 }
 function pickProfileTracks() {
-  const row = (t, i) => { const on = inProfile(t); return `<button class="pt-row" data-i="${i}" aria-pressed="${on}"><span class="pf-cov">${coverHTML(folderOf(t) || { name: t.artist })}</span>
+  const row = (t, i) => { const on = inProfile(t); return `<button class="pt-row" data-i="${i}" aria-pressed="${on}"><span class="pf-cov">${coverHTML(artOf(t))}</span>
       <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span><span class="pt-mark" aria-hidden="true">${on ? I.check : I.plus}</span></button>`; };
   const list = qv => { const w = norm(qv).split(/\s+/).filter(Boolean);
     const all = M.tracks.map((t, i) => ({ t, i })).filter(({ t }) => { const h = norm(`${t.title} ${t.artist} ${t.album}`); return w.every(x => h.includes(x)); });
@@ -2408,7 +2460,7 @@ document.addEventListener("drop", ev => { if (route().path !== "music" || S.user
 function playAt(i) {
   const t = M.tracks[i]; if (!t) return;
   M.i = i; M.audio.src = M.urls[t.file]; M.audio.play().catch(() => {});
-  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: folderOf(t)?.name || "Train", artwork: coverOf(folderOf(t)) ? [{ src: coverOf(folderOf(t)), sizes: "400x400" }] : [] });
+  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: folderOf(t)?.name || "Train", artwork: coverOf(artOf(t)) ? [{ src: coverOf(artOf(t)), sizes: "400x400" }] : [] });
   drawBar(); drawFull(); refreshTracks();
 }
 async function toggleFav(i) {
@@ -2510,7 +2562,7 @@ function drawBar() {
   }
   M.bar.querySelector(".pl-txt b").textContent = t.title;
   M.bar.querySelector(".pl-txt span").textContent = t.artist;
-  const cov = folderOf(t) || { name: t.artist };
+  const cov = artOf(t);
   if (M.bar.dataset.cov !== (cov.id || cov.name)) { M.bar.dataset.cov = cov.id || cov.name; M.bar.querySelector(".pl-cover").innerHTML = coverHTML(cov); }
   const paused = M.audio.paused, play = M.bar.querySelector(".pl-play");
   play.innerHTML = paused ? I.play : I.pause; play.setAttribute("aria-label", paused ? "Играть" : "Пауза");
@@ -2555,7 +2607,8 @@ function drawFull() {
   M.full.querySelector("[data-title]").textContent = t.title;
   M.full.querySelector("[data-artist]").textContent = t.artist + (t.album ? ` · ${t.album}` : "");
   M.full.querySelector("[data-from]").textContent = M.folder === "fav" ? "Избранное" : f.name || "Музыка";
-  if (M.full.dataset.cov !== (f.id || f.name)) { M.full.dataset.cov = f.id || f.name; M.full.querySelector(".now-cover").innerHTML = coverHTML(f, "xl"); ambient(f); }
+  const a = artOf(t);
+  if (M.full.dataset.cov !== (a.id || a.name)) { M.full.dataset.cov = a.id || a.name; M.full.querySelector(".now-cover").innerHTML = coverHTML(a, "xl"); ambient(a); }
   const paused = M.audio.paused, play = M.full.querySelector(".pl-play");
   play.innerHTML = paused ? I.play : I.pause; play.setAttribute("aria-label", paused ? "Играть" : "Пауза");
   M.full.querySelector("[data-p=shuffle]").setAttribute("aria-pressed", M.shuffle);
@@ -3055,8 +3108,10 @@ async function run(b, act) {
     case "pick-prog": {
       const pr = programById(b.dataset.v), p = S.profile;
       if (p.program_id && !await confirmSheet("Сменить программу?", `Вместо «${programById(p.program_id).title}» в календаре будет «${pr.title}». Уже записанные тренировки останутся.`, "Сменить")) return;
+      const keys = ["program_id", "program_days", "program_week", "program_start", "program_moves"], was = Object.fromEntries(keys.map(k => [k, p[k]]));
       p.program_id = pr.id; p.program_days = pr.defaultDays; p.program_week = defaultLayout(pr); p.program_start = today(); p.program_moves = {};
-      saveProfile(); rerender(); scrollTo({ top: 0, behavior: "smooth" }); toast(`«${pr.title}» — в календаре`); break;
+      saveProfile(); rerender(); scrollTo({ top: 0, behavior: "smooth" });
+      toast(`«${pr.title}» — в календаре`, { label: "Отменить", run: () => { Object.assign(S.profile, was); saveProfile(); rerender(); toast(was.program_id ? "Вернул прежнюю программу" : "Программа убрана из календаря"); } }); break;
     }
     case "wk-pick": { // выбор без перетаскивания: нажал на тренировку, потом на день
       const i = +b.closest("[data-wd]").dataset.wd;
