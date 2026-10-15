@@ -41,6 +41,7 @@ const I = {
   right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
@@ -1739,6 +1740,7 @@ function ytApi() {
 async function ytPlay(i, k = 0) {
   const x = YT.list?.[i]; if (!x) return;
   M.audio.pause(); // одновременно играет что-то одно
+  ytWake(true);
   document.documentElement.classList.add("yt-front"); YT.dock?.classList.remove("mini");
   YT.i = i; YT.plk = x.kind === "playlist" ? k : -1; YT.shuffle = false; YT.loaded = null; ytDock(); ytPaintDock(); refreshYtList();
   if (x.kind === "playlist") ytListOf(x.yt_id).then(() => ytPaintDock()); // для «3 из 25» в плеере
@@ -1755,7 +1757,7 @@ async function ytPlay(i, k = 0) {
     events: {
       onReady: e => { e.target.setVolume(ytVol()); if (x.kind === "playlist") load(); else e.target.playVideo(); },
       onStateChange: e => {
-        YT.playing = e.data === 1; ytPaintDock(); refreshYtList();
+        YT.playing = e.data === 1; ytPaintDock(); refreshYtList(); ytWake(YT.playing || !!YT.lockEl);
         if (e.data === 0 && YT.list[YT.i]?.kind === "video") ytNext(1); // видео закончилось — следующее
       },
       onError: () => { toast("Это видео нельзя включить на других сайтах — пропускаю"); ytNext(1); },
@@ -1783,6 +1785,7 @@ function ytDock() {
           <button class="icon-btn bare yt-wide" data-y="fwd" aria-label="Вперёд на 10 секунд">${I.fwd10}</button>
           <button class="icon-btn bare" data-y="next" aria-label="Следующее">${I.next}</button>
           <div class="vol yt-vol yt-wide-v"><button class="icon-btn bare" data-y="mute" aria-label="Выключить звук" title="Громкость">${I.vol}</button><input type="range" min="0" max="100" value="${ytVol()}" data-yvol aria-label="Громкость YouTube"></div>
+          <button class="icon-btn bare yt-lock" data-y="lock" aria-label="Заблокировать экран" title="Заблокировать экран — музыка играет, случайные нажатия не сработают">${I.lock}</button>
           <button class="icon-btn bare yt-min" data-y="min" aria-label="Свернуть плеер" title="Свернуть плеер — музыка продолжит играть">${I.chevDown}</button>
           <button class="icon-btn bare pl-x" data-y="close" aria-label="Закрыть YouTube" title="Закрыть YouTube">${I.x}</button>
         </div>
@@ -1794,6 +1797,7 @@ function ytDock() {
     if (a === "big") { const big = el.classList.toggle("big"); el.classList.remove("mini"); const b = el.querySelector(".yt-vid"); b.title = big ? "Свернуть видео" : "Развернуть видео"; b.setAttribute("aria-label", b.title); return; }
     if (a === "min") { const mini = el.classList.toggle("mini"); if (!mini) document.documentElement.classList.add("yt-front"); el.classList.remove("big"); const b = el.querySelector(".yt-min"); b.setAttribute("aria-label", mini ? "Развернуть плеер" : "Свернуть плеер"); b.title = mini ? "Развернуть плеер" : "Свернуть плеер — музыка продолжит играть"; return; }
     if (a === "close") return ytClose();
+    if (a === "lock") return ytLock();
     if (!P?.getPlayerState) return;
     if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), document.documentElement.classList.add("yt-front"), P.playVideo());
     if (a === "prev") ytNext(-1);
@@ -1857,7 +1861,38 @@ function refreshYtList() {
     });
   });
 }
+// Пока играет YouTube, экран не гаснет: при блокировке iPhone останавливает видео, а не давать ему гаснуть — можно
+function ytWake(on) {
+  if (!("wakeLock" in navigator)) return;
+  if (on && !YT.wake && !document.hidden) { YT.wake = navigator.wakeLock.request("screen").then(w => { w.addEventListener("release", () => { YT.wake = null; }); return w; }).catch(() => (YT.wake = null)); }
+  if (!on && YT.wake) { const w = YT.wake; YT.wake = null; w.then(x => x?.release()).catch(() => {}); }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && (YT.playing || YT.lockEl)) ytWake(true); });
+// «Замок» сайта: чёрный экран поверх всего, музыка играет, нажатия не проходят; снять — удерживать кнопку
+function ytLock() {
+  if (YT.lockEl) return;
+  const x = YT.list?.[YT.i], d = YT.player?.getVideoData?.() || {};
+  const el = YT.lockEl = document.createElement("div"); el.className = "yt-lockscr"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Экран заблокирован");
+  el.innerHTML = `<div class="yl-mid">${I.lock}<b>${esc(d.title || x?.title || "YouTube")}</b><span>Музыка играет, экран не гаснет</span></div>
+    <button class="yl-hold" type="button"><i aria-hidden="true"></i><span>Удерживай, чтобы разблокировать</span></button>`;
+  const stop = ev => { if (!ev.target.closest(".yl-hold")) ev.preventDefault(); };
+  ["touchstart", "touchmove", "contextmenu", "wheel"].forEach(t => el.addEventListener(t, stop, { passive: false }));
+  const hold = el.querySelector(".yl-hold"); let t;
+  const end = () => { clearTimeout(t); hold.classList.remove("on"); };
+  hold.addEventListener("pointerdown", ev => { ev.preventDefault(); hold.classList.add("on"); t = setTimeout(ytUnlock, 900); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(k => hold.addEventListener(k, end));
+  hold.addEventListener("contextmenu", ev => ev.preventDefault());
+  document.body.append(el); document.documentElement.classList.add("yt-locked");
+  requestAnimationFrame(() => el.classList.add("on"));
+  ytWake(true);
+}
+function ytUnlock() {
+  const el = YT.lockEl; if (!el) return; YT.lockEl = null;
+  el.classList.remove("on"); setTimeout(() => el.remove(), 260); document.documentElement.classList.remove("yt-locked");
+  ytWake(YT.playing);
+}
 function ytClose() {
+  ytUnlock(); ytWake(false);
   try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
   YT.player = null; YT.playing = false; YT.i = -1; YT.plk = -1; YT.loaded = null; clearInterval(YT.tick);
   const el = YT.dock; YT.dock = null; el?.classList.remove("on"); setTimeout(() => el?.remove(), 260);

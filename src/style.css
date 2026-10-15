@@ -1544,3 +1544,20 @@ html.has-yt.yt-front.has-player body{padding-bottom:calc(220px + env(safe-area-i
 .yt-vol input::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p),var(--chip) var(--p))}
 .yt-vol input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-4.5px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .yt-vol input::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--ink);border:0}
+
+/* «Замок» YouTube: кнопка в плеере только на сенсорных экранах; чёрный экран поверх всего, снять — удержанием */
+.yt-lock{display:none!important}
+@media (hover:none){.yt-dock:not(.mini) .yt-lock{display:grid!important}}
+.yt-lockscr{position:fixed;inset:0;z-index:1000;background:#000;color:#8A949C;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px calc(28px + env(safe-area-inset-bottom,0px));
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;opacity:0;transition:opacity var(--t2) ease}
+.yt-lockscr.on{opacity:1}
+html.yt-locked,html.yt-locked body{overflow:hidden}
+.yl-mid{flex:1;display:grid;place-content:center;justify-items:center;gap:10px;text-align:center;max-width:340px}
+.yl-mid svg{width:28px;height:28px;margin-bottom:6px}
+.yl-mid b{color:#C9D0D5;font-size:17px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.yl-mid span{font-size:14px}
+.yl-hold{position:relative;overflow:hidden;width:min(100%,320px);height:52px;border:1px solid #2A3238;border-radius:26px;background:#0E1215;color:#C9D0D5;font:inherit;font-size:15px;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;cursor:pointer}
+.yl-hold i{position:absolute;inset:0;background:#1F2A30;transform:scaleX(0);transform-origin:left;transition:transform .2s ease}
+.yl-hold.on i{transform:scaleX(1);transition:transform .9s linear}
+.yl-hold span{position:relative}
