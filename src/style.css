@@ -1331,8 +1331,23 @@ body:has(.auth){padding-bottom:0}
   @keyframes vtOut{to{opacity:0;transform:translateY(-4px)}}
 
   /* подсветка активного раздела переезжает к новому пункту */
-  .tabbar a.slide::before{animation:pillTab .38s var(--ease-out)}
-  @keyframes pillTab{from{opacity:1;transform:translateX(var(--from))}}
+  /* нижнее меню: подсветка переезжает «каплей» — вытягивается в пути и мягко пружинит на месте; значок слегка подпрыгивает */
+  .tabbar a.slide::before{animation:pillTab .5s cubic-bezier(.3,.9,.35,1)}
+  @keyframes pillTab{
+    0%{opacity:1;transform:translateX(var(--from)) scale(1,1)}
+    35%{transform:translateX(calc(var(--from) * .45)) scale(1.45,.86)}
+    70%{transform:translateX(calc(var(--from) * -.05)) scale(.94,1.06)}
+    100%{transform:none}}
+  .tabbar a.slide svg{animation:tabIcon .45s cubic-bezier(.3,1.4,.5,1)}
+  @keyframes tabIcon{0%{transform:scale(.8)}55%{transform:translateY(-2px) scale(1.12)}100%{transform:none}}
+  .tabbar a svg,.tabbar a span{transition:transform .18s var(--ease-out)}
+  .tabbar a:active svg{transform:scale(.86)}
+  .tabbar a:active span{transform:scale(.95)}
+  /* смена вкладки: старый экран уходит в сторону, новые блоки приходят с другой стороны */
+  html.tabdir::view-transition-old(root){animation:vtSide .2s ease both}
+  @keyframes vtSide{to{opacity:0;transform:translateX(calc(var(--dir) * -28px))}}
+  html.tabdir .stg{animation-name:stgSide;animation-duration:.42s;animation-delay:calc(var(--i,0) * 22ms)}
+  @keyframes stgSide{from{opacity:0;transform:translateX(calc(var(--dir) * 32px))}to{opacity:1;transform:none}}
   .nav a.slide::before{animation:pillNav .38s var(--ease-out)}
   @keyframes pillNav{from{transform:translateX(var(--from)) scaleX(var(--sx,1))}}
 

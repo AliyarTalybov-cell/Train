@@ -427,12 +427,19 @@ function rerender() { // перерисовать экран без анимац
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
 }
+const tabIdx = () => { const r = route(); return ROUTES.indexOf(r.parent || r); };
+let lastTab = tabIdx();
 window.addEventListener("hashchange", () => {
   S.moving = null; S.friends = {}; S.wkSel = null;
+  // переход между вкладками: экран уезжает в сторону, куда нажали (вправо по меню — содержимое приходит справа)
+  const ti = tabIdx(), dir = Math.sign(ti - lastTab), root = document.documentElement; lastTab = ti;
+  clearTimeout(root._dirT);
+  if (dir && !calm()) { root.style.setProperty("--dir", dir); root.classList.add("tabdir"); root._dirT = setTimeout(() => root.classList.remove("tabdir"), 700); }
+  else root.classList.remove("tabdir");
   const go = () => { render(); scrollTo({ top: 0 }); };
   // старый экран быстро гаснет, новый поднимается волной; шапка и нижнее меню — отдельными слоями, не мигают
   if (!document.startViewTransition || calm() || document.hidden || !S.user) return go();
-  const root = document.documentElement; root.classList.add("vt");
+  root.classList.add("vt");
   document.startViewTransition(go).finished.finally(() => root.classList.remove("vt"));
 });
 
