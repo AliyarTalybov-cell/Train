@@ -1,6 +1,5 @@
 // ИИ-тренер дневника (проект RassP). Модель — через OpenRouter, ключ в секрете OPENROUTER_API_KEY.
-// Данные читает от имени того, кто спрашивает: токен пользователя + RLS,
-// поэтому каждый получает советы только по своим тренировкам.
+// Данные читает от имени того, кто спрашивает (токен пользователя), и только его строки — фильтр по user_id.
 const GYM = "https://qgdtzpsgzlwdhlqdqwex.supabase.co";
 const GYM_KEY = "sb_publishable_rKUjSv2W8BS1_ZDXGXwU1A_jgCrjPWM";
 const MODELS = ["deepseek/deepseek-v4-flash", "mistralai/mistral-small-2603", "nvidia/nemotron-3-super-120b-a12b:free", "qwen/qwen3.8-27b:free"];
@@ -27,14 +26,19 @@ Deno.serve(async (req) => {
   const h = { apikey: GYM_KEY, Authorization: `Bearer ${token}` };
   const me = await fetch(`${GYM}/auth/v1/user`, { headers: h });
   if (!me.ok) return json({ error: "auth" }, 401);
+  const uid = (await me.json())?.id;
+  if (!uid) return json({ error: "auth" }, 401);
 
   let body: { question?: string; today?: string; plan?: unknown; program?: unknown; calendar?: unknown; known?: string[]; history?: { role: string; content: string }[] };
   try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const question = String(body.question || "").slice(0, 600);
 
   const get = (path: string) => fetch(`${GYM}/rest/v1/${path}`, { headers: h }).then(r => r.ok ? r.json() : []);
-  const [prof] = await get("gym_profile?select=weight_kg,height_cm") as any[];
-  const ex = await get(`gym_exercises?select=name,sets,done,plan,gym_workouts!inner(day,title)&gym_workouts.day=gte.${daysAgo(42)}`);
+  // все вошедшие видят дневники друг друга (RLS select для всех) — поэтому своё фильтруем по user_id явно;
+  // в историю — только прошедшие дни и сегодня, будущее тренер видит в календаре
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today)) ? String(body.today) : daysAgo(0);
+  const [prof] = await get(`gym_profile?select=weight_kg,height_cm&user_id=eq.${uid}`) as any[];
+  const ex = await get(`gym_exercises?select=name,sets,done,plan,gym_workouts!inner(day,title)&user_id=eq.${uid}&gym_workouts.day=gte.${daysAgo(42)}&gym_workouts.day=lte.${today}`);
 
   // Короткая выжимка вместо сырых таблиц: по дням — тренировка, упражнения с подходами.
   const byDay: Record<string, { title: string; items: string[] }> = {};
