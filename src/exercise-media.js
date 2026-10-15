@@ -152,6 +152,17 @@ const M = {
   "Косые скручивания": ["Oblique_Crunches_-_On_The_Floor", "Пресс"],
   "Паллоф-жим": ["Pallof_Press", "Пресс"],
   "Дровосек на верхнем блоке": ["Standing_Cable_Wood_Chop", "Пресс"],
+  // короткие названия, как их обычно пишут сами
+  "Жим лёжа": ["Barbell_Bench_Press_-_Medium_Grip", "Грудь"],
+  "Отжимания": ["Pushups", "Грудь"],
+  "Брусья": ["Dips_-_Triceps_Version", "Трицепс"],
+  "Жим стоя": ["Standing_Military_Press", "Плечи"],
+  "Армейский жим": ["Standing_Military_Press", "Плечи"],
+  "Тяга верхнего блока": ["Wide-Grip_Lat_Pulldown", "Спина"],
+  "Шраги": ["Barbell_Shrug", "Плечи"],
+  "Разгибание ног": ["Leg_Extensions", "Ноги"],
+  "Тяга штанги": ["Bent_Over_Barbell_Row", "Спина"],
+  "Бицепс со штангой": ["Barbell_Curl", "Бицепс"],
 };
 const key = s => String(s || "").trim().toLowerCase().replace(/ё/g, "е");
 const BY = new Map(Object.entries(M).map(([k, v]) => [key(k), v]));

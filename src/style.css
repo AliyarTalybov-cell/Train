@@ -247,7 +247,9 @@ h2{font-family:var(--display);font-weight:500;font-size:clamp(19px,5vw,22px);lin
 .set-del{width:36px;height:36px;display:grid;place-items:center;border:0;background:none;color:var(--muted);border-radius:50%;padding:0}
 .set-del svg{width:16px;height:16px}
 @media (hover:hover){.set-del:hover{background:var(--bad-soft);color:var(--bad)}}
-.ex-foot{display:flex;justify-content:space-between;align-items:center}
+.ex-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 16px}
+.ex-foot .linkbtn{white-space:nowrap}
+.ex-foot .ex-chart{font-size:14px}
 .add-ex{display:flex;gap:8px}
 .add-ex .inp{flex:1}
 .add-ex .btn{width:46px;padding:0;flex:none}
