@@ -403,6 +403,7 @@ function countUp(main) {
     el.textContent = "0"; requestAnimationFrame(step);
   });
 }
+const seenViews = new Set();
 function render() {
   if (!S.user) return loginView();
   sidePosters();
@@ -416,7 +417,8 @@ function render() {
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
   if (!introDone && S.loaded && !calm()) { introDone = true; app.querySelector(".brand").classList.add("intro"); } // логотип проявляется один раз за открытие сайта
   if (scrambleNext) { scrambleNext = false; setTimeout(() => scramble(app.querySelector(".brand .brand-t")), 30); }
-  if (S.loaded) { const main = document.getElementById("main"); slidePills(oldPills); staggerIn(main); countUp(main); }
+  // волна блоков и набегающие числа — только при первом открытии раздела; дальше экран показывается сразу, без вида «перезагрузки»
+  if (S.loaded) { const main = document.getElementById("main"); slidePills(oldPills); if (!seenViews.has(r.path)) { seenViews.add(r.path); staggerIn(main); countUp(main); } }
 }
 function rerender() { // перерисовать экран без анимации входа и без прыжка прокрутки
   queueMicrotask(paintBadge);
