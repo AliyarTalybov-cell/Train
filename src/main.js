@@ -1604,6 +1604,21 @@ const artOf = t => M.tcov[t?.file] ? { id: "t:" + t.file, name: folderOf(t)?.nam
 const tileHue = name => [...String(name || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 17);
 const coverHTML = (f, cls = "") => coverOf(f) ? `<img class="cov ${cls}" style="--h:${tileHue(f?.name)}" src="${coverOf(f)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')">`
   : `<span class="cover-tile ${cls}" style="--h:${tileHue(f?.name)}" aria-hidden="true">${esc(initial(f?.name || "♪"))}</span>`;
+// Мозаика 2×2 из обложек разных альбомов (у треков одного альбома картинка одна и та же — берём по одной);
+// сначала разные группы, потом разные альбомы. Меньше четырёх разных — одна обложка, нет ни одной — fallback.
+function mosaicHTML(tracks, fallback) {
+  const seen = new Set(), arts = new Set(), pick = [];
+  for (const pass of [0, 1]) for (const t of tracks) {
+    if (pick.length >= 4 || !M.tcov[t.file]) continue;
+    const alb = norm(t.artist) + "|" + norm(t.album || t.file), who = norm(t.artist);
+    if (arts.has(alb) || (pass === 0 && seen.has(who))) continue;
+    arts.add(alb); seen.add(who); pick.push(t);
+  }
+  if (!pick.length) return fallback;
+  if (pick.length < 4) return coverHTML(artOf(pick[0]));
+  return `<span class="mosaic">${pick.map(t => coverHTML(artOf(t))).join("")}</span>`;
+}
+const folderArt = f => coverOf(f) ? coverHTML(f) : mosaicHTML(M.tracks.filter(t => t.folder_id === f.id), coverHTML(f));
 // внутри папки — по альбомам и номерам треков, во «Все треки» — по порядку добавления
 const visibleTracks = () => {
   if (M.q) { // поиск — по всем трекам: название, группа, альбом
@@ -1631,10 +1646,10 @@ function musicView() {
   return `
     <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
     <div class="folders" role="list">
-      ${card(null, "Все треки", M.tracks.length, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`)}
+      ${card(null, "Все треки", M.tracks.length, mosaicHTML(M.tracks, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`))}
       ${card("fav", "Избранное", M.favs.size, `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`)}
       <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true"><i class="yt-logo">${I.play}</i></span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
-      ${M.folders.map(x => card(x.id, x.name, count(x.id), coverHTML(x))).join("")}
+      ${M.folders.map(x => card(x.id, x.name, count(x.id), folderArt(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
     </div>
     ${M.folder === "yt" ? "" : searchBox()}
@@ -1944,7 +1959,7 @@ function musicList() {
   const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
   return `
     <section class="mu-head">
-      <div class="mu-title">${f ? `<span class="mu-cover">${coverHTML(f)}</span>` : ""}<div><h2>${M.q ? "Поиск" : esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
+      <div class="mu-title">${f ? `<span class="mu-cover">${folderArt(f)}</span>` : ""}<div><h2>${M.q ? "Поиск" : esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
       <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>

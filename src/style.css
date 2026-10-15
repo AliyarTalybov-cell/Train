@@ -623,6 +623,9 @@ html.mu-drop .mu-up{border-color:var(--accent);background:var(--accent-soft)}
 .fold-card{flex:none;width:136px;display:grid;gap:2px;padding:0;border:0;background:none;text-align:left;scroll-snap-align:start}
 .fold-cover{display:grid;width:136px;height:136px;margin-bottom:8px;border-radius:16px;overflow:hidden;background:var(--chip);box-shadow:0 1px 2px rgba(0,0,0,.08);transition:transform var(--t2) var(--ease-out),box-shadow var(--t2) ease}
 .fold-cover img,.fold-cover .cover-tile{width:100%;height:100%;object-fit:cover}
+/* мозаика из четырёх обложек — для «Все треки» и папок без своей картинки */
+.mosaic{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:100%;background:var(--chip)}
+.mosaic img{width:100%;height:100%;min-width:0;min-height:0;object-fit:cover}
 .fold-card b{font-weight:600;font-size:14.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fold-card>span:last-child{font-size:12.5px;color:var(--muted)}
 .fold-card.on .fold-cover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
