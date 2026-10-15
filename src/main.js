@@ -1756,8 +1756,6 @@ async function ytPlay(i, k = 0) {
       onReady: e => { e.target.setVolume(ytVol()); if (x.kind === "playlist") load(); else e.target.playVideo(); },
       onStateChange: e => {
         YT.playing = e.data === 1; ytPaintDock(); refreshYtList();
-        if (e.data === 1) { YT.userPause = false; ytMediaMeta(); }
-        if (e.data === 2 && !YT.userPause) ytResumeIfLocked();
         if (e.data === 0 && YT.list[YT.i]?.kind === "video") ytNext(1); // видео закончилось — следующее
       },
       onError: () => { toast("Это видео нельзя включить на других сайтах — пропускаю"); ytNext(1); },
@@ -1797,7 +1795,7 @@ function ytDock() {
     if (a === "min") { const mini = el.classList.toggle("mini"); if (!mini) document.documentElement.classList.add("yt-front"); el.classList.remove("big"); const b = el.querySelector(".yt-min"); b.setAttribute("aria-label", mini ? "Развернуть плеер" : "Свернуть плеер"); b.title = mini ? "Развернуть плеер" : "Свернуть плеер — музыка продолжит играть"; return; }
     if (a === "close") return ytClose();
     if (!P?.getPlayerState) return;
-    if (a === "toggle") YT.playing ? (YT.userPause = true, P.pauseVideo()) : (M.audio.pause(), document.documentElement.classList.add("yt-front"), P.playVideo());
+    if (a === "toggle") YT.playing ? P.pauseVideo() : (M.audio.pause(), document.documentElement.classList.add("yt-front"), P.playVideo());
     if (a === "prev") ytNext(-1);
     if (a === "next") ytNext(1);
     if (a === "mute") { P.isMuted() ? P.unMute() : P.mute(); ytPaintVol(); return; }
@@ -1859,22 +1857,6 @@ function refreshYtList() {
     });
   });
 }
-// Экран заблокировали или свернули браузер — телефон сам ставит YouTube на паузу. Включаем снова,
-// но только если пауза пришла в момент блокировки: паузу, нажатую человеком (на сайте или позже на экране блокировки), не трогаем.
-document.addEventListener("visibilitychange", () => { if (document.hidden) YT.hidAt = Date.now(); });
-function ytResumeIfLocked() {
-  [400, 1200, 2500].forEach(ms => setTimeout(() => {
-    if (YT.userPause || YT.playing || !YT.player?.playVideo || !document.hidden || Date.now() - (YT.hidAt || 0) > 4000) return;
-    YT.player.playVideo();
-  }, ms));
-}
-// экран блокировки: название видео и кнопки управляют YouTube, когда на виду он, а не наш mp3
-const ytActive = () => !!YT.player?.getPlayerState && document.documentElement.classList.contains("yt-front");
-function ytMediaMeta() {
-  if (!("mediaSession" in navigator) || !ytActive()) return;
-  const x = YT.list?.[YT.i], d = YT.player.getVideoData?.() || {};
-  try { navigator.mediaSession.metadata = new MediaMetadata({ title: d.title || x?.title || "YouTube", artist: d.author || x?.author || "", album: "YouTube", artwork: d.video_id ? [{ src: `https://i.ytimg.com/vi/${d.video_id}/hqdefault.jpg`, sizes: "480x360" }] : [] }); navigator.mediaSession.playbackState = "playing"; } catch {}
-}
 function ytClose() {
   try { YT.player?.stopVideo(); YT.player?.destroy(); } catch {}
   YT.player = null; YT.playing = false; YT.i = -1; YT.plk = -1; YT.loaded = null; clearInterval(YT.tick);
@@ -1883,7 +1865,7 @@ function ytClose() {
 }
 // включили наш mp3 — YouTube на паузу
 M.audio.addEventListener("play", () => { // включили наш mp3 — YouTube на паузу и в маленькую плашку, на виду наш плеер
-  if (YT.playing) { YT.userPause = true; YT.player?.pauseVideo(); }
+  if (YT.playing) YT.player?.pauseVideo();
   if (YT.dock) { YT.dock.classList.add("mini"); YT.dock.classList.remove("big"); document.documentElement.classList.remove("yt-front"); }
 });
 document.addEventListener("submit", ev => { if (ev.target.matches("[data-yt-form]")) { ev.preventDefault(); addYt(ev.target); } });
@@ -2562,14 +2544,13 @@ M.audio.addEventListener("error", () => { // ссылка истекла — п�
 });
 if ("mediaSession" in navigator) {
   const ms = navigator.mediaSession, set = (k, fn) => { try { ms.setActionHandler(k, fn); } catch {} };
-  const P = () => YT.player;
-  set("play", () => ytActive() ? P().playVideo() : M.audio.play().catch(() => {}));
-  set("pause", () => { if (ytActive()) { YT.userPause = true; P().pauseVideo(); } else M.audio.pause(); });
-  set("nexttrack", () => { if (ytActive()) return ytNext(1); const n = nextIndex(1); if (n >= 0) playAt(n); });
-  set("previoustrack", () => ytActive() ? ytNext(-1) : playAt(nextIndex(-1)));
-  set("seekto", d => { if (ytActive()) return P().seekTo(d.seekTime, true); M.audio.currentTime = d.seekTime; paintTime(); });
-  set("seekbackward", d => { if (ytActive()) return P().seekTo(Math.max(0, P().getCurrentTime() - (d.seekOffset || 10)), true); M.audio.currentTime = Math.max(0, M.audio.currentTime - (d.seekOffset || 10)); });
-  set("seekforward", d => { if (ytActive()) return P().seekTo(P().getCurrentTime() + (d.seekOffset || 10), true); M.audio.currentTime = Math.min(dur(), M.audio.currentTime + (d.seekOffset || 10)); });
+  set("play", () => M.audio.play().catch(() => {}));
+  set("pause", () => M.audio.pause());
+  set("nexttrack", () => { const n = nextIndex(1); if (n >= 0) playAt(n); });
+  set("previoustrack", () => playAt(nextIndex(-1)));
+  set("seekto", d => { M.audio.currentTime = d.seekTime; paintTime(); });
+  set("seekbackward", d => { M.audio.currentTime = Math.max(0, M.audio.currentTime - (d.seekOffset || 10)); });
+  set("seekforward", d => { M.audio.currentTime = Math.min(dur(), M.audio.currentTime + (d.seekOffset || 10)); });
 }
 // Клавиши на компьютере: пробел — пауза, ←/→ — 5 секунд, Shift+←/→ — трек; Esc — свернуть большой плеер.
 document.addEventListener("keydown", ev => {
