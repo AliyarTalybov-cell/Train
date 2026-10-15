@@ -2062,11 +2062,17 @@ function folderMenu() {
   const f = M.folders.find(x => x.id === M.folder); if (!f) return;
   sheet(f.name, `<div class="pick">
       <label class="pick-file"><input type="file" accept="image/jpeg,image/png,image/webp" hidden data-cover><b>Сменить обложку</b><span>картинка с компьютера</span></label>
+      ${f.cover ? `<button data-no-cover><b>Убрать обложку</b><span>вместо неё — мозаика из обложек треков</span></button>` : ""}
       <button data-del-folder><b>Удалить папку</b><span>треки останутся во «Все треки»</span></button></div>`, (el, close) => {
     el.querySelector("[data-cover]").onchange = async ev => {
       const file = ev.target.files[0]; if (!file) return;
       try { const cover = await uploadCover(file, f.name); await q(sb.from("gym_music_folders").update({ cover }).eq("id", f.id)); if (f.cover) sb.storage.from("gym-music").remove(["covers/" + f.cover]);
         M.loading = null; await loadTracks(); close(); rerender(); toast("Обложка обновлена"); } catch { toast("Не получилось загрузить картинку"); }
+    };
+    const nc = el.querySelector("[data-no-cover]");
+    if (nc) nc.onclick = async () => {
+      try { await q(sb.from("gym_music_folders").update({ cover: null }).eq("id", f.id)); sb.storage.from("gym-music").remove(["covers/" + f.cover]);
+        f.cover = null; close(); rerender(); toast("Обложка убрана"); } catch { toast("Не получилось — попробуй ещё раз"); }
     };
     el.querySelector("[data-del-folder]").onclick = async () => {
       close();
