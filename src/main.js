@@ -199,6 +199,9 @@ async function loadAll() {
   S.avatars = {}; await loadAvatars();
   obLoad(); applyOutbox(); snapLater();
   S.loaded = true; S.offline = false;
+  // слушал музыку до перезагрузки — плеер появляется на паузе на том же месте (на любой странице)
+  let last; try { last = JSON.parse(localStorage.getItem("gym-last-track")); } catch {}
+  if (last?.user === S.user.id) setTimeout(() => loadTracks().then(restorePos).catch(() => {}), 1200);
 }
 /* ---------- без сети: очередь записей и снимок данных на телефоне ---------- */
 // Отметки подходов, новые упражнения и тренировки сначала попадают в очередь (localStorage) и отправляются,
@@ -1015,7 +1018,14 @@ function examplePicker() {
 // Тренер только читает дневник и советует — календарь сам не меняет.
 const FN_COACH = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-coach";
 const coachKey = d => `gym-coach2-${S.user?.id}-${d}`;
-const coachCached = d => { try { return JSON.parse(localStorage.getItem(coachKey(d)) || "null"); } catch { return null; } };
+// совет дня годится, пока не поменялись тренировки или программа — иначе тренер смотрит заново
+function coachSig() {
+  const p = S.profile || {}, src = JSON.stringify([p.program_id, p.program_start, p.program_week, p.program_moves, p.weight_kg,
+    S.workouts.map(w => [w.id, w.day, w.title]), S.exercises.map(e => [e.workout_id, e.name, e.done, e.sets])]);
+  let h = 5381; for (let i = 0; i < src.length; i++) h = (h * 33 + src.charCodeAt(i)) | 0;
+  return String(h >>> 0);
+}
+const coachCached = d => { try { const c = JSON.parse(localStorage.getItem(coachKey(d)) || "null"); return c?.sig === coachSig() ? c : null; } catch { return null; } };
 function planForCoach(d) {
   const w = workoutOn(d), p = sessionOn(d);
   if (w) return { title: w.title, ex: exercisesOf(w.id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) };
@@ -1146,7 +1156,7 @@ function coachChat() {
   // первым — совет на этот день
   const first = bubble("assistant", cached ? adviceHTML(cached) : waitHTML("Смотрю твои тренировки…"));
   if (!cached) { setTimeout(() => bbPlay(ava, "reps"), 1700); askCoach("").then(c => {
-    try { localStorage.setItem(coachKey(day), JSON.stringify(c)); } catch {}
+    try { localStorage.setItem(coachKey(day), JSON.stringify({ ...c, sig: coachSig() })); } catch {}
     first.innerHTML = adviceHTML(c); bbPlay(ava, "flex");
   }).catch(e => { ava?.classList.remove("reps"); first.innerHTML = `<p class="muted">${failText(e)}</p>`; }); }
   for (const m of msgs) bubble(m.role, `<p>${esc(m.text)}</p>`);
@@ -1583,7 +1593,9 @@ function loadTracks() {
     M.tracks = tracks; M.folders = folders; M.favs = new Set(favs.map(f => f.track_id)); M.favOrder = favs.map(f => f.track_id);
     const tpaths = new Map(M.tracks.map(t => [tcovPath(t), t.file])); // своих обложек может и не быть — тогда ссылки просто не будет
     const paths = [...M.tracks.map(t => "tracks/" + t.file), ...folders.filter(f => f.cover).map(f => "covers/" + f.cover), ...tpaths.keys()];
-    const { data: urls } = await sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600);
+    const [{ data: urls }, { data: tl }] = await Promise.all([sb.storage.from("gym-music").createSignedUrls(paths, 6 * 3600),
+      sb.storage.from("gym-music").list("covers/t", { limit: 1000 }).catch(() => ({ data: [] }))]);
+    M.tsum = Object.fromEntries((tl || []).map(o => [o.name.replace(/\.jpg$/, ""), o.metadata?.eTag || o.metadata?.size])); // отпечаток картинки — одинаковые обложки совпадают
     M.tcov = {};
     for (const u of urls || []) if (u.signedUrl) {
       if (tpaths.has(u.path)) M.tcov[tpaths.get(u.path)] = u.signedUrl;
@@ -1610,7 +1622,7 @@ function mosaicHTML(tracks, fallback) {
   const seen = new Set(), arts = new Set(), pick = [];
   for (const pass of [0, 1]) for (const t of tracks) {
     if (pick.length >= 4 || !M.tcov[t.file]) continue;
-    const alb = norm(t.artist) + "|" + norm(t.album || t.file), who = norm(t.artist);
+    const alb = M.tsum?.[t.file.replace(/\.mp3$/i, "")] || norm(t.artist) + "|" + norm(t.album || t.file), who = norm(t.artist);
     if (arts.has(alb) || (pass === 0 && seen.has(who))) continue;
     arts.add(alb); seen.add(who); pick.push(t);
   }
@@ -1634,11 +1646,12 @@ const isOwner = () => S.user?.id === OWNER;
 
 function musicView() {
   if (!M.tracks) {
-    loadTracks().then(() => { if (route().path === "music") rerender(); })
+    loadTracks().then(() => { restorePos(); if (route().path === "music") rerender(); })
       .catch(() => { if (route().path === "music") document.getElementById("main").innerHTML = `<section class="hero"><h1>Музыка</h1><p class="muted">Не получилось загрузить треки — проверь интернет.</p><div><button class="btn quiet" onclick="location.reload()">Обновить</button></div></section>`; });
     return skeleton();
   }
   openShared(); setTimeout(backfillCovers, 2000);
+  if (isOwner() && M.usage == null && !M.usageLoading) { M.usageLoading = true; musicUsage().catch(() => {}); }
   const count = id => M.tracks.filter(t => t.folder_id === id).length;
   let ci = 0;
   const card = (id, name, n, cover) => `<button style="--i:${Math.min(ci++, 8)}" class="fold-card ${M.folder === id && !M.q ? "on" : ""}" data-act="mu-folder" data-id="${id || ""}">
@@ -1647,7 +1660,7 @@ function musicView() {
     <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
     <div class="folders" role="list">
       ${card(null, "Все треки", M.tracks.length, mosaicHTML(M.tracks, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`))}
-      ${card("fav", "Избранное", M.favs.size, `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`)}
+      ${card("fav", "Избранное", M.favs.size, mosaicHTML(M.tracks.filter(t => M.favs.has(t.id)), `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`))}
       <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true"><i class="yt-logo">${I.play}</i></span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
       ${M.folders.map(x => card(x.id, x.name, count(x.id), folderArt(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
@@ -1655,6 +1668,7 @@ function musicView() {
     ${M.folder === "yt" ? "" : searchBox()}
     <div id="mu-list">${musicList()}</div>`;
 }
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // ---------- YouTube в «Музыке»: общий список по ссылкам, играет официальный плеер YouTube в мини-плеере внизу ----------
 const YT = { list: null, loading: null, i: -1, player: null, ready: null, dock: null, playing: false, subOpen: (() => { try { return localStorage.getItem("gym-yt-sub") !== "0"; } catch { return true; } })() };
 function loadYt() {
@@ -1747,6 +1761,7 @@ function ytSection() {
       <input class="inp" name="url" inputmode="url" placeholder="Ссылка на видео или плейлист YouTube" autocomplete="off" aria-label="Ссылка YouTube">
       <button class="btn" type="submit">Добавить</button>
     </form>
+    ${isIOS ? `<p class="hint yt-ios">На iPhone YouTube встаёт на паузу при блокировке экрана. Нажми ${I.lock} в плеере — экран не погаснет, а случайные нажатия не сработают.</p>` : ""}
     <details class="yt-how"><summary>Как добавить?${I.chevDown}</summary><p class="hint">Поиска внутри сайта нет — <a href="https://www.youtube.com/results?search_query=${encodeURIComponent("музыка для зала")}" target="_blank" rel="noopener">найди на YouTube</a>, нажми «Поделиться» → «Копировать ссылку» и вставь сюда. Подходят и видео, и плейлисты. Если видео не играет — его автор запретил показ на других сайтах, оно пропустится само.</p></details>
     ${YT.list.length ? `<ol class="tracks yt-list">${YT.list.map((x, i) => { const pl = x.kind === "playlist", open = pl && YT.exp === x.yt_id, n = YTL[x.yt_id]?.items?.length;
       return `<li data-i="${i}" class="${i === YT.i ? "cur" : ""} ${i === YT.i && YT.playing ? "playing" : ""} ${pl ? "is-pl" : ""}">
@@ -1964,7 +1979,7 @@ function musicList() {
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>
     ${isOwner() && U.items.length ? uploadPanel() : ""}
-    ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама.</span></span></label>` : ""}
+    ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама. Тяжёлые треки сжимаются перед загрузкой.</span>${usageHTML()}</span></label>` : ""}
     ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
       <button class="track" data-act="mu-play" data-i="${i}">
         <span class="tr-art ${M.tcov[t.file] ? "img" : ""}">${M.tcov[t.file] ? coverHTML(artOf(t)) : ""}<span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span></span>
@@ -2108,6 +2123,34 @@ async function id3(file) {
   }
   return out;
 }
+// Пережать mp3 в браузере: раскодировать и закодировать заново в 192 кбит/с (теги не нужны — они уже в базе, обложка — отдельно)
+async function shrinkMp3(file, onProgress) {
+  const buf = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await file.arrayBuffer());
+  const { Mp3Encoder } = await import("@breezystack/lamejs");
+  const chs = Math.min(2, buf.numberOfChannels), enc = new Mp3Encoder(chs, buf.sampleRate, 192);
+  const L = buf.getChannelData(0), R = chs > 1 ? buf.getChannelData(1) : null, n = L.length, B = 1152, out = [];
+  const i16 = (src, a, b) => { const r = new Int16Array(b - a); for (let k = a; k < b; k++) { const v = Math.max(-1, Math.min(1, src[k])); r[k - a] = v < 0 ? v * 0x8000 : v * 0x7fff; } return r; };
+  for (let a = 0, step = 0; a < n; a += B, step++) {
+    const b = Math.min(n, a + B), mp3 = R ? enc.encodeBuffer(i16(L, a, b), i16(R, a, b)) : enc.encodeBuffer(i16(L, a, b));
+    if (mp3.length) out.push(mp3);
+    if (step % 300 === 0) { onProgress?.(a / n); await new Promise(r => setTimeout(r)); if (U.stop) throw new Error("abort"); }
+  }
+  const end = enc.flush(); if (end.length) out.push(end);
+  const res = new Blob(out, { type: "audio/mpeg" });
+  return res.size < file.size ? res : file;
+}
+// Сколько места занимает музыка (треки и обложки) — владельцу видно у кнопки загрузки
+async function musicUsage() {
+  const sum = async dir => { let total = 0; for (let off = 0; ; off += 1000) {
+    const { data } = await sb.storage.from("gym-music").list(dir, { limit: 1000, offset: off }); if (!data?.length) break;
+    total += data.reduce((a, o) => a + (o.metadata?.size || 0), 0); if (data.length < 1000) break; } return total; };
+  const [a, b, c] = await Promise.all([sum("tracks"), sum("covers"), sum("covers/t")]);
+  M.usage = a + b + c;
+  const el = document.querySelector("[data-usage]"); if (el) el.outerHTML = usageHTML();
+}
+const STORAGE_MB = 1024; // Supabase Free: 1 ГБ файлов на всю организацию
+const usageHTML = () => { if (M.usage == null) return `<span data-usage></span>`; const used = M.usage / 1048576, p = used / STORAGE_MB;
+  return `<span class="mu-usage ${p > .85 ? "warn" : ""}" data-usage><i style="--p:${Math.min(100, p * 100).toFixed(1)}%"></i>Музыка занимает ${Math.round(used)} МБ из ${STORAGE_MB} МБ общего места${p > .85 ? " — места почти нет" : ""}</span>`; };
 // Обложка трека — уменьшенный jpeg (до 400 px) из картинки в тегах mp3
 async function smallJpeg(blob, size = 400) {
   const img = await createImageBitmap(blob), k = Math.min(1, size / Math.max(img.width, img.height)), c = document.createElement("canvas");
@@ -2174,11 +2217,11 @@ async function putTrack(path, f, onPct) {
     x.send(f);
   });
 }
-const UP_ST = { wait: "ждёт", tags: "читаю теги", up: "", ok: "готово", dup: "уже есть", fail: "не получилось", skip: "остановлено" };
+const UP_ST = { wait: "ждёт", tags: "читаю теги", shrink: "", up: "", ok: "готово", dup: "уже есть", fail: "не получилось", skip: "остановлено" };
 function uploadPanel() {
-  const it = U.items, n = it.length, done = it.filter(x => !["wait", "tags", "up"].includes(x.st)).length;
+  const it = U.items, n = it.length, done = it.filter(x => !["wait", "tags", "shrink", "up"].includes(x.st)).length;
   const total = it.reduce((a, x) => a + x.f.size, 0), sent = it.reduce((a, x) => a + (["ok", "dup"].includes(x.st) ? x.f.size : x.st === "up" ? x.f.size * x.pct : 0), 0);
-  const pct = total ? sent / total : 0, cur = it.find(x => x.st === "up" || x.st === "tags");
+  const pct = total ? sent / total : 0, cur = it.find(x => x.st === "up" || x.st === "tags" || x.st === "shrink");
   const c = st => it.filter(x => x.st === st).length;
   let left = "";
   if (U.run && U.t0 && sent > 1e5) { const sec = (Date.now() - U.t0) / 1000 * (total - sent) / sent; left = sec < 60 ? " · меньше минуты" : ` · ещё ≈ ${Math.round(sec / 60)} мин`; }
@@ -2192,7 +2235,7 @@ function uploadPanel() {
     ${cur ? `<p class="upl-cur">${esc(cur.f.name)}</p>` : ""}
     <ol class="upl-list">${it.map(x => `<li class="${x.st}"><span class="upl-ic" aria-hidden="true">${x.st === "ok" ? I.check : x.st === "fail" ? I.x : ""}</span>
       <span class="upl-n">${esc(x.title ? `${x.artist ? x.artist + " — " : ""}${x.title}` : x.f.name)}</span>
-      <span class="upl-s mono">${x.st === "up" ? Math.round(x.pct * 100) + "%" : `${UP_ST[x.st]}${x.st === "wait" ? ` · ${mb(x.f.size)} МБ` : ""}`}</span></li>`).join("")}</ol>
+      <span class="upl-s mono">${x.st === "shrink" ? `сжимаю ${Math.round(x.pct * 100)}%` : x.st === "up" ? Math.round(x.pct * 100) + "%" : `${UP_ST[x.st]}${x.st === "wait" ? ` · ${mb(x.f.size)} МБ` : ""}`}</span></li>`).join("")}</ol>
   </section>`;
 }
 let upPaint = 0;
@@ -2237,15 +2280,18 @@ async function runUpload() {
       let file = slugify(`${artist} ${title}`) + ".mp3"; if (have.has(file)) file = slugify(`${artist} ${title}`) + "-" + Date.now().toString(36) + ".mp3";
       const sec = await durationOf(f);
       if (U.stop) throw new Error("abort");
+      let body = f; // тяжёлый трек (больше ~260 кбит/с) пережимаем в 192 кбит/с — место в хранилище общее и небольшое
+      if (sec && f.size * 8 / sec > 260e3) { x.st = "shrink"; x.pct = 0; paintUpload(true); body = await shrinkMp3(f, p => { x.pct = p; paintUpload(); }).catch(e => { console.warn("сжатие", e); return f; }); }
+      if (U.stop) throw new Error("abort");
       x.st = "up"; x.pct = 0; paintUpload(true);
-      await putTrack("tracks/" + file, f, p => { x.pct = p; paintUpload(); });
+      await putTrack("tracks/" + file, body, p => { x.pct = p; paintUpload(); });
       if (tag.cover) await putTrackCover({ file }, tag.cover).catch(() => {});
       await q(sb.from("gym_tracks").insert({ file, artist, title, album, track_no, sec, folder_id: folder?.id || null }), { silent: true });
       have.add(file); same.add(norm(artist) + "|" + norm(title)); x.st = "ok";
     } catch (e) { x.st = U.stop ? "skip" : "fail"; if (!U.stop) console.error(e); }
   }
   U.items.forEach(y => { if (y.st === "wait") y.st = "skip"; });
-  U.run = false; M.loading = null; await loadTracks().catch(() => {});
+  U.run = false; M.loading = null; M.usage = null; M.usageLoading = false; await loadTracks().catch(() => {});
   if (route().path === "music") rerender();
   const ok = U.items.filter(y => y.st === "ok").length, bad = U.items.filter(y => y.st === "fail").length;
   toast(U.stop ? `Загрузка остановлена, загружено: ${ok}` : bad ? `Загружено: ${ok}, не получилось: ${bad}` : `Загружено треков: ${ok}`);

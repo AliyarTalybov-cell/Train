@@ -166,6 +166,22 @@ const M = {
 };
 const key = s => String(s || "").trim().toLowerCase().replace(/ё/g, "е");
 const BY = new Map(Object.entries(M).map(([k, v]) => [key(k), v]));
-export const media = name => { const m = BY.get(key(name)); return m ? { img: `/ex/${m[0]}/0.jpg`, img2: `/ex/${m[0]}/1.jpg`, group: m[1] } : null; };
+// Не нашлось точного названия — ищем по словам: «жим лежа на скамье» → «Жим лёжа», «присед» → «Приседания».
+// Слова сравниваются по началу (4 буквы), короткие предлоги не считаются; нужно совпасть хотя бы на половину слов.
+const stems = s => key(s).split(/[^a-zа-я0-9]+/).filter(w => w.length > 2).map(w => w.slice(0, 4));
+const KEYS = [...BY.keys()].map(k => [k, stems(k)]);
+const FUZZY = new Map();
+function guess(name) {
+  const k = key(name); if (FUZZY.has(k)) return FUZZY.get(k);
+  const q = [...new Set(stems(name))]; let best = null, score = 0, tie = false;
+  if (q.length) for (const [kk, st] of KEYS) {
+    const hit = q.filter(w => st.includes(w)).length; if (!hit || hit / q.length < .5) continue;
+    const sc = hit - st.length * .01 - (st[0] === q[0] ? 0 : .5), m = BY.get(kk); // точнее — меньше лишних слов; первое слово (движение) важнее
+    if (sc > score + 1e-9) { score = sc; best = m; tie = false; } else if (Math.abs(sc - score) < 1e-9 && m[0] !== best[0]) tie = true;
+  }
+  if (tie) best = null; // «жим», «тяга», «пресс» — непонятно, какое движение: лучше без фото, чем с чужим
+  FUZZY.set(k, best); return best;
+}
+export const media = name => { const m = BY.get(key(name)) || guess(name); return m ? { img: `/ex/${m[0]}/0.jpg`, img2: `/ex/${m[0]}/1.jpg`, group: m[1] } : null; };
 export const IDS = [...new Set(Object.values(M).map(v => v[0]))];
 export const NAMES = Object.keys(M);
