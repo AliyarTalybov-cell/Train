@@ -438,7 +438,8 @@ window.addEventListener("hashchange", () => {
   else root.classList.remove("tabdir");
   const go = () => { render(); scrollTo({ top: 0 }); };
   // старый экран быстро гаснет, новый поднимается волной; шапка и нижнее меню — отдельными слоями, не мигают
-  if (!document.startViewTransition || calm() || document.hidden || !S.user) return go();
+  // между вкладками — без View Transition: снимок старого экрана задерживал отклик на нажатие; хватает сдвига блоков
+  if (dir || !document.startViewTransition || calm() || document.hidden || !S.user) return go();
   root.classList.add("vt");
   document.startViewTransition(go).finished.finally(() => root.classList.remove("vt"));
 });

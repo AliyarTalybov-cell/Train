@@ -150,8 +150,7 @@ h2{font-family:var(--display);font-weight:500;font-size:clamp(19px,5vw,22px);lin
 .tabbar a svg{display:none} /* на телефоне — только названия, без значков */
 .tabbar a span{position:relative}
 .tabbar a::before{content:"";position:absolute;z-index:-1;top:50%;left:4px;right:4px;height:38px;margin-top:-19px;border-radius:19px;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 16%,var(--surface)),color-mix(in srgb,var(--accent) 24%,var(--surface)));
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 22%,transparent);opacity:0;transform:scale(.8);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
+  background:color-mix(in srgb,var(--accent) 11%,var(--surface));opacity:0;transform:scale(.8);transition:opacity var(--t2) ease,transform var(--t2) var(--ease-out)}
 .tabbar a[aria-current="page"]{color:var(--accent);font-weight:600}
 .tabbar a[aria-current="page"]::before{opacity:1;transform:none}
 @media (min-width:760px){.tabbar{display:none}}
@@ -1337,7 +1336,7 @@ body:has(.auth){padding-bottom:0}
 
   /* подсветка активного раздела переезжает к новому пункту */
   /* нижнее меню: подсветка переезжает «каплей» — вытягивается в пути и мягко пружинит на месте; значок слегка подпрыгивает */
-  .tabbar a.slide::before{animation:pillTab .5s cubic-bezier(.3,.9,.35,1)}
+  .tabbar a.slide::before{animation:pillTab .4s cubic-bezier(.3,.9,.35,1)}
   @keyframes pillTab{
     0%{opacity:1;transform:translateX(var(--from)) scale(1,1)}
     35%{transform:translateX(calc(var(--from) * .45)) scale(1.22,.9)}
@@ -1348,8 +1347,6 @@ body:has(.auth){padding-bottom:0}
   .tabbar a span{transition:transform .18s var(--ease-out)}
   .tabbar a:active span{transform:scale(.92)}
   /* смена вкладки: старый экран уходит в сторону, новые блоки приходят с другой стороны */
-  html.tabdir::view-transition-old(root){animation:vtSide .2s ease both}
-  @keyframes vtSide{to{opacity:0;transform:translateX(calc(var(--dir) * -28px))}}
   html.tabdir .stg{animation-name:stgSide;animation-duration:.42s;animation-delay:calc(var(--i,0) * 22ms)}
   @keyframes stgSide{from{opacity:0;transform:translateX(calc(var(--dir) * 32px))}to{opacity:1;transform:none}}
   .nav a.slide::before{animation:pillNav .38s var(--ease-out)}
