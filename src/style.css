@@ -1597,3 +1597,4 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .mu-usage.warn{color:var(--bad)}
 .mu-usage.warn i{background:linear-gradient(to right,var(--bad) var(--p),var(--chip) var(--p))}
 .yt-ios svg{width:14px;height:14px;vertical-align:-2px}
+.mu-share{flex:none;margin-left:auto}

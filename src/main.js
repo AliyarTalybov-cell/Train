@@ -1974,7 +1974,7 @@ function musicList() {
   const total = list.reduce((a, x) => a + (x.t.sec || 0), 0);
   return `
     <section class="mu-head">
-      <div class="mu-title">${f ? `<span class="mu-cover">${folderArt(f)}</span>` : ""}<div><h2>${M.q ? "Поиск" : esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div></div>
+      <div class="mu-title">${f ? `<span class="mu-cover">${folderArt(f)}</span>` : ""}<div><h2>${M.q ? "Поиск" : esc(f?.name || (fav ? "Избранное" : "Все треки"))}</h2><p class="muted">${list.length} ${plural(list.length, "трек", "трека", "треков")} · ${Math.round(total / 60)} мин</p></div>${f && !M.q ? `<button class="icon-btn mu-share" data-act="mu-folder-share" aria-label="Поделиться папкой" title="Ссылка на папку — отправь другу">${I.share}</button>` : ""}</div>
       <div class="row"><button class="btn" data-act="mu-all" ${list.length ? "" : "disabled"}>${I.play}Слушать</button><button class="btn quiet" data-act="mu-shuffle" aria-pressed="${M.shuffle}">${I.shuffle}Вперемешку</button>
         ${f && isOwner() ? `<button class="icon-btn" data-act="mu-folder-menu" aria-label="Настройки папки">${I.dots}</button>` : ""}</div>
     </section>
@@ -2774,18 +2774,27 @@ function restorePos() {
 
 // Поделиться треком: ссылка открывает у друга «Музыку» на этом треке, играет он по нажатию.
 async function shareTrack(t) {
-  if (!t) return;
-  const url = `${location.origin}/#/music?t=${t.id}`;
+  if (t) shareLink(`${location.origin}/#/music?t=${t.id}`, `${t.title} — ${t.artist}`, "трек");
+}
+// на телефоне — системное меню «Поделиться», на компьютере — ссылка в буфер обмена
+async function shareLink(url, title, what) {
   if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-    try { await navigator.share({ title: `${t.title} — ${t.artist}`, url }); } catch {} // закрыл меню — ничего не делаем
+    try { await navigator.share({ title, url }); } catch {} // закрыл меню — ничего не делаем
     return;
   }
-  try { await navigator.clipboard.writeText(url); toast("Ссылка на трек скопирована — отправь её другу"); }
-  catch { sheet("Ссылка на трек", `<p class="muted">${esc(t.title)} — ${esc(t.artist)}</p><input class="inp" readonly value="${esc(url)}" onfocus="this.select()">`); }
+  try { await navigator.clipboard.writeText(url); toast(`Ссылка на ${what} скопирована — отправь её другу`); }
+  catch { sheet(`Ссылка на ${what}`, `<p class="muted">${esc(title)}</p><input class="inp" readonly value="${esc(url)}" onfocus="this.select()">`); }
 }
 const sharedId = () => new URLSearchParams(location.hash.split("?")[1] || "").get("t");
+const sharedFolder = () => new URLSearchParams(location.hash.split("?")[1] || "").get("f");
 // Открыли ссылку на трек: папка трека, трек заряжен в плеер на паузе и открыт большой плеер — остаётся нажать «Играть».
 function openShared() {
+  const fid = sharedFolder();
+  if (fid && M.tracks) { // ссылка на папку: открыть её, как будто нажали на карточку
+    history.replaceState(null, "", "#/music");
+    if (!M.folders.some(f => f.id === fid)) return queueMicrotask(() => toast("Этой папки уже нет — возможно, её удалили"));
+    M.q = ""; M.folder = fid; return;
+  }
   const id = sharedId(); if (!id || !M.tracks) return;
   history.replaceState(null, "", "#/music"); // ссылка срабатывает один раз; дальше — обычная «Музыка»
   const i = M.tracks.findIndex(t => t.id === id), t = M.tracks[i];
@@ -3131,6 +3140,7 @@ async function run(b, act) {
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
     case "mu-folder-menu": folderMenu(); break;
+    case "mu-folder-share": { const f = M.folders.find(x => x.id === M.folder); if (f) shareLink(`${location.origin}/#/music?f=${f.id}`, `Плейлист «${f.name}»`, "папку"); break; }
     case "ph-open": { const uid = b.dataset.u; lightbox(PF.photos[uid].map(x => ({ ...x, src: PF.urls[x.path] })), +b.dataset.k, uid === S.user.id); break; }
     case "ph-ava": lightbox([{ src: S.avatars[b.dataset.u] }]); break;
     case "pf-pick": pickProfileTracks(); break;
