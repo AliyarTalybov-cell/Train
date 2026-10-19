@@ -31,6 +31,7 @@ const M = {
   "Тяга нижнего блока сидя": ["Seated_Cable_Rows", "Спина"],
   "Тяга Т-грифа": ["T-Bar_Row_with_Handle", "Спина"],
   "Пуловер на верхнем блоке": ["Straight-Arm_Pulldown", "Спина"],
+  "Пуловер с гантелью": ["Bent-Arm_Dumbbell_Pullover", "Грудь"],
   "Становая тяга": ["Barbell_Deadlift", "Спина"],
   "Тяга с плинтов": ["Rack_Pulls", "Спина"],
   "Тяга штанги в раме": ["Rack_Pulls", "Спина"],

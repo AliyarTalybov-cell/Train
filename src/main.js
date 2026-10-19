@@ -618,7 +618,7 @@ document.addEventListener("click", ev => {
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
 // video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания).
 const ATHLETES = [
-  { id: "arnold", video: "my6IroYcyEI", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%",
+  { id: "arnold", video: "my6IroYcyEI", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%", prog: "arnold",
     quotes: ["Последние три-четыре повтора — вот что заставляет мышцу расти. Эта зона боли отделяет чемпиона от того, кто им не станет.",
       "Разум — вот предел. Если разум видит, что ты можешь что-то сделать, — ты сможешь, если веришь в это на все сто."],
     from: "из фильма «Качая железо», 1977",
@@ -1275,7 +1275,7 @@ function coachChat() {
 }
 
 /* ---------- programs ---------- */
-const STAR_ORDER = ["coleman", "cutler", "phil-heath", "dorian-yates", "kai-greene", "lee-priest", "frank-zane", "the-rock", "morning"];
+const STAR_ORDER = ["arnold", "coleman", "cutler", "phil-heath", "dorian-yates", "kai-greene", "lee-priest", "frank-zane", "the-rock", "morning"];
 function programsView() {
   const p = S.profile, cur = programById(p.program_id);
   if (S.goProg) { const id = S.goProg; S.goProg = null; setTimeout(() => document.getElementById("prog-" + id)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60); } // пришли с постера
