@@ -1017,7 +1017,7 @@ function examplePicker() {
 /* ---------- coach ---------- */
 // Тренер только читает дневник и советует — календарь сам не меняет.
 const FN_COACH = "https://qgdtzpsgzlwdhlqdqwex.supabase.co/functions/v1/gym-coach";
-const coachKey = d => `gym-coach2-${S.user?.id}-${d}`;
+const coachKey = d => `gym-coach3-${S.user?.id}-${d}`;
 // совет дня годится, пока не поменялись тренировки или программа — иначе тренер смотрит заново
 function coachSig() {
   const p = S.profile || {}, src = JSON.stringify([p.program_id, p.program_start, p.program_week, p.program_moves, p.weight_kg,
@@ -1028,8 +1028,26 @@ function coachSig() {
 const coachCached = d => { try { const c = JSON.parse(localStorage.getItem(coachKey(d)) || "null"); return c?.sig === coachSig() ? c : null; } catch { return null; } };
 function planForCoach(d) {
   const w = workoutOn(d), p = sessionOn(d);
-  if (w) return { title: w.title, ex: exercisesOf(w.id).map(e => ({ name: e.name, plan: e.plan, sets: e.sets })) };
-  return p ? { title: p.title, ex: p.ex.map(e => ({ name: e.name, sets: e.sets, reps: e.reps })) } : null;
+  if (w) return { title: w.title, ex: exercisesOf(w.id).map(e => ({ name: e.name, group: media(e.name)?.group, plan: e.plan, sets: e.sets })) };
+  return p ? { title: p.title, ex: p.ex.map(e => ({ name: e.name, group: media(e.name)?.group, sets: e.sets, reps: e.reps })) } : null;
+}
+// Когда каждая группа мышц последний раз реально работала (только отмеченные подходы) и сколько подходов за 7 дней —
+// тренер по этой таблице решает, что сегодня отдыхает, а что пора качать.
+const MAIN_GROUPS = ["Грудь", "Спина", "Плечи", "Бицепс", "Трицепс", "Ноги", "Пресс"];
+function musclesForCoach(ref) {
+  const from = addDays(ref, -28), week = addDays(ref, -6), m = {};
+  for (const g of MAIN_GROUPS) m[g] = { g, last: null, sets7: 0 };
+  for (const w of S.workouts) {
+    if (w.day > ref || w.day < from) continue;
+    for (const e of exercisesOf(w.id)) {
+      const g = media(e.name)?.group; if (!g || g === "Котики") continue;
+      const n = (e.sets || []).filter(x => x.done).length || (e.done ? (e.sets || []).length || 1 : 0); if (!n) continue;
+      const r = m[g] ||= { g, last: null, sets7: 0 };
+      if (!r.last || w.day > r.last) r.last = w.day;
+      if (w.day >= week) r.sets7 += n;
+    }
+  }
+  return Object.values(m);
 }
 async function askCoach(question, history = []) {
   const { data } = await sb.auth.getSession();
@@ -1040,6 +1058,7 @@ async function askCoach(question, history = []) {
       question, history, today: question ? today() : S.day,
       plan: question ? (planForCoach(S.day) ? { day: S.day, ...planForCoach(S.day) } : null) : planForCoach(S.day),
       program: prog ? { title: prog.title, since: S.profile.program_start } : null,
+      muscles: musclesForCoach(question ? today() : S.day),
       ...(question ? { calendar: calendarForCoach(), known: KNOWN_NAMES } : {}),
     }),
   });
