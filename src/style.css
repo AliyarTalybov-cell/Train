@@ -1600,13 +1600,10 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .mu-share{flex:none;margin-left:auto}
 /* Видео легенды фоном за постером: обрезано «по cover», без кнопок, проявляется, когда пошло */
 .ath-ov{overflow:hidden}
-.ath-bg{position:absolute;inset:0;z-index:0;overflow:hidden;opacity:0;transition:opacity .9s ease}
-.ath-bg.on{opacity:1}
 .ath-bg iframe{position:absolute;top:50%;left:50%;width:max(100vw,177.78vh);height:max(100vh,56.25vw);border:0;pointer-events:none;transform:translate(-50%,-50%) scale(1.18);filter:grayscale(.75) contrast(1.12) brightness(.85)}
 .ath-bg::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(8,8,10,.25) 0%,rgba(0,0,0,.55) 60%,rgba(0,0,0,.85) 100%)}
 .ath-poster{z-index:1}
 .ap-snd{right:66px}
-@media (prefers-reduced-motion: reduce){.ath-bg{transition:none}}
 /* Легендарные видео в программе: лента карточек 16:9 */
 .vids{display:grid;gap:10px;min-width:0}
 .vids-row{display:flex;gap:12px;margin:0 -18px;padding:0 18px 2px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
@@ -1635,7 +1632,6 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .ath-ov .ath-poster{transition:transform .45s var(--ease-out),opacity .3s ease}
 .ath-ov.bare .ath-poster{transform:translateY(calc(50dvh + 50%)) rotate(-6deg);opacity:0;pointer-events:none}
 .ath-bg::after{transition:opacity var(--t3) ease}
-.ath-ov.bare .ath-bg::after{opacity:.35}
 .ath-ov.bare{cursor:pointer}
 .ath-ov .ap-x{background:rgba(16,16,18,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 @media (hover:hover){.ath-ov .ap-x:hover{background:rgba(40,40,44,.7)}}
@@ -1651,3 +1647,11 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 @media (hover:hover){.pp-snd:hover{background:rgba(40,40,44,.7)}}
 @media (min-width:760px){.prog-photo[data-video]{--h:300px}}
 @media (prefers-reduced-motion: reduce){.pp-vid{transition:none}}
+/* Слой видео легенды живёт отдельно от окна (его готовят заранее, при наведении): невидим, пока не показан */
+.ath-bg{position:fixed;inset:0;z-index:94;overflow:hidden;opacity:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,10,12,.72),rgba(0,0,0,.92));transition:opacity var(--t3) ease}
+.ath-bg.show{opacity:1}
+.ath-bg>div{position:absolute;inset:0;opacity:0;transition:opacity .35s ease}
+.ath-bg.on>div{opacity:1}
+.ath-bg.bare::after{opacity:.35}
+.ath-ov.has-vid{background:transparent}
+@media (prefers-reduced-motion: reduce){.ath-bg,.ath-bg>div{transition:none}}
