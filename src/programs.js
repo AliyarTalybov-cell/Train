@@ -433,7 +433,7 @@ PROGRAMS.push(
     defaultDays: [0, 1, 2, 3, 4, 5],
     place: "зал",
     about: "Шесть тренировок в неделю по знаменитому сплиту Арнольда: грудь со спиной, плечи с руками, ноги — и по кругу ещё раз. Грудь и спину он качал вместе, чередуя жим и тягу почти без отдыха. Объём огромный, это схема для опытных: новичку лучше начать с «Верх / низ».",
-    photo: { src: "/img/arnold.jpg", caption: "Арнольд Шварценеггер — 7 раз «Мистер Олимпия»", credit: "Фото: Madison Square Garden Center, общественное достояние", link: "https://commons.wikimedia.org/wiki/File:Arnold_Schwarzenegger_1974.jpg", pos: "50% 18%" },
+    photo: { src: "/img/arnold.jpg", caption: "Арнольд Шварценеггер — 7 раз «Мистер Олимпия»", pos: "50% 12%", video: "Afr18IePNTQ" }, // video — играет на фото, когда карточка на экране
     diet: {
       goal: "mass",
       how: [

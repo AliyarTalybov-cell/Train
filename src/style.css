@@ -1640,3 +1640,14 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .ath-ov .ap-x{background:rgba(16,16,18,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 @media (hover:hover){.ath-ov .ap-x:hover{background:rgba(40,40,44,.7)}}
 @media (max-width:520px){.ath-ov{padding-top:calc(70px + env(safe-area-inset-top,0px))}.ath-poster{height:min(calc(100dvh - 92px - env(safe-area-inset-top,0px)),660px)}}
+/* Видео на фото программы: поверх снимка, проявляется, когда пошло; подпись и затемнение — выше */
+.pp-vid{position:absolute;inset:0;overflow:hidden;opacity:0;transition:opacity .9s ease;pointer-events:none}
+.prog-photo.vid-on .pp-vid{opacity:1}
+.pp-vid iframe{position:absolute;top:50%;left:50%;width:max(100%,calc(var(--h,220px) * 16 / 9));height:max(100%,56.25cqw);border:0;transform:translate(-50%,-50%) scale(1.2);filter:grayscale(.75) contrast(1.12) brightness(.9)}
+.prog-photo[data-video]{container-type:inline-size}
+.pp-snd{position:absolute;top:12px;right:12px;z-index:2;display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:rgba(16,16,18,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;opacity:0;transition:opacity var(--t2) ease,background-color var(--t2) ease}
+.pp-snd svg{width:18px;height:18px}
+.prog-photo.vid-on .pp-snd{opacity:1}
+@media (hover:hover){.pp-snd:hover{background:rgba(40,40,44,.7)}}
+@media (min-width:760px){.prog-photo[data-video]{--h:300px}}
+@media (prefers-reduced-motion: reduce){.pp-vid{transition:none}}

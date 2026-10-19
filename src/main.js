@@ -522,7 +522,7 @@ function athleteSheet(id) {
     ${a.video ? `<button class="ap-x ap-hide" type="button" aria-pressed="false">Скрыть карточку</button>` : ""}
     ${a.video ? `<button class="ap-x ap-snd" type="button" aria-label="Выключить звук" title="Звук видео" hidden>${I.vol}</button>` : ""}
     <button class="ap-x" type="button" aria-label="Закрыть">${I.x}</button>`;
-  const bg = a.video ? bgVideo(ov, a.video) : null;
+  const bg = a.video ? bgVideo(ov, a.video, !a.fromStart) : null;
   const close = () => { bg?.stop(); ov.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => ov.remove(), 260); };
   const key = ev => { if (ev.key === "Escape") close(); };
   ov.addEventListener("click", ev => {
@@ -550,7 +550,7 @@ function hushPlayers() {
 // Видео на фоне постера: без кнопок YouTube, на весь экран, проявляется, только когда реально пошло —
 // если YouTube не грузится (без VPN), остаётся обычный постер. Звук включён: окно открыли нажатием.
 // Браузер не дал играть со звуком — играем без него, а кнопка звука рядом с крестиком включит его.
-function bgVideo(ov, id) {
+function bgVideo(ov, id, mid = true) {
   const box = ov.querySelector(".ath-bg"), btn = ov.querySelector(".ap-snd"), resume = hushPlayers();
   let p = null, dead = false, muted = false;
   const silent = () => { if (dead || !p) return; muted = true; p.mute(); p.playVideo(); paint(); };
@@ -561,7 +561,7 @@ function bgVideo(ov, id) {
       host: "https://www.youtube-nocookie.com", videoId: id,
       playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, playlist: id, playsinline: 1, rel: 0, modestbranding: 1 },
       events: {
-        onReady: e => { const d = e.target.getDuration(); if (d > 60) e.target.seekTo(Math.floor(d / 2), true); // с середины — там уже тренировка, а не заставка
+        onReady: e => { const d = e.target.getDuration(); if (mid && d > 60) e.target.seekTo(Math.floor(d / 2), true); // с середины — там уже тренировка, а не заставка (кроме fromStart)
           e.target.setVolume(ytVol()); e.target.playVideo();
           setTimeout(() => { if (!dead && p.getPlayerState?.() === -1) silent(); }, 4000); }, // старые браузеры без onAutoplayBlocked: так и не стартовало
         onAutoplayBlocked: () => silent(),
@@ -573,6 +573,38 @@ function bgVideo(ov, id) {
     sound() { if (!p) return; muted = !muted; muted ? p.mute() : (p.unMute(), p.setVolume(ytVol())); paint(); },
     stop() { dead = true; box.classList.remove("on"); setTimeout(() => p?.destroy?.(), 260); resume(); },
   };
+}
+// Видео на фото программы (Арнольд): включается без звука, когда карточка видна, и встаёт на паузу, когда уходит с экрана.
+// Звук — кнопкой в углу (нажатие разрешает браузеру играть со звуком); наша музыка тогда встаёт на паузу.
+function watchPhotoVideos() {
+  document.querySelectorAll(".prog-photo[data-video]:not([data-bound])").forEach(fig => {
+    fig.dataset.bound = "1";
+    const id = fig.dataset.video, box = fig.querySelector(".pp-vid"), btn = fig.querySelector(".pp-snd");
+    let p = null, want = false, ready = false;
+    const paintSnd = () => { const m = !p || p.isMuted(); btn.innerHTML = m ? I.volOff : I.vol; btn.setAttribute("aria-label", m ? "Включить звук" : "Выключить звук"); };
+    const make = () => ytApi().then(() => {
+      if (!fig.isConnected) return;
+      p = new window.YT.Player(box.firstElementChild, {
+        host: "https://www.youtube-nocookie.com", videoId: id,
+        playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, playlist: id, playsinline: 1, rel: 0, modestbranding: 1 },
+        events: {
+          onReady: e => { ready = true; want ? e.target.playVideo() : e.target.pauseVideo(); },
+          onStateChange: e => { if (e.data === 1) fig.classList.add("vid-on"); },
+        },
+      });
+    }).catch(() => {});
+    const io = new IntersectionObserver(([en]) => {
+      if (!fig.isConnected) return io.disconnect();
+      want = en.isIntersecting;
+      if (want && !p) make(); else if (ready) want ? p.playVideo() : p.pauseVideo();
+    }, { threshold: .5 });
+    io.observe(fig);
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation(); if (!ready) return;
+      if (p.isMuted()) { M.audio.pause(); if (YT.playing) YT.player?.pauseVideo?.(); p.unMute(); p.setVolume(ytVol()); p.playVideo(); } else p.mute();
+      setTimeout(paintSnd, 60);
+    });
+  });
 }
 // Видео из программы — в окне поверх страницы, с обычными кнопками YouTube.
 function videoSheet(v) {
@@ -616,9 +648,9 @@ document.addEventListener("click", ev => {
   setTimeout(() => { if (scrambleNext) { scrambleNext = false; scramble(document.querySelector(".brand .brand-t")); } }, 160); // если перерисовки не было
 });
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
-// video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания).
+// video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания); обычно с середины, fromStart — с начала.
 const ATHLETES = [
-  { id: "arnold", video: "my6IroYcyEI", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%", prog: "arnold",
+  { id: "arnold", video: "Afr18IePNTQ", fromStart: true, src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 10%", prog: "arnold",
     quotes: ["Последние три-четыре повтора — вот что заставляет мышцу расти. Эта зона боли отделяет чемпиона от того, кто им не станет.",
       "Разум — вот предел. Если разум видит, что ты можешь что-то сделать, — ты сможешь, если веришь в это на все сто."],
     from: "из фильма «Качая железо», 1977",
@@ -643,7 +675,6 @@ const ATHLETES = [
 ];
 // Лицензии CC BY / CC BY-SA требуют указать авторов — список открывается по ссылке «Авторы фото».
 const ATH_CREDITS = [
-  ["Арнольд Шварценеггер", "Madison Square Garden Center, общественное достояние", "https://commons.wikimedia.org/wiki/File:Arnold_Schwarzenegger_1974.jpg"],
   ["Ронни Коулман", "localfitness.com.au, CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:Ronnie_Coleman_8_x_Mr_Olympia_-_2009_-_4.png"],
   ["Фил Хит", "Kevin Laval, «Мистер Олимпия» 2012, CC0", "https://commons.wikimedia.org/wiki/File:Phil_Heath_Kai_Greene.JPG"],
   ["Джей Катлер", "Morten Skovgaard, CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Jay_Cutler_%E2%80%93_Loaded_039_(15263347890).jpg"],
@@ -1278,6 +1309,7 @@ function coachChat() {
 const STAR_ORDER = ["arnold", "coleman", "cutler", "phil-heath", "dorian-yates", "kai-greene", "lee-priest", "frank-zane", "the-rock", "morning"];
 function programsView() {
   const p = S.profile, cur = programById(p.program_id);
+  setTimeout(watchPhotoVideos, 0);
   if (S.goProg) { const id = S.goProg; S.goProg = null; setTimeout(() => document.getElementById("prog-" + id)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60); } // пришли с постера
   const card = pr => {
     const on = pr.id === p.program_id;
@@ -1285,7 +1317,8 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}" id="prog-${pr.id}">
-      ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
+      ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""} ${pr.photo.video ? `data-video="${pr.photo.video}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
+          ${pr.photo.video ? `<div class="pp-vid" aria-hidden="true"><div></div></div><button class="pp-snd" type="button" aria-label="Включить звук" title="Звук видео">${I.volOff}</button>` : ""}
           <figcaption><b>${esc(pr.photo.caption)}</b>${pr.photo.credit ? `<a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a>` : ""}</figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
       <div class="prog-head">
