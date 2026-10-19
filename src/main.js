@@ -522,7 +522,7 @@ function athleteSheet(id) {
     ${a.video ? `<button class="ap-x ap-hide" type="button" aria-pressed="false">Скрыть карточку</button>` : ""}
     ${a.video ? `<button class="ap-x ap-snd" type="button" aria-label="Выключить звук" title="Звук видео" hidden>${I.vol}</button>` : ""}
     <button class="ap-x" type="button" aria-label="Закрыть">${I.x}</button>`;
-  const bg = a.video ? bgVideo(ov, a.video, !a.fromStart) : null;
+  const bg = a.video ? bgVideo(ov, a.video, a.start) : null;
   const close = () => { bg?.stop(); ov.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => ov.remove(), 260); };
   const key = ev => { if (ev.key === "Escape") close(); };
   ov.addEventListener("click", ev => {
@@ -550,7 +550,7 @@ function hushPlayers() {
 // Видео на фоне постера: без кнопок YouTube, на весь экран, проявляется, только когда реально пошло —
 // если YouTube не грузится (без VPN), остаётся обычный постер. Звук включён: окно открыли нажатием.
 // Браузер не дал играть со звуком — играем без него, а кнопка звука рядом с крестиком включит его.
-function bgVideo(ov, id, mid = true) {
+function bgVideo(ov, id, start) {
   const box = ov.querySelector(".ath-bg"), btn = ov.querySelector(".ap-snd"), resume = hushPlayers();
   let p = null, dead = false, muted = false;
   const silent = () => { if (dead || !p) return; muted = true; p.mute(); p.playVideo(); paint(); };
@@ -561,9 +561,9 @@ function bgVideo(ov, id, mid = true) {
       host: "https://www.youtube-nocookie.com", videoId: id,
       playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, playlist: id, playsinline: 1, rel: 0, modestbranding: 1 },
       events: {
-        onReady: e => { const d = e.target.getDuration(); if (mid && d > 60) e.target.seekTo(Math.floor(d / 2), true); // с середины — там уже тренировка, а не заставка (кроме fromStart)
+        onReady: e => { const d = e.target.getDuration(); const t = start ?? (d > 60 ? Math.floor(d / 2) : 0); if (t) e.target.seekTo(t, true); // по умолчанию с середины — там уже тренировка, а не заставка
           e.target.setVolume(ytVol()); e.target.playVideo();
-          setTimeout(() => { if (!dead && p.getPlayerState?.() === -1) silent(); }, 4000); }, // старые браузеры без onAutoplayBlocked: так и не стартовало
+          setTimeout(() => { if (!dead && ![1, 3].includes(p.getPlayerState?.())) silent(); }, 4000); }, // старые браузеры без onAutoplayBlocked: не играет и не грузится
         onAutoplayBlocked: () => silent(),
         onStateChange: e => { if (e.data === 1) { box.classList.add("on"); muted = p.isMuted(); paint(); } },
       },
@@ -588,7 +588,7 @@ function watchPhotoVideos() {
         host: "https://www.youtube-nocookie.com", videoId: id,
         playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, playlist: id, playsinline: 1, rel: 0, modestbranding: 1 },
         events: {
-          onReady: e => { ready = true; want ? e.target.playVideo() : e.target.pauseVideo(); },
+          onReady: e => { ready = true; if (+fig.dataset.start) e.target.seekTo(+fig.dataset.start, true); want ? e.target.playVideo() : e.target.pauseVideo(); },
           onStateChange: e => { if (e.data === 1) fig.classList.add("vid-on"); },
         },
       });
@@ -648,18 +648,18 @@ document.addEventListener("click", ev => {
   setTimeout(() => { if (scrambleNext) { scrambleNext = false; scramble(document.querySelector(".brand .brand-t")); } }, 160); // если перерисовки не было
 });
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
-// video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания); обычно с середины, fromStart — с начала.
+// video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания); обычно с середины, start — с этой секунды (0 — с начала).
 const ATHLETES = [
-  { id: "arnold", video: "Afr18IePNTQ", fromStart: true, src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 10%", prog: "arnold",
+  { id: "arnold", video: "Afr18IePNTQ", start: 0, src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 10%", prog: "arnold",
     quotes: ["Последние три-четыре повтора — вот что заставляет мышцу расти. Эта зона боли отделяет чемпиона от того, кто им не станет.",
       "Разум — вот предел. Если разум видит, что ты можешь что-то сделать, — ты сможешь, если веришь в это на все сто."],
     from: "из фильма «Качая железо», 1977",
     story: "Приехал в Америку почти без денег и английского — и стал семикратным «Мистером Олимпия», звездой кино и губернатором Калифорнии." },
-  { id: "coleman", video: "q7W2XroUeRM", fromStart: true, src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%", prog: "coleman",
+  { id: "coleman", video: "q7W2XroUeRM", start: 0, src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%", prog: "coleman",
     quotes: ["Все хотят быть бодибилдерами, но никто не хочет поднимать по-настоящему тяжёлые веса.", "Лёгкий вес, бэйби!"],
     from: "его фразы из зала",
     story: "Работал полицейским в Арлингтоне и тренировался после смен. Восемь раз подряд выиграл «Мистера Олимпия» — рекорд, который делит только с Ли Хейни." },
-  { id: "heath", video: "ZwWAHFQAbAc", fromStart: true, src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 12%", prog: "phil-heath",
+  { id: "heath", video: "ZwWAHFQAbAc", start: 0, src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 12%", prog: "phil-heath",
     story: "Играл в баскетбол за университет и пришёл в бодибилдинг только в 22 года. Через девять лет стал «Мистером Олимпия» — и выигрывал семь лет подряд, с 2011 по 2017." },
   { id: "cutler", video: "qu_6_oPQHYE", src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%", prog: "cutler",
     story: "Четыре раза был вторым после Коулмана — в 2001, 2003, 2004 и 2005 годах. Не сдался и в 2006-м победил. А в 2009-м стал первым, кто вернул себе титул после того, как его потерял." },
@@ -667,7 +667,7 @@ const ATHLETES = [
     story: "Тренировался в подвальном зале в Бирмингеме, вдали от звёздных залов Калифорнии. Короткие тренировки, один подход до отказа — и шесть титулов подряд, с 1992 по 1997." },
   { id: "kai", video: "-hnMTy-l_10", src: "/img/kai-greene.jpg", name: "Кай Грин", title: "3 × Arnold Classic", pos: "50% 16%", prog: "kai-greene",
     story: "Вырос в приёмных семьях в Бруклине; заниматься бодибилдингом его подтолкнул школьный учитель. Трижды выиграл Arnold Classic и трижды был вторым на «Мистере Олимпия»." },
-  { id: "priest", video: "V8UltHyi-9w", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 20%", prog: "lee-priest",
+  { id: "priest", video: "fXZplciAIGE", start: 35, src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 20%", prog: "lee-priest",
     story: "Начал выступать подростком, а в 21 год уже был профессионалом. Рост около 163 см — и одни из самых больших рук в истории спорта." },
   { id: "rock", video: "24fdcMw0Bj0", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", short: ["Скала", "Джонсон"], title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
     quotes: ["Кровь, пот и уважение. Первые два ты отдаёшь, последнее — зарабатываешь."],
@@ -1317,7 +1317,7 @@ function programsView() {
     const pics = [...new Set(sessionsOf(pr).flatMap(s => s.ex.map(e => media(e.n[0])?.img)).filter(Boolean))];
     const four = Array.from({ length: 4 }, (_, k) => pics[Math.floor(k * pics.length / 4)]).filter(Boolean);
     return `<article class="prog ${on ? "on" : ""}" id="prog-${pr.id}">
-      ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""} ${pr.photo.video ? `data-video="${pr.photo.video}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
+      ${pr.photo2 ? duoHTML(pr) : pr.photo ? `<figure class="prog-photo ${pr.joke ? "joke" : ""}" ${pr.joke ? `data-act="storm" data-id="${pr.id}"` : ""} ${pr.photo.video ? `data-video="${pr.photo.video}" data-start="${pr.photo.start || 0}"` : ""}>${photoSrc(pr) ? `<img src="${photoSrc(pr)}" alt="${esc(pr.photo.caption)}" loading="lazy" decoding="async" style="object-position:${pr.photo.pos || "30% 22%"}">` : ""}
           ${pr.photo.video ? `<div class="pp-vid" aria-hidden="true"><div></div></div><button class="pp-snd" type="button" aria-label="Включить звук" title="Звук видео">${I.volOff}</button>` : ""}
           <figcaption><b>${esc(pr.photo.caption)}</b>${pr.photo.credit ? `<a href="${pr.photo.link}" target="_blank" rel="noopener">${esc(pr.photo.credit)}</a>` : ""}</figcaption></figure>`
         : `<div class="prog-pics" aria-hidden="true">${four.map(src => `<img src="${src}" alt="" loading="lazy" decoding="async">`).join("")}</div>`}
