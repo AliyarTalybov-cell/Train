@@ -512,7 +512,7 @@ PROGRAMS.push(
     defaultDays: [0, 1, 2, 3, 4, 5],
     place: "зал",
     about: "Шесть тяжёлых тренировок в неделю по схеме восьмикратного «Мистера Олимпия»: спина с бицепсом и плечами, ноги, грудь с трицепсом — и по кругу ещё раз с другими упражнениями. Много базовых движений и большой объём. Для опытных: новичку лучше начать с «Верх / низ».",
-    photo: { src: "/img/ronnie-coleman.jpg", caption: "Ронни Коулман — 8 раз «Мистер Олимпия»", credit: "Фото: localfitness.com.au, CC BY-SA 3.0", link: "https://commons.wikimedia.org/wiki/File:Ronnie_Coleman_8_x_Mr_Olympia_-_2009_-_4.png", pos: "50% 20%" },
+    photo: { src: "/img/ronnie-coleman.jpg", caption: "Ронни Коулман — 8 раз «Мистер Олимпия»", credit: "Фото: localfitness.com.au, CC BY-SA 3.0", link: "https://commons.wikimedia.org/wiki/File:Ronnie_Coleman_8_x_Mr_Olympia_-_2009_-_4.png", pos: "50% 20%", video: "q7W2XroUeRM" },
     diet: {
       goal: "mass",
       how: [
