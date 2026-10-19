@@ -835,7 +835,7 @@ PROGRAMS.push(
     defaultDays: [0, 1, 2, 3, 4],
     place: "зал",
     about: "Пять тренировок в неделю в стиле Кая Грина — трёхкратного победителя Arnold Classic. Главное у него не вес на штанге, а ощущение мышцы: медленный темп, пауза в сокращении, позирование и растяжка между подходами. Подходит и опытным, и тем, кто хочет научиться чувствовать мышцы.",
-    photo: { src: "/img/kai-greene.jpg", caption: "Кай Грин на Arnold Classic", credit: "Фото: neverfearfailure.com, CC BY-SA 4.0", link: "https://commons.wikimedia.org/wiki/File:Kai_greene_arnold_classic.jpg", pos: "50% 18%" },
+    photo: { src: "/img/kai-greene.jpg", caption: "Кай Грин на Arnold Classic", credit: "Фото: neverfearfailure.com, CC BY-SA 4.0", link: "https://commons.wikimedia.org/wiki/File:Kai_greene_arnold_classic.jpg", pos: "50% 18%", video: "Wcb3PAI12uE" },
     diet: {
       goal: "mass",
       how: [
