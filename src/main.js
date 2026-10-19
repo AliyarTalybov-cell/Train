@@ -70,6 +70,7 @@ const I = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  ext: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 };
 
 /* ---------- network ---------- */
@@ -507,7 +508,7 @@ function athleteSheet(id) {
   const a = ATHLETES.find(x => x.id === id); if (!a) return;
   const pr = a.prog && programById(a.prog), [first, ...rest] = a.short || a.name.replace(/«|»/g, "").split(" ");
   const ov = document.createElement("div"); ov.className = "ath-ov"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-label", a.name);
-  ov.innerHTML = `<article class="ath-poster">
+  ov.innerHTML = `${a.video ? `<div class="ath-bg" aria-hidden="true"><div></div></div>` : ""}<article class="ath-poster">
       <span class="tape a" aria-hidden="true"></span><span class="tape b" aria-hidden="true"></span>
       <img src="${a.src}" alt="" style="object-position:${a.id === "rock" ? a.pos : "50% 10%"}">
       <div class="ap-top"><span>Train · легенды</span><span>${esc(a.title)}</span></div>
@@ -518,17 +519,79 @@ function athleteSheet(id) {
         ${pr && S.user ? `<a class="ap-cta" href="#/programs" data-prog-go>Тренироваться как ${esc(a.short ? a.short[0] : first)}${I.right}</a>` : ""}
       </div>
     </article>
+    ${a.video ? `<button class="ap-x ap-hide" type="button" aria-pressed="false">Скрыть карточку</button>` : ""}
+    ${a.video ? `<button class="ap-x ap-snd" type="button" aria-label="Выключить звук" title="Звук видео" hidden>${I.vol}</button>` : ""}
     <button class="ap-x" type="button" aria-label="Закрыть">${I.x}</button>`;
-  const close = () => { ov.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => ov.remove(), 260); };
+  const bg = a.video ? bgVideo(ov, a.video) : null;
+  const close = () => { bg?.stop(); ov.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => ov.remove(), 260); };
   const key = ev => { if (ev.key === "Escape") close(); };
   ov.addEventListener("click", ev => {
     if (ev.target.closest("[data-prog-go]")) { close(); S.goProg = pr.id; if (route().path === "programs") { ev.preventDefault(); rerender(); } return; }
-    if (ev.target === ov || ev.target.closest(".ap-x")) close();
+    if (ev.target.closest(".ap-snd")) return bg?.sound();
+    // карточку можно убрать и смотреть видео целиком; нажатие на видео возвращает её, а не закрывает окно
+    const bare = ov.classList.contains("bare");
+    if (ev.target.closest(".ap-hide") || (bare && (ev.target === ov || ev.target.classList.contains("ath-bg")))) {
+      ov.classList.toggle("bare", !bare); const h = ov.querySelector(".ap-hide");
+      h.textContent = bare ? "Скрыть карточку" : "Показать карточку"; h.setAttribute("aria-pressed", String(!bare)); return;
+    }
+    if (ev.target === ov || ev.target.classList.contains("ath-bg") || ev.target.closest(".ap-x")) close();
   });
   document.addEventListener("keydown", key);
   document.body.append(ov); document.documentElement.classList.add("lb-open");
   requestAnimationFrame(() => ov.classList.add("on"));
-  ov.querySelector(".ap-x").focus({ preventScroll: true });
+  ov.querySelector(".ap-x:last-of-type").focus({ preventScroll: true });
+}
+// Пока играет видео легенды, наша музыка и плеер YouTube молчат; после закрытия — продолжают с того же места.
+function hushPlayers() {
+  const music = !M.audio.paused, yt = !!YT.playing;
+  M.audio.pause(); if (yt) YT.player?.pauseVideo?.();
+  return () => { if (music) M.audio.play().catch(() => {}); if (yt) YT.player?.playVideo?.(); };
+}
+// Видео на фоне постера: без кнопок YouTube, на весь экран, проявляется, только когда реально пошло —
+// если YouTube не грузится (без VPN), остаётся обычный постер. Звук включён: окно открыли нажатием.
+// Браузер не дал играть со звуком — играем без него, а кнопка звука рядом с крестиком включит его.
+function bgVideo(ov, id) {
+  const box = ov.querySelector(".ath-bg"), btn = ov.querySelector(".ap-snd"), resume = hushPlayers();
+  let p = null, dead = false, muted = false;
+  const silent = () => { if (dead || !p) return; muted = true; p.mute(); p.playVideo(); paint(); };
+  const paint = () => { btn.hidden = false; btn.innerHTML = muted ? I.volOff : I.vol; btn.setAttribute("aria-label", muted ? "Включить звук" : "Выключить звук"); };
+  ytApi().then(() => {
+    if (dead) return;
+    p = new window.YT.Player(box.firstElementChild, {
+      host: "https://www.youtube-nocookie.com", videoId: id,
+      playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, playlist: id, playsinline: 1, rel: 0, modestbranding: 1 },
+      events: {
+        onReady: e => { const d = e.target.getDuration(); if (d > 60) e.target.seekTo(Math.floor(d / 2), true); // с середины — там уже тренировка, а не заставка
+          e.target.setVolume(ytVol()); e.target.playVideo();
+          setTimeout(() => { if (!dead && p.getPlayerState?.() === -1) silent(); }, 4000); }, // старые браузеры без onAutoplayBlocked: так и не стартовало
+        onAutoplayBlocked: () => silent(),
+        onStateChange: e => { if (e.data === 1) { box.classList.add("on"); muted = p.isMuted(); paint(); } },
+      },
+    });
+  }).catch(() => {});
+  return {
+    sound() { if (!p) return; muted = !muted; muted ? p.mute() : (p.unMute(), p.setVolume(ytVol())); paint(); },
+    stop() { dead = true; box.classList.remove("on"); setTimeout(() => p?.destroy?.(), 260); resume(); },
+  };
+}
+// Видео из программы — в окне поверх страницы, с обычными кнопками YouTube.
+function videoSheet(v) {
+  const el = document.createElement("div"); el.className = "lb vid-lb"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", v.t);
+  el.innerHTML = `<div class="lb-top"><span class="lb-n">${esc(v.t)}</span><span class="lb-acts"><a class="lb-btn" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener" aria-label="Открыть на YouTube" title="Открыть на YouTube">${I.ext}</a><button class="lb-btn" data-lb="x" aria-label="Закрыть">${I.x}</button></span></div>
+    <div class="vid-frame"><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt=""><div></div></div>`;
+  const resume = hushPlayers(); let p = null, dead = false;
+  const close = () => { dead = true; p?.destroy?.(); resume(); el.classList.remove("on"); document.removeEventListener("keydown", key); document.documentElement.classList.remove("lb-open"); setTimeout(() => el.remove(), 220); };
+  const key = ev => { if (ev.key === "Escape") close(); };
+  el.addEventListener("click", ev => { if (ev.target === el || ev.target.closest("[data-lb=x]")) close(); });
+  document.addEventListener("keydown", key);
+  document.body.append(el); document.documentElement.classList.add("lb-open");
+  requestAnimationFrame(() => el.classList.add("on"));
+  ytApi().then(() => {
+    if (dead) return;
+    p = new window.YT.Player(el.querySelector(".vid-frame>div"), { host: "https://www.youtube-nocookie.com", videoId: v.id,
+      playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+      events: { onReady: e => { e.target.setVolume(ytVol()); e.target.playVideo(); }, onError: () => toast("Видео не включилось — открой его на YouTube") } });
+  }).catch(() => toast("YouTube не загрузился — проверь интернет или VPN"));
 }
 // Логотип: при нажатии буквы быстро перебираются и по очереди встают на место.
 function scramble(el) {
@@ -553,27 +616,28 @@ document.addEventListener("click", ev => {
   setTimeout(() => { if (scrambleNext) { scrambleNext = false; scramble(document.querySelector(".brand .brand-t")); } }, 160); // если перерисовки не было
 });
 // Легенды «Мистер Олимпия» на странице входа. Фото — Wikimedia Commons, авторы и лицензии — под формой.
+// video — тренировка с YouTube, она идёт фоном за постером (все проверены: разрешены для встраивания).
 const ATHLETES = [
-  { id: "arnold", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%",
+  { id: "arnold", video: "my6IroYcyEI", src: "/img/arnold.jpg", name: "Арнольд Шварценеггер", title: "7 × «Мистер Олимпия»", pos: "50% 18%",
     quotes: ["Последние три-четыре повтора — вот что заставляет мышцу расти. Эта зона боли отделяет чемпиона от того, кто им не станет.",
       "Разум — вот предел. Если разум видит, что ты можешь что-то сделать, — ты сможешь, если веришь в это на все сто."],
     from: "из фильма «Качая железо», 1977",
     story: "Приехал в Америку почти без денег и английского — и стал семикратным «Мистером Олимпия», звездой кино и губернатором Калифорнии." },
-  { id: "coleman", src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%", prog: "coleman",
+  { id: "coleman", video: "LVVdlwf1iyM", src: "/img/ronnie-coleman.jpg", name: "Ронни Коулман", title: "8 × «Мистер Олимпия»", pos: "50% 20%", prog: "coleman",
     quotes: ["Все хотят быть бодибилдерами, но никто не хочет поднимать по-настоящему тяжёлые веса.", "Лёгкий вес, бэйби!"],
     from: "его фразы из зала",
     story: "Работал полицейским в Арлингтоне и тренировался после смен. Восемь раз подряд выиграл «Мистера Олимпия» — рекорд, который делит только с Ли Хейни." },
-  { id: "heath", src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 12%", prog: "phil-heath",
+  { id: "heath", video: "Z9bfWGb7uI0", src: "/img/phil-heath.jpg", name: "Фил Хит", title: "7 × «Мистер Олимпия»", pos: "50% 12%", prog: "phil-heath",
     story: "Играл в баскетбол за университет и пришёл в бодибилдинг только в 22 года. Через девять лет стал «Мистером Олимпия» — и выигрывал семь лет подряд, с 2011 по 2017." },
-  { id: "cutler", src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%", prog: "cutler",
+  { id: "cutler", video: "qu_6_oPQHYE", src: "/img/jay-cutler.jpg", name: "Джей Катлер", title: "4 × «Мистер Олимпия»", pos: "45% 25%", prog: "cutler",
     story: "Четыре раза был вторым после Коулмана — в 2001, 2003, 2004 и 2005 годах. Не сдался и в 2006-м победил. А в 2009-м стал первым, кто вернул себе титул после того, как его потерял." },
-  { id: "yates", src: "/img/dorian-yates.jpg", name: "Дориан Йейтс", title: "6 × «Мистер Олимпия»", pos: "50% 15%", prog: "dorian-yates",
+  { id: "yates", video: "UHymqS5bZdg", src: "/img/dorian-yates.jpg", name: "Дориан Йейтс", title: "6 × «Мистер Олимпия»", pos: "50% 15%", prog: "dorian-yates",
     story: "Тренировался в подвальном зале в Бирмингеме, вдали от звёздных залов Калифорнии. Короткие тренировки, один подход до отказа — и шесть титулов подряд, с 1992 по 1997." },
-  { id: "kai", src: "/img/kai-greene.jpg", name: "Кай Грин", title: "3 × Arnold Classic", pos: "50% 16%", prog: "kai-greene",
+  { id: "kai", video: "-hnMTy-l_10", src: "/img/kai-greene.jpg", name: "Кай Грин", title: "3 × Arnold Classic", pos: "50% 16%", prog: "kai-greene",
     story: "Вырос в приёмных семьях в Бруклине; заниматься бодибилдингом его подтолкнул школьный учитель. Трижды выиграл Arnold Classic и трижды был вторым на «Мистере Олимпия»." },
-  { id: "priest", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 20%", prog: "lee-priest",
+  { id: "priest", video: "V8UltHyi-9w", src: "/img/lee-priest.jpg", name: "Ли Прист", title: "IFBB Pro, «Блондинистый миф»", pos: "50% 20%", prog: "lee-priest",
     story: "Начал выступать подростком, а в 21 год уже был профессионалом. Рост около 163 см — и одни из самых больших рук в истории спорта." },
-  { id: "rock", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", short: ["Скала", "Джонсон"], title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
+  { id: "rock", video: "24fdcMw0Bj0", src: "/img/the-rock.jpg", name: "Дуэйн «Скала» Джонсон", short: ["Скала", "Джонсон"], title: "актёр и рестлер", pos: "20% 4%", prog: "the-rock",
     quotes: ["Кровь, пот и уважение. Первые два ты отдаёшь, последнее — зарабатываешь."],
     story: "После того как его выгнали из канадской футбольной лиги, у него в кармане было семь долларов. В честь этого он назвал свою компанию Seven Bucks — и стал самым высокооплачиваемым актёром Голливуда." },
 ];
@@ -1229,6 +1293,9 @@ function programsView() {
         <div class="tags">${on ? `<span class="tag on">${I.check}в календаре</span>` : ""}<span class="tag">${pr.days} ${plural(pr.days, "раз", "раза", "раз")} в неделю</span><span class="tag">${{ дом: "дома", везде: "где угодно" }[pr.place] || "в зале"}</span>${pr.length ? `<span class="tag">${pr.length} недель</span>` : ""}</div>
       </div>
       <p>${esc(pr.about)}</p>
+      ${pr.videos ? `<div class="vids"><span class="eyebrow">Легендарные видео</span><div class="vids-row">${pr.videos.map((v, k) => `<button class="vid" data-act="prog-vid" data-id="${pr.id}" data-k="${k}">
+          <span class="vid-cover"><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" alt="" loading="lazy" decoding="async"><span class="vid-play" aria-hidden="true">${I.play}</span><span class="yt-len mono">${v.len}</span></span>
+          <b>${esc(v.t)}</b><span>${esc(v.by)}</span></button>`).join("")}</div></div>` : ""}
       <details class="fold" ${pr.joke ? `data-storm="${pr.id}"` : ""}><summary>Посмотреть тренировки</summary>
         <div class="sessions">${sessionsOf(pr).map((s, k) => `
           <section class="sess">
@@ -3156,6 +3223,7 @@ async function run(b, act) {
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
     case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
+    case "prog-vid": videoSheet(programById(b.dataset.id).videos[+b.dataset.k]); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
     case "mu-folder-menu": folderMenu(); break;

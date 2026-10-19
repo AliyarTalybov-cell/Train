@@ -201,8 +201,10 @@ function cutlerWeek(week) { // week — с нуля
     }),
   }));
 }
+// videos — легендарные видео с YouTube у программ звёзд (все проверены: разрешены для встраивания на сайты).
 PROGRAMS.push({
   id: "cutler",
+  videos: [{ id: "qu_6_oPQHYE", t: "Полная тренировка груди", by: "JayCutlerTV", len: "23:35" }, { id: "ZYXwiEc9dIA", t: "Грудь за 13 недель до «Олимпии» 2011", by: "JayCutlerTV", len: "18:41" }, { id: "M9g78izPpyY", t: "Руки — фильм Ripped to Shreds, 2004", by: "Mocvideo Productions", len: "49:49" }],
   place: "зал",
   title: "Джей Катлер, 12 недель",
   days: 5,
@@ -425,6 +427,7 @@ PROGRAMS.push(
 PROGRAMS.push(
   {
     id: "coleman",
+    videos: [{ id: "LVVdlwf1iyM", t: "Присед 363 кг — официальная запись", by: "Ronnie Coleman", len: "3:44" }, { id: "j6EE1yzv6N8", t: "The Unbelievable: спина и бицепс", by: "Ronnie Coleman", len: "15:45" }, { id: "TRcR-_nF84o", t: "«Yeah buddy! Light weight, baby!»", by: "лучшие моменты", len: "4:24" }],
     title: "Ронни Коулман, объём",
     days: 6,
     defaultDays: [0, 1, 2, 3, 4, 5],
@@ -502,6 +505,7 @@ PROGRAMS.push(
   },
   {
     id: "the-rock",
+    videos: [{ id: "24fdcMw0Bj0", t: "Главная тренировка Скалы", by: "The Rock", len: "4:18" }, { id: "Oqw32w49KD0", t: "Как я поднимаю планку в зале", by: "The Rock", len: "1:22" }],
     title: "Скала Джонсон, «Геркулес»",
     days: 5,
     defaultDays: [0, 1, 2, 3, 4],
@@ -571,6 +575,7 @@ PROGRAMS.push(
   },
   {
     id: "lee-priest",
+    videos: [{ id: "V8UltHyi-9w", t: "Руки — фильм Another Blond Myth, 2000", by: "Mocvideo Productions", len: "14:34" }, { id: "uXgFE9UqAXQ", t: "Руки — фильм The Blond Myth, 1998", by: "Mocvideo Productions", len: "15:57" }, { id: "pPrdaFxrPA8", t: "Тренировка рук с Ларри Уилсом", by: "Larry Wheels", len: "59:50" }],
     title: "Ли Прист, «Блондинистый миф»",
     days: 5,
     defaultDays: [0, 1, 2, 3, 4],
@@ -632,6 +637,7 @@ PROGRAMS.push(
   },
   {
     id: "frank-zane",
+    videos: [{ id: "pbJKgTbhXcg", t: "Тренировки и питание — советы Зейна", by: "Sadik Hadzovic", len: "12:13" }, { id: "LJ-Tr8L4lpA", t: "Первая победа на «Олимпии»", by: "Kong Motivation", len: "14:48" }],
     title: "Фрэнк Зейн, эстетика",
     days: 3,
     defaultDays: [0, 2, 4],
@@ -684,6 +690,7 @@ PROGRAMS.push(
   },
   {
     id: "phil-heath",
+    videos: [{ id: "Z9bfWGb7uI0", t: "Спина по пути к «Олимпии» 2011", by: "Bodybuilding.com", len: "11:23" }, { id: "ZpSqVZTm6gA", t: "Целая тренировка, «Олимпия» 2011", by: "MrKreaPro", len: "34:51" }, { id: "AdAh18MVDx4", t: "The Legacy — мотивация", by: "NicandroVision", len: "3:19" }],
     title: "Фил Хит, FST-7",
     days: 5,
     defaultDays: [0, 1, 2, 3, 4],
@@ -743,6 +750,7 @@ PROGRAMS.push(
   },
   {
     id: "kai-greene",
+    videos: [{ id: "-hnMTy-l_10", t: "Train with Kai: руки", by: "Mike Pulcinella", len: "20:33" }, { id: "UxheOUa0ZOw", t: "Как накачать большие руки", by: "Kai Greene", len: "40:07" }, { id: "C-fHWV_mYMo", t: "Объёмные плечи: упражнения на дельты", by: "Kai Greene", len: "22:50" }],
     title: "Кай Грин, связь мозг — мышца",
     days: 5,
     defaultDays: [0, 1, 2, 3, 4],
@@ -805,6 +813,7 @@ PROGRAMS.push(
   },
   {
     id: "dorian-yates",
+    videos: [{ id: "UHymqS5bZdg", t: "Blood & Guts: грудь и бицепс", by: "Dorian Yates", len: "3:17" }, { id: "-gNZPzefdlI", t: "Blood & Guts: каждый повтор до конца", by: "Dorian Yates", len: "3:27" }, { id: "afqHMID-VEQ", t: "Программа Blood & Guts — объясняет сам", by: "Bodybuilding.com", len: "2:46" }],
     title: "Дориан Йейтс, «Кровь и кишки»",
     days: 4,
     defaultDays: [0, 1, 3, 4],

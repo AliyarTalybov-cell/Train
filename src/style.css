@@ -1598,3 +1598,45 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .mu-usage.warn i{background:linear-gradient(to right,var(--bad) var(--p),var(--chip) var(--p))}
 .yt-ios svg{width:14px;height:14px;vertical-align:-2px}
 .mu-share{flex:none;margin-left:auto}
+/* Видео легенды фоном за постером: обрезано «по cover», без кнопок, проявляется, когда пошло */
+.ath-ov{overflow:hidden}
+.ath-bg{position:absolute;inset:0;z-index:0;overflow:hidden;opacity:0;transition:opacity .9s ease}
+.ath-bg.on{opacity:1}
+.ath-bg iframe{position:absolute;top:50%;left:50%;width:max(100vw,177.78vh);height:max(100vh,56.25vw);border:0;pointer-events:none;transform:translate(-50%,-50%) scale(1.18);filter:grayscale(.75) contrast(1.12) brightness(.85)}
+.ath-bg::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(8,8,10,.25) 0%,rgba(0,0,0,.55) 60%,rgba(0,0,0,.85) 100%)}
+.ath-poster{z-index:1}
+.ap-snd{right:66px}
+@media (prefers-reduced-motion: reduce){.ath-bg{transition:none}}
+/* Легендарные видео в программе: лента карточек 16:9 */
+.vids{display:grid;gap:10px;min-width:0}
+.vids-row{display:flex;gap:12px;margin:0 -18px;padding:0 18px 2px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.vids-row::-webkit-scrollbar{display:none}
+.vid{flex:none;width:212px;display:grid;align-content:start;gap:2px;padding:0;border:0;background:none;color:inherit;text-align:left;scroll-snap-align:start;scroll-margin-left:18px}
+.vid-cover{position:relative;display:block;aspect-ratio:16/9;margin-bottom:8px;border-radius:12px;overflow:hidden;background:var(--chip);box-shadow:0 1px 2px rgba(0,0,0,.08);transition:transform var(--t2) var(--ease-out)}
+.vid-cover img{display:block;width:100%;height:100%;object-fit:cover;transition:transform var(--t3) var(--ease-out)}
+.vid-play{position:absolute;top:50%;left:50%;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;transform:translate(-50%,-50%);transition:background-color var(--t2) ease,color var(--t2) ease}
+.vid-play svg{width:18px;height:18px}
+.vid-cover .yt-len{right:6px;bottom:6px}
+.vid b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600;font-size:14px;line-height:1.3}
+.vid>span:last-child{font-size:12.5px;color:var(--muted)}
+.vid:active .vid-cover{transform:scale(.97)}
+.vid:focus-visible{outline:none}.vid:focus-visible .vid-cover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+@media (hover:hover){.vid:hover .vid-cover img{transform:scale(1.04)}.vid:hover .vid-play{background:var(--accent);color:var(--accent-ink)}}
+@media (min-width:700px){.vids-row{margin:0;padding:0 0 2px;scroll-snap-type:none}}
+/* Окно с видео из программы */
+.vid-frame{position:relative;width:min(100vw - 32px,(100dvh - 150px) * 16 / 9,1100px);aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;opacity:0;transform:scale(.97);transition:opacity var(--t2) ease,transform var(--t3) var(--ease-out)}
+.lb.on .vid-frame{opacity:1;transform:none}
+.vid-frame img,.vid-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
+.vid-lb .lb-top{gap:12px}
+.vid-lb .lb-n{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600;font-size:15px;opacity:.9}
+.vid-lb a.lb-btn{text-decoration:none}
+/* «Скрыть карточку»: постер уезжает вниз, видео остаётся целиком */
+.ap-hide{right:118px;width:auto;padding:0 16px;border-radius:999px;font-weight:600;font-size:14px;white-space:nowrap}
+.ath-ov .ath-poster{transition:transform .45s var(--ease-out),opacity .3s ease}
+.ath-ov.bare .ath-poster{transform:translateY(calc(50dvh + 50%)) rotate(-6deg);opacity:0;pointer-events:none}
+.ath-bg::after{transition:opacity var(--t3) ease}
+.ath-ov.bare .ath-bg::after{opacity:.35}
+.ath-ov.bare{cursor:pointer}
+.ath-ov .ap-x{background:rgba(16,16,18,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+@media (hover:hover){.ath-ov .ap-x:hover{background:rgba(40,40,44,.7)}}
+@media (max-width:520px){.ath-ov{padding-top:calc(70px + env(safe-area-inset-top,0px))}.ath-poster{height:min(calc(100dvh - 92px - env(safe-area-inset-top,0px)),660px)}}
