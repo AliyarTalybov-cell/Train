@@ -133,9 +133,10 @@ function confirmSheet(title, text, ok = "Удалить") {
 }
 
 /* ---------- theme ---------- */
-const getTheme = () => { try { return localStorage.getItem("gym-theme") || "system"; } catch { return "system"; } };
+// По умолчанию (первый заход) — тёмная; «Как в системе» сохраняется явно
+const getTheme = () => { try { return localStorage.getItem("gym-theme") || "dark"; } catch { return "dark"; } };
 function setTheme(t) {
-  try { t === "system" ? localStorage.removeItem("gym-theme") : localStorage.setItem("gym-theme", t); } catch {}
+  try { localStorage.setItem("gym-theme", t); } catch {}
   if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   themeColor();
 }
