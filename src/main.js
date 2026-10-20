@@ -179,8 +179,12 @@ function themeColor() { // строка браузера и статус-бар 
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
   const add = (c, media) => { const m = document.createElement("meta"); m.name = "theme-color"; m.content = c; if (media) m.media = media; document.head.append(m); };
   if (t === "system") { add(p.l[0], "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(p[t === "dark" ? "d" : "l"][0]);
+  setMode();
 }
 themeColor();
+// тёмный режим отдельным атрибутом — на нём держится «мрачная» атмосфера в style.css (системная тема тоже учитывается)
+function setMode() { document.documentElement.dataset.mode = darkNow() ? "dark" : "light"; }
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", setMode);
 const palPreview = k => { const c = PALETTES[k][darkNow() ? "d" : "l"];
   return `<span class="pal-prev" style="--p-bg:${c[0]};--p-surface:${c[1]};--p-ink:${c[2]};--p-line:${c[3]}" aria-hidden="true"><i></i><i></i><b><i></i><u></u></b></span>`; };
 
@@ -1808,7 +1812,7 @@ const visibleTracks = () => {
   }
   if (M.folder === "fav") return (M.favOrder || []).map(id => M.tracks.findIndex(t => t.id === id)).filter(i => i >= 0).map(i => ({ t: M.tracks[i], i }));
   const list = M.tracks.map((t, i) => ({ t, i })).filter(x => !M.folder || x.t.folder_id === M.folder);
-  if (M.folder) list.sort((a, b) => (a.t.album || "").localeCompare(b.t.album || "") || (a.t.track_no ?? 999) - (b.t.track_no ?? 999) || a.i - b.i);
+  if (M.folder) list.sort((a, b) => !a.t.album - !b.t.album || (a.t.album || "").localeCompare(b.t.album || "") || (a.t.track_no ?? 999) - (b.t.track_no ?? 999) || a.i - b.i);
   return list;
 };
 const isOwner = () => S.user?.id === OWNER;
@@ -1827,13 +1831,19 @@ function musicView() {
       <span class="fold-cover">${cover}</span><b>${esc(name)}</b><span>${n} ${plural(n, "трек", "трека", "треков")}</span></button>`;
   return `
     <section class="hero mu-hero"><h1>Музыка</h1><p class="lead">Играет, пока открыт сайт: можно отмечать подходы и переходить между разделами.</p></section>
-    <div class="folders" role="list">
+    <div class="mu-quick">
       ${card(null, "Все треки", M.tracks.length, mosaicHTML(M.tracks, `<span class="cover-tile all" aria-hidden="true">${I.note}</span>`))}
       ${card("fav", "Избранное", M.favs.size, mosaicHTML(M.tracks.filter(t => M.favs.has(t.id)), `<span class="cover-tile fav" aria-hidden="true">${I.heart}</span>`))}
       <button style="--i:2" class="fold-card ${M.folder === "yt" ? "on" : ""}" data-act="mu-folder" data-id="yt"><span class="fold-cover"><span class="cover-tile yt" aria-hidden="true"><i class="yt-logo">${I.play}</i></span></span><b>YouTube</b><span>${YT.list ? `${YT.list.length} видео` : "по ссылкам"}</span></button>
+    </div>
+    ${(() => { // папки групп сеткой: свёрнуто — две строки, открытая папка видна всегда
+      const n = M.folders.length + (isOwner() ? 1 : 0), more = [n > 8 && "m3", n > 10 && "m4", n > 12 && "m5"].filter(Boolean).join(" "); // сворачиваем, только если прячется хотя бы 3
+      return `<div class="mu-fold-head"><b>Папки</b><span class="muted">${M.folders.length}</span>
+        ${more ? `<button class="linkbtn mu-more ${more}" data-act="mu-folders-all" aria-expanded="${!!M.allFolders}">${M.allFolders ? "Свернуть" : "Показать все"}${I.down}</button>` : ""}</div>
+      <div class="folders ${M.allFolders ? "" : more}">
       ${M.folders.map(x => card(x.id, x.name, count(x.id), folderArt(x))).join("")}
       ${isOwner() ? `<button class="fold-card add" data-act="mu-new-folder"><span class="fold-cover"><span class="cover-tile plus" aria-hidden="true">${I.plus}</span></span><b>Новая папка</b><span>группа или альбом</span></button>` : ""}
-    </div>
+    </div>`; })()}
     ${M.folder === "yt" ? "" : searchBox()}
     <div id="mu-list">${musicList()}</div>`;
 }
@@ -2137,6 +2147,14 @@ M.audio.addEventListener("play", () => { // включили наш mp3 — YouT
 });
 document.addEventListener("submit", ev => { if (ev.target.matches("[data-yt-form]")) { ev.preventDefault(); addYt(ev.target); } });
 const searchBox = () => `<label class="mu-search">${I.search}<input type="search" data-field="mu-q" value="${esc(M.q || "")}" placeholder="Найти трек или группу" autocomplete="off" enterkeyhint="search" aria-label="Поиск по трекам">${M.q ? `<button type="button" data-act="mu-q-clear" aria-label="Очистить поиск">${I.x}</button>` : ""}</label>`;
+// внутри папки треки идут по альбомам — над каждым альбомом его название (если альбомов больше одного)
+const albumHead = (list, k, f) => {
+  if (!f || M.q || new Set(list.map(x => x.t.album || "")).size < 2) return "";
+  const a = list[k].t.album || "", prev = k ? list[k - 1].t.album || "" : null;
+  if (a === prev) return "";
+  const n = list.filter(x => (x.t.album || "") === a).length;
+  return `<li class="tr-album" role="presentation"><b>${esc(a || "Без альбома")}</b><span class="muted">${n} ${plural(n, "трек", "трека", "треков")}</span></li>`;
+};
 function musicList() {
   if (M.folder === "yt") return ytSection();
   const list = visibleTracks(), fav = M.folder === "fav" && !M.q, f = !M.q && M.folders.find(x => x.id === M.folder), playing = !M.audio.paused;
@@ -2149,7 +2167,7 @@ function musicList() {
     </section>
     ${isOwner() && U.items.length ? uploadPanel() : ""}
     ${isOwner() && !fav && !M.q && !U.run ? `<label class="mu-up"><input type="file" accept=".mp3,audio/mpeg" multiple hidden data-field="mu-files">${I.plus}<span><b>Загрузить треки${f ? ` в «${esc(f.name)}»` : ""}</b><span class="hint">mp3 с компьютера, можно несколько или перетащить на страницу. Группа, название и обложка берутся из самого трека; папка группы создаётся сама. Тяжёлые треки сжимаются перед загрузкой.</span>${usageHTML()}</span></label>` : ""}
-    ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
+    ${list.length ? `<ol class="tracks">${list.map(({ t, i }, k) => `${albumHead(list, k, f)}<li class="${i === M.i ? "cur" : ""} ${i === M.i && playing ? "playing" : ""} " data-i="${i}" style="--i:${Math.min(k, 12)}">
       <button class="track" data-act="mu-play" data-i="${i}">
         <span class="tr-art ${M.tcov[t.file] ? "img" : ""}">${M.tcov[t.file] ? coverHTML(artOf(t)) : ""}<span class="tr-n">${i === M.i ? `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>` : k + 1}</span></span>
         <span class="tr-t"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
@@ -3291,11 +3309,12 @@ async function run(b, act) {
     case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else { M.queue = visibleTracks().map(x => x.t.file); playAt(i); } break; }
     case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
     case "mu-folder": {
-      const x = document.querySelector(".folders")?.scrollLeft || 0;
       M.folder = b.dataset.id || null; M.q = ""; rerender();
-      const strip = document.querySelector(".folders"); if (strip) strip.scrollLeft = x; // полоса папок остаётся на месте
+      // список открытой папки ниже сетки — на телефоне подкручиваем к нему, если он за краем экрана
+      const h = document.querySelector(".mu-head"); if (h && h.getBoundingClientRect().top > innerHeight * .7) h.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
       break;
     }
+    case "mu-folders-all": M.allFolders = !M.allFolders; rerender(); break;
     case "mu-fav": toggleFav(+b.dataset.i); break;
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;

@@ -1655,3 +1655,141 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .ath-bg.bare::after{opacity:.35}
 .ath-ov.has-vid{background:transparent}
 @media (prefers-reduced-motion: reduce){.ath-bg,.ath-bg>div{transition:none}}
+
+/* ---------- Музыка: быстрые разделы сверху, папки групп сеткой (свёрнуто — две строки), альбомы внутри папки ---------- */
+.mu-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}
+.mu-quick .fold-card{width:auto;min-width:0;display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;column-gap:10px;align-content:center;
+  padding:8px 10px 8px 8px;border-radius:14px;background:var(--surface);border:1px solid var(--line);transition:border-color var(--t2) ease,background-color var(--t2) ease}
+.mu-quick .fold-cover{grid-row:1/3;width:44px;height:44px;margin:0;border-radius:10px}
+.mu-quick .fold-card b{align-self:end;font-size:14px}
+.mu-quick .fold-card>span:last-child{align-self:start;font-size:12px}
+.mu-quick .cover-tile svg{width:20px;height:20px}
+.mu-quick .cover-tile.yt .yt-logo{width:26px;height:19px;border-radius:6px}
+.mu-quick .cover-tile.yt .yt-logo svg{width:11px;height:11px}
+.mu-quick .fold-card.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mu-quick .fold-card.on .fold-cover{box-shadow:none}
+@media (hover:hover){.mu-quick .fold-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.mu-quick .fold-card:hover .fold-cover{transform:none;box-shadow:none}}
+@media (max-width:479px){
+  .mu-quick .fold-card{grid-template-columns:minmax(0,1fr);row-gap:0;padding:10px}
+  .mu-quick .fold-cover{grid-row:auto;width:34px;height:34px;margin-bottom:8px;border-radius:9px}
+  .mu-quick .cover-tile svg{width:16px;height:16px}
+  .mu-quick .cover-tile.yt .yt-logo{width:22px;height:16px;border-radius:5px}
+}
+.mu-fold-head{display:flex;align-items:center;gap:8px;min-height:44px;margin-top:18px}
+.mu-fold-head b{font-family:var(--display);font-weight:500;font-size:16px}
+.mu-fold-head .muted{font-family:var(--mono);font-size:13px}
+.mu-more{display:none;align-items:center;gap:4px;margin-left:auto;font-size:14px}
+.mu-more svg{width:16px;height:16px;transition:transform var(--t2) var(--ease-out)}
+.mu-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+.folders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px;overflow:visible;scroll-snap-type:none;margin:4px 0 0;padding:0}
+.folders .fold-card{width:auto;min-width:0}
+.folders .fold-cover{width:100%;height:auto;aspect-ratio:1}
+.mu-more.m3{display:inline-flex}
+@media (max-width:519px){.folders.m3>:nth-child(n+7):not(.on){display:none}}
+@media (min-width:520px){
+  .folders{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .mu-more.m3{display:none}.mu-more.m4{display:inline-flex}
+}
+@media (min-width:520px) and (max-width:759px){.folders.m4>:nth-child(n+9):not(.on){display:none}}
+@media (min-width:760px){
+  .folders{grid-template-columns:repeat(5,minmax(0,1fr));margin-inline:0;padding-inline:0}
+  .folders .fold-card{width:auto}.folders .fold-cover{width:100%;height:auto}
+  .folders.m5>:nth-child(n+11):not(.on){display:none}
+  .mu-more.m4{display:none}.mu-more.m5{display:inline-flex}
+}
+.mu-head{scroll-margin-top:12px}
+.tracks li.tr-album{display:flex;align-items:baseline;gap:8px;padding:18px 10px 6px;background:none!important;border-radius:0}
+.tracks li.tr-album:first-child{padding-top:10px}
+.tr-album b{font-family:var(--display);font-weight:500;font-size:14.5px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tr-album .muted{flex:none;font-size:12.5px}
+
+/* ---------- Атмосфера тёмной темы: глубокий фон с виньеткой, зерно плёнки, карточки-«плиты» с отблеском и тлеющим акцентом ---------- */
+:root[data-mode="dark"]{
+  --slab:linear-gradient(180deg,color-mix(in srgb,var(--surface) 94%,#fff 0%) 0%,color-mix(in srgb,var(--surface) 72%,#000) 100%);
+  --rim:color-mix(in srgb,var(--line) 72%,#000);
+  --hi:inset 0 1px 0 rgba(255,255,255,.045);
+  --drop:0 14px 34px -16px rgba(0,0,0,.85);
+  --glow:color-mix(in srgb,var(--accent) 38%,transparent);
+}
+:root[data-mode="dark"] body{background:color-mix(in srgb,var(--bg) 70%,#000)}
+:root[data-mode="dark"] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(90% 55% at 50% -8%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 70%),
+    radial-gradient(120% 90% at 50% 45%,transparent 35%,rgba(0,0,0,.6) 100%)}
+:root[data-mode="dark"] body::after{content:"";position:fixed;inset:0;z-index:200;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* неделя: тренировочные дни — тёмные плиты с тлеющей полосой акцента, отдых — едва заметный пунктир */
+:root[data-mode="dark"] .wk-day{position:relative;overflow:hidden;background:var(--slab);border-color:var(--rim);box-shadow:var(--hi),var(--drop)}
+:root[data-mode="dark"] .wk-day:not(.st-rest){background:radial-gradient(70% 140% at 0% 50%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 70%),var(--slab)}
+:root[data-mode="dark"] .wk-day:not(.st-rest)::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);opacity:.45;box-shadow:0 0 12px var(--glow)}
+:root[data-mode="dark"] .wk-day.st-done::before{opacity:1}
+:root[data-mode="dark"] .wk-day.st-missed::before{background:var(--muted);box-shadow:none;opacity:.35}
+:root[data-mode="dark"] .wk-day.st-done{background:radial-gradient(80% 160% at 0% 50%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 72%),var(--slab)}
+:root[data-mode="dark"] .wk-day.st-rest{background:color-mix(in srgb,var(--surface) 25%,transparent);border-color:color-mix(in srgb,var(--line) 55%,transparent);box-shadow:none}
+:root[data-mode="dark"] .wk-day.st-rest .wk-d{opacity:.7}
+:root[data-mode="dark"] .wk-day[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 32px -8px var(--glow),var(--hi)}
+:root[data-mode="dark"] .wk-day.today .wk-d span{text-shadow:0 0 14px var(--glow)}
+
+/* упражнения дня: фото приглушены в монохром, цвет проступает у раскрытого и под курсором */
+:root[data-mode="dark"] .ex{background:var(--slab);border-color:var(--rim);box-shadow:var(--hi),var(--drop)}
+:root[data-mode="dark"] .ex.open{border-color:color-mix(in srgb,var(--accent) 45%,var(--rim));box-shadow:var(--hi),0 0 28px -12px var(--glow),var(--drop)}
+:root[data-mode="dark"] .ex.done{background:radial-gradient(80% 160% at 0% 50%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 72%),var(--slab)}
+:root[data-mode="dark"] .ex-thumb{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+:root[data-mode="dark"] .ex-thumb img{filter:grayscale(.85) contrast(1.15) brightness(.78);transition:filter var(--t3) ease}
+:root[data-mode="dark"] .ex.open .ex-thumb img{filter:grayscale(.15) contrast(1.05) brightness(.92)}
+@media (hover:hover){:root[data-mode="dark"] .ex:hover .ex-thumb img{filter:grayscale(.15) contrast(1.05) brightness(.92)}}
+:root[data-mode="dark"] .ex.done .ex-thumb img{filter:grayscale(1) brightness(.55)}
+:root[data-mode="dark"] .card{background:var(--slab);border-color:var(--rim);box-shadow:var(--hi),var(--drop)}
+
+/* программы: фото в полумраке перетекает в карточку, сверху — слабое свечение акцента */
+:root[data-mode="dark"] .prog{background:radial-gradient(100% 60% at 50% 0%,color-mix(in srgb,var(--accent) 6%,transparent),transparent 70%),var(--slab);border-color:var(--rim);box-shadow:var(--hi),0 22px 50px -24px rgba(0,0,0,.95)}
+:root[data-mode="dark"] .prog.on{border-color:color-mix(in srgb,var(--accent) 50%,var(--rim));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent),0 0 44px -14px var(--glow),0 22px 50px -24px rgba(0,0,0,.95)}
+:root[data-mode="dark"] .prog-photo{background:#050506}
+:root[data-mode="dark"] .prog-photo>img{filter:grayscale(.4) contrast(1.14) brightness(.8)}
+:root[data-mode="dark"] .prog-photo:not(.duo)::after{background:
+  radial-gradient(120% 90% at 50% 30%,transparent 45%,rgba(0,0,0,.55) 100%),
+  linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,.35) 60%,color-mix(in srgb,var(--surface) 92%,#000) 100%)}
+:root[data-mode="dark"] .prog-photo figcaption b{text-shadow:0 2px 14px rgba(0,0,0,.8)}
+:root[data-mode="dark"] .prog-pics{background:#050506;position:relative}
+:root[data-mode="dark"] .prog-pics img{filter:grayscale(.8) contrast(1.15) brightness(.7)}
+:root[data-mode="dark"] .prog-pics::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.1) 0%,rgba(0,0,0,0) 40%,color-mix(in srgb,var(--surface) 92%,#000) 100%)}
+:root[data-mode="dark"] .prog .tag{background:color-mix(in srgb,var(--chip) 70%,#000);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+:root[data-mode="dark"] .sess{background:color-mix(in srgb,var(--bg) 60%,#000);border-color:var(--rim)}
+
+/* стена чемпионов на компьютере: «нуарные» снимки на тёмной бумаге */
+@media (min-width:1180px){
+  :root[data-mode="dark"] .poster{background:#1c1b1a;opacity:.7;box-shadow:0 2px 3px rgba(0,0,0,.5),0 18px 40px -10px rgba(0,0,0,.9)}
+  :root[data-mode="dark"] .poster-ph img{filter:grayscale(1) contrast(1.2) brightness(.72)}
+  :root[data-mode="dark"] .poster figcaption{color:#cfc7b8}
+  :root[data-mode="dark"] .tape{background:rgba(110,100,80,.55)}
+  :root[data-mode="dark"] .poster:hover,:root[data-mode="dark"] .poster:focus-visible{opacity:.95}
+}
+
+/* вход: прожектор за формой, снимки чемпионов темнее, форма — дымчатое стекло */
+:root[data-mode="dark"] .auth{background:radial-gradient(55% 45% at 50% 52%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 72%)}
+:root[data-mode="dark"] .ath{box-shadow:0 20px 44px -12px rgba(0,0,0,.9)}
+:root[data-mode="dark"] .ath img{filter:grayscale(1) contrast(1.2) brightness(.74)}
+:root[data-mode="dark"] .ath::after{background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,transparent 30%,transparent 45%,color-mix(in srgb,var(--accent) 30%,#000) 100%)}
+:root[data-mode="dark"] .auth-card{background:color-mix(in srgb,var(--surface) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);
+  border-color:color-mix(in srgb,var(--line) 80%,transparent);box-shadow:var(--hi),0 40px 90px -24px rgba(0,0,0,.95)}
+:root[data-mode="dark"] .auth-card::before{content:"";position:absolute;left:24px;right:24px;top:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.7}
+:root[data-mode="dark"] .auth .inp{background:color-mix(in srgb,var(--bg) 60%,#000);border-color:var(--rim)}
+:root[data-mode="dark"] .auth .inp:focus{border-color:var(--accent)}
+:root[data-mode="dark"] .auth .seg{background:color-mix(in srgb,var(--bg) 60%,#000)}
+:root[data-mode="dark"] .auth-logo em{text-shadow:0 0 22px var(--glow)}
+:root[data-mode="dark"] .auth .btn:not(.quiet):not(.ghost){box-shadow:0 10px 30px -10px var(--glow)}
+
+/* музыка: обложки в полумраке, играющий трек подсвечен */
+:root[data-mode="dark"] .mu-quick .fold-card{background:var(--slab);border-color:var(--rim);box-shadow:var(--hi),var(--drop)}
+:root[data-mode="dark"] .mu-quick .fold-card.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 28px -10px var(--glow)}
+:root[data-mode="dark"] .folders .fold-cover{position:relative;box-shadow:0 14px 30px -14px rgba(0,0,0,.9)}
+:root[data-mode="dark"] .folders .fold-cover::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),inset 0 -50px 40px -30px rgba(0,0,0,.55)}
+:root[data-mode="dark"] .folders .fold-cover img{filter:contrast(1.05) brightness(.88);transition:filter var(--t3) ease}
+:root[data-mode="dark"] .folders .fold-card.on .fold-cover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 34px -6px var(--glow)}
+:root[data-mode="dark"] .folders .fold-card.on .fold-cover img{filter:none}
+@media (hover:hover){:root[data-mode="dark"] .folders .fold-card:hover .fold-cover img{filter:none}}
+:root[data-mode="dark"] .mu-search{background:color-mix(in srgb,var(--surface) 60%,#000);border-color:var(--rim)}
+:root[data-mode="dark"] .tracks li.cur{position:relative;background:var(--slab);box-shadow:var(--hi)}
+:root[data-mode="dark"] .tracks li.cur::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);box-shadow:0 0 12px var(--glow)}
+:root[data-mode="dark"] .tr-art{box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+:root[data-mode="dark"] .player{background:color-mix(in srgb,var(--surface) 78%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-color:var(--rim);box-shadow:0 18px 44px -12px rgba(0,0,0,.9)}
