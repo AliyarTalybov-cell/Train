@@ -171,38 +171,22 @@ function themeColor() { // строка браузера и статус-бар 
   const p = PALETTES[getLook("palette")], t = getTheme();
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
   const add = (c, media) => { const m = document.createElement("meta"); m.name = "theme-color"; m.content = c; if (media) m.media = media; document.head.append(m); };
-  if (t === "system") { add(concrete(p.l), "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(t === "dark" ? p.d[0] : concrete(p.l));
+  if (t === "system") { add(p.l[0], "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(p[t === "dark" ? "d" : "l"][0]);
   setMode();
 }
 themeColor();
 // тёмный режим отдельным атрибутом — на нём держится «мрачная» атмосфера в style.css (системная тема тоже учитывается)
-function setMode() {
-  const r = document.documentElement, dark = darkNow();
-  r.dataset.mode = dark ? "dark" : "light";
-  // светлая тема — «бетон»: фон палитры чуть притушен её же цветом текста
-  if (dark) r.style.removeProperty("--bg"); else r.style.setProperty("--bg", concrete(PALETTES[getLook("palette")].l));
-}
-function concrete(p) { const h = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), a = h(p[0]), b = h(p[2]);
-  return "#" + a.map((x, i) => Math.round(x * .93 + b[i] * .07).toString(16).padStart(2, "0")).join(""); }
+function setMode() { document.documentElement.dataset.mode = darkNow() ? "dark" : "light"; }
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", setMode);
 const palPreview = k => { const c = PALETTES[k][darkNow() ? "d" : "l"];
   return `<span class="pal-prev" style="--p-bg:${c[0]};--p-surface:${c[1]};--p-ink:${c[2]};--p-line:${c[3]}" aria-hidden="true"><i></i><i></i><b><i></i><u></u></b></span>`; };
 
-// Прозрачность: карточки, шторки и панели — дымчатое стекло. По умолчанию включена, выбор — на этом устройстве.
-const getGlass = () => { try { return localStorage.getItem("gym-glass") !== "0"; } catch { return true; } };
-function setGlass(on) {
-  try { on ? localStorage.removeItem("gym-glass") : localStorage.setItem("gym-glass", "0"); } catch {}
-  document.documentElement.toggleAttribute("data-glass", on);
-}
-document.documentElement.toggleAttribute("data-glass", getGlass());
-// Оформление — отдельным окном из шапки (и с экрана входа): тема, прозрачность, палитра, цвет кнопок
+// Оформление — отдельным окном из шапки (и с экрана входа): тема, палитра, цвет кнопок
 function lookSheet() {
   const th = getTheme(), seg = (act, list, cur, label) => `<div class="seg full" role="radiogroup" aria-label="${label}">${list.map(([k, l]) => `<button role="radio" data-look="${act}" data-v="${k}" aria-checked="${cur === k}">${l}</button>`).join("")}</div>`;
   sheet("Оформление", `<div class="look">
       <p class="look-label">Тема</p>
       ${seg("theme", [["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]], th, "Тема")}
-      <p class="look-label">Прозрачность</p>
-      ${seg("glass", [["1", "Стекло"], ["0", "Плотно"]], getGlass() ? "1" : "0", "Прозрачность")}
       <p class="look-label" id="look-pal">Палитра</p>
       <div class="look-pals" role="radiogroup" aria-labelledby="look-pal">${Object.entries(PALETTES).map(([k, x]) => `<button class="look-pal" role="radio" data-look="palette" data-v="${k}" aria-checked="${getLook("palette") === k}">${palPreview(k)}<span>${x.label}</span></button>`).join("")}</div>
       <p class="look-label" id="look-acc">Цвет кнопок и ссылок</p>
@@ -212,7 +196,6 @@ function lookSheet() {
       const b = ev.target.closest("[data-look]"); if (!b) return;
       const k = b.dataset.look, v = b.dataset.v;
       if (k === "theme") { setTheme(v); el.querySelectorAll(".look-pal").forEach(x => { x.querySelector(".pal-prev").outerHTML = palPreview(x.dataset.v); }); } // превью — под светлую или тёмную
-      else if (k === "glass") setGlass(v === "1");
       else setLook(k, v);
       b.parentElement.querySelectorAll("[data-look]").forEach(x => x.setAttribute("aria-checked", x === b));
     });
@@ -462,7 +445,7 @@ function render() {
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; paintBadge(); }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
-    <header class="topbar"><a class="brand" href="#/" aria-label="Train — на главную"><span class="brand-t" aria-hidden="true">Train</span><span aria-hidden="true">.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav><button class="icon-btn look-btn" data-act="look-open" aria-label="Оформление" title="Оформление: тема, прозрачность, цвета">${I.look}</button></header>
+    <header class="topbar"><a class="brand" href="#/" aria-label="Train — на главную"><span class="brand-t" aria-hidden="true">Train</span><span aria-hidden="true">.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav><button class="icon-btn look-btn" data-act="look-open" aria-label="Оформление" title="Оформление: тема и цвета">${I.look}</button></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
@@ -770,7 +753,7 @@ function loginView(mode = "in") {
   const card = a => `<figure class="ath" data-ath="${a.id}" role="button" tabindex="0" aria-label="${esc(a.name)} — мотивация"><img src="${a.src}" alt="" style="object-position:${a.pos}" decoding="async" onload="this.classList.add('ok')"><figcaption><b>${a.name}</b><span>${a.title}</span></figcaption></figure>`;
   app.innerHTML = `
     <main class="auth screen">
-      <button class="icon-btn look-btn auth-look" type="button" data-look-open aria-label="Оформление" title="Оформление: тема, прозрачность, цвета">${I.look}</button>
+      <button class="icon-btn look-btn auth-look" type="button" data-look-open aria-label="Оформление" title="Оформление: тема и цвета">${I.look}</button>
       <section class="auth-art" aria-label="Легенды бодибилдинга"><div class="auth-track">${[...ATHLETES, ...ATHLETES, ...ATHLETES].map(card).join("")}</div></section>
       <section class="auth-card">
       <div class="auth-brand">
@@ -2405,9 +2388,31 @@ async function smallJpeg(blob, size = 400) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); img.close?.();
   return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("jpeg")), "image/jpeg", 0.82));
 }
+// Сайты-«качалки» (audiovk и т. п.) вшивают в mp3 вместо обложки заглушку — гладкую ноту одного цвета.
+// Узнаём её по картинке 32×32: почти нет мелких деталей, она насыщенная и вся одного оттенка. Такую не сохраняем —
+// у трека остаётся обложка папки. Правило проверено на всех обложках треков: 14 заглушек из 14, настоящие не задевает.
+async function isStubCover(blob) {
+  const img = await createImageBitmap(blob), c = document.createElement("canvas"); c.width = c.height = 32;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, 32, 32); img.close?.();
+  const d = g.getImageData(0, 0, 32, 32).data, px = i => [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]];
+  let edge = 0, n = 0, sat = 0, sx = 0, sy = 0, ss = 0;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const a = px(y * 32 + x), mx = Math.max(...a), mn = Math.min(...a);
+    if (x < 31) { const b = px(y * 32 + x + 1); edge += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]); n++; }
+    if (y < 31) { const b = px(y * 32 + x + 32); edge += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]); n++; }
+    const s = mx ? (mx - mn) / mx : 0; sat += s;
+    if (mx > mn) { // оттенок пикселя, с весом по насыщенности — чтобы понять, один ли цвет у всей картинки
+      const [r, gg, b] = a, dd = mx - mn, h = (mx === r ? (gg - b) / dd + (gg < b ? 6 : 0) : mx === gg ? (b - r) / dd + 2 : (r - gg) / dd + 4) / 6;
+      sx += Math.cos(2 * Math.PI * h) * s; sy += Math.sin(2 * Math.PI * h) * s; ss += s;
+    }
+  }
+  return edge / n < 16 && sat / 1024 >= .4 && ss > 0 && Math.hypot(sx, sy) / ss >= .97;
+}
 async function putTrackCover(t, blob) {
+  if (await isStubCover(blob).catch(() => false)) return false;
   const { error } = await sb.storage.from("gym-music").upload(tcovPath(t), await smallJpeg(blob), { contentType: "image/jpeg" });
   if (error && !/exists|duplicate/i.test(error.message)) throw error;
+  return true;
 }
 // mp3 из хранилища как «файл» для id3(): качается только кусок с тегами (Range), а не весь трек
 const remoteFile = url => ({ slice: (a, b) => ({ arrayBuffer: async () => {
@@ -2424,7 +2429,7 @@ async function backfillCovers() {
   const one = async t => {
     try {
       const tag = await id3(remoteFile(M.urls[t.file]));
-      if (tag.cover) { await putTrackCover(t, tag.cover); await showTrackCover(t); }
+      if (tag.cover && await putTrackCover(t, tag.cover)) await showTrackCover(t);
       mark(t.file);
     } catch (e) { console.warn("обложка", t.file, e); }
   };
@@ -2562,7 +2567,7 @@ function loadPf(uid, force) {
 }
 // блоки «Фото» и «Любимые треки» — на своей странице и на странице друга
 function pfBlocks(uid, own) {
-  if (!PF.photos[uid]) { loadPf(uid).then(() => { if (["me", `u/${uid}`].includes(route().path)) rerender(); }); return `<div class="skel" style="height:140px;margin-top:12px;border-radius:var(--r-xl)"></div>`; }
+  if (!PF.photos[uid]) { loadPf(uid).then(() => { if (["me", `u/${uid}`].includes(route().path)) rerender(); }); return `<div class="skel" style="height:140px;margin-top:12px;border-radius:18px"></div>`; }
   const ph = PF.photos[uid];
   const favs = PF.tracks[uid] || [];
   const idx = favs.map(id => M.tracks ? M.tracks.findIndex(t => t.id === id) : -1).filter(i => i >= 0);
