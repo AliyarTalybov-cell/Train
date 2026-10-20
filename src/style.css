@@ -1714,8 +1714,6 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 :root[data-mode="dark"] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(90% 55% at 50% -8%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 70%),
     radial-gradient(120% 90% at 50% 45%,transparent 35%,rgba(0,0,0,.6) 100%)}
-:root[data-mode="dark"] body::after{content:"";position:fixed;inset:0;z-index:200;pointer-events:none;opacity:.05;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* неделя: тренировочные дни — тёмные плиты с тлеющей полосой акцента, отдых — едва заметный пунктир */
 :root[data-mode="dark"] .wk-day{position:relative;overflow:hidden;background:var(--slab);border-color:var(--rim);box-shadow:var(--hi),var(--drop)}
@@ -1809,3 +1807,66 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 .auth{position:relative}
 .auth-look{position:absolute;z-index:3;top:calc(12px + env(safe-area-inset-top,0px));right:16px;background:var(--surface)}
 .look{display:grid;gap:10px}
+
+/* ---------- Режим «В зале»: одно упражнение на экран, крупные кнопки под палец ---------- */
+.gym{position:fixed;inset:0;z-index:55;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);opacity:0;transform:translateY(16px);transition:opacity var(--t2) ease,transform var(--t3) var(--ease-out)}
+:root[data-mode="dark"] .gym{background:color-mix(in srgb,var(--bg) 70%,#000)}
+.gym.open{opacity:1;transform:none}
+html.gym-on{overflow:hidden}
+html.gym-on .coach-fab,html.gym-on .rest{display:none}
+html.gym-on .player,html.gym-on .yt-dock{z-index:56;bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.g-wrap>*{min-width:0}
+.g-wrap{max-width:520px;min-height:100%;margin-inline:auto;display:grid;align-content:start;gap:16px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+html.has-player .g-wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+.g-top{display:flex;align-items:center;gap:8px;min-height:52px}
+.g-prog{flex:1;min-width:0;display:grid;justify-items:center;line-height:1.25}
+.g-prog span:first-child{font-weight:600;font-size:15px}
+.g-prog span:last-child{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.g-top .linkbtn{padding-inline:6px}
+.g-bars{display:flex;gap:4px}
+.g-bars i{flex:1;height:4px;border-radius:2px;background:var(--line);transition:background-color var(--t2) ease}
+.g-bars i.done{background:var(--accent)}
+.g-bars i.cur{background:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.g-ex{display:grid;gap:8px}
+.g-ph{position:relative;display:block;width:100%;aspect-ratio:16/9;padding:0;border:0;border-radius:16px;overflow:hidden;background:var(--chip)}
+.g-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.g-ph img.b{animation:frame 2.4s steps(1) infinite}
+.g-ex h2{font-size:clamp(22px,6vw,26px);margin-top:4px}
+.g-hint{font-size:15px;color:var(--accent);font-weight:500}
+.g-sets{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.g-sets li{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.g-sets li.done{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.g-sets li.cur{border-color:var(--accent);color:var(--ink)}
+.g-set,.g-rest{display:grid;gap:14px;padding:18px 16px;border-radius:18px;background:var(--surface);border:1px solid var(--line)}
+.g-set-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.g-set-h b{font-family:var(--display);font-weight:500;font-size:17px}
+.g-set-h .muted{font-size:14px}
+.g-steps{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.g-step{display:grid;justify-items:center;gap:6px;min-width:0}
+.g-lab{font-size:13px;color:var(--muted)}
+.g-ctl{display:flex;align-items:center;gap:2px;min-width:0}
+.g-ctl .icon-btn{width:42px;height:42px}
+.g-ctl .icon-btn svg{width:18px;height:18px}
+.g-ctl input{width:58px;min-width:0;padding:8px 4px;border:0;border-bottom:2px solid var(--line);background:none;color:var(--ink);font-size:30px;font-weight:600;text-align:center}
+.g-ctl input:focus{outline:none;border-bottom-color:var(--accent)}
+.g-unit{font-size:13px;color:var(--muted)}
+.btn.g-go{min-height:60px;font-size:17px;width:100%}
+.btn.g-go svg{width:22px;height:22px}
+.g-ex-done b{font-family:var(--display);font-weight:500;font-size:17px}
+.g-rest{justify-items:center;text-align:center}
+.g-rest b{font-family:var(--mono);font-size:64px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.g-rest .row{justify-content:center}
+.g-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:48px}
+.g-nav .muted{flex:1;min-width:0;text-align:center;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-nav .icon-btn:disabled{opacity:.3;cursor:default}
+@media (max-width:360px){.g-ctl input{width:48px;font-size:24px}.g-ctl .icon-btn{width:38px;height:38px}}
+@media (prefers-reduced-motion: reduce){.gym{transition:none;transform:none}}
+.ex-hint{color:var(--accent);padding-top:2px}
+
+/* ---------- Итог тренировки ---------- */
+.sum{display:grid;gap:14px}
+.sum-stats{margin-top:0}
+.sum-cmp{font-weight:500}
+.sum-prs{display:grid;gap:4px}
+.sum-prs p{font-size:15px}
+.sum-prs .muted{font-size:13px}

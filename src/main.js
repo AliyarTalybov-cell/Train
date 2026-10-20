@@ -41,6 +41,7 @@ const I = {
   left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>',
+  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
@@ -913,6 +914,18 @@ function suggestSets(name, sets, reps, day) {
   const hit = !!(last && top && last.sets.length && last.sets.every(s => (+s.r || 0) >= top));
   return Array.from({ length: sets }, () => ({ w: lw ? (hit ? lw + 2.5 : lw) : null, r: low, done: false }));
 }
+// Почему сегодня такой вес: одна строка по прошлому разу. Прибавка — если тогда во всех подходах дошёл до верха диапазона.
+function weightHint(name, day, reps) {
+  const last = lastFor(name, day); if (!last) return "";
+  const ws = last.sets.map(s => +s.w).filter(Boolean); if (!ws.length) return "";
+  const lw = Math.max(...ws), top = parseInt(String(reps || "").split(/[–-]/).pop()) || null;
+  if (!top) return `В прошлый раз ${fmt(lw, 1)} кг — начни с него`;
+  return last.sets.every(s => (+s.r || 0) >= top)
+    ? `Сегодня ${fmt(lw + 2.5, 1)} кг: в прошлый раз все подходы по ${top} — можно прибавить`
+    : `Сегодня ${fmt(lw, 1)} кг, как в прошлый раз: добери до ${top} повторов, потом прибавим`;
+}
+// повторы по плану: из программы дня или из «4 × 8–10», сохранённого в упражнении
+const repsFor = e => sessionOn(dayOfWorkout(e.workout_id) || S.day)?.ex.find(x => norm(x.name) === norm(e.name))?.reps || String(e.plan || "").split("×")[1]?.trim() || "";
 const planItems = (p, day) => p.ex.map(e => ({ name: e.name, plan: `${e.sets} × ${e.reps}`, sets: suggestSets(e.name, e.sets, e.reps, day) }));
 const tipFor = name => sessionOn(S.day)?.ex.find(e => norm(e.name) === norm(name))?.tip || "";
 
@@ -947,6 +960,7 @@ function exBody(e, last) {
   return `<div class="ex-body">
     ${tip ? `<p class="ex-tip">${esc(tip)}</p>` : ""}
     ${last && setsText(last.sets) ? `<p class="ex-tip">В прошлый раз, ${shortDay(last.day)}: ${esc(setsText(last.sets))}</p>` : ""}
+    ${(h => h ? `<p class="ex-tip ex-hint">${esc(h)}</p>` : "")(weightHint(e.name, dayOfWorkout(e.workout_id) || S.day, repsFor(e)))}
     <div class="sets">${(e.sets || []).map((s, i, _, pr = prSetIndex(e, dayOfWorkout(e.workout_id) || S.day)) => `
       <div class="set ${s.done ? "done" : ""} ${i === pr ? "pr" : ""}" data-i="${i}">
         <span class="n">${i === pr ? `<span class="pr-tag" title="Личный рекорд">PR</span>` : i + 1}</span>
@@ -1000,7 +1014,8 @@ function dayPanel() {
     ${s.ex.length ? workoutMeta(s.ex.map(e => ({ name: e.name, sets: e.sets?.length || 0 }))) : ""}
     <ol class="ex-list" id="ex-list">${s.ex.map((e, i) => exRow(e, i, d)).join("")}</ol>
     ${addForm()}
-    ${s.ex.length && s.done < s.ex.length ? `<div class="row actions"><button class="btn" data-act="finish">${I.check}Отметить всё</button></div>` : ""}
+    ${s.ex.length && s.done < s.ex.length ? `<div class="row actions">${d === today() ? `<button class="btn" data-act="gym">${I.play}В зал</button><button class="btn quiet" data-act="finish">${I.check}Отметить всё</button>` : `<button class="btn" data-act="finish">${I.check}Отметить всё</button>`}</div>` : ""}
+    ${s.ex.length && s.done ? `<div class="row links"><button class="linkbtn" data-act="summary">Итог тренировки</button></div>` : ""}
     <div class="row links"><button class="linkbtn muted-link" data-act="move">Перенести на другой день</button><button class="linkbtn muted-link" data-act="del-w">Удалить тренировку</button></div>`;
 }
 // Сводка тренировки: число упражнений, примерное время (≈2,5 мин на подход с отдыхом) и мышцы.
@@ -1143,6 +1158,168 @@ function restTimer(sec = 90) {
   };
   el.querySelector(".rest-t").innerHTML = `Отдых <b class="mono"></b>`;
   tick(); restT = setInterval(tick, 1000);
+}
+
+/* ---------- Режим «В зале»: одно упражнение на весь экран, крупные кнопки, отдых — тут же ---------- */
+const G = { wid: null, k: 0, el: null, rest: 0, restT: null, clock: null, wake: null };
+// отдых по плану: «отдых 30–45 секунд», «отдых 3–4 мин» — берём нижнюю границу; иначе полторы минуты
+function restFor(e) {
+  const d = dayOfWorkout(e.workout_id) || S.day, p = sessionOn(d);
+  const txt = `${p?.ex.find(x => norm(x.name) === norm(e.name))?.tip || ""} ${p?.focus || ""}`;
+  const m = txt.match(/отдых\s*(\d+)(?:\s*[–-]\s*\d+)?\s*(сек|с\b|мин)/i);
+  return m ? +m[1] * (/мин/i.test(m[2]) ? 60 : 1) : 90;
+}
+const gymList = () => exercisesOf(G.wid);
+const gymWake = on => {
+  if (on && !G.wake && "wakeLock" in navigator) G.wake = navigator.wakeLock.request("screen").catch(() => null);
+  if (!on && G.wake) { G.wake.then(w => w?.release()).catch(() => {}); G.wake = null; }
+};
+function openGym(wid) {
+  G.wid = wid; const list = gymList(); if (!list.length) return;
+  G.k = Math.max(0, list.findIndex(e => !e.done)); G.rest = 0;
+  if (!G.el) {
+    G.el = document.createElement("div"); G.el.className = "gym"; G.el.setAttribute("role", "dialog"); G.el.setAttribute("aria-modal", "true"); G.el.setAttribute("aria-label", "Тренировка в зале");
+    G.el.addEventListener("click", gymClick); G.el.addEventListener("change", gymInput);
+    document.body.append(G.el);
+  }
+  document.documentElement.classList.add("gym-on"); gymWake(true);
+  clearInterval(G.clock); G.clock = setInterval(gymTick, 1000);
+  gymPaint(); requestAnimationFrame(() => G.el.classList.add("open"));
+}
+function closeGym() {
+  if (!G.el) return;
+  clearInterval(G.clock); clearInterval(G.restT); gymWake(false);
+  document.documentElement.classList.remove("gym-on");
+  const el = G.el; G.el = null; el.classList.remove("open"); setTimeout(() => el.remove(), 300);
+  if (route().path === "") rerender();
+}
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && G.el && !document.querySelector(".sheet-backdrop")) closeGym(); });
+document.addEventListener("visibilitychange", () => { if (G.el && document.visibilityState === "visible") { G.wake = null; gymWake(true); } });
+const mmssLeft = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+function gymElapsed() {
+  const w = S.workouts.find(x => x.id === G.wid), t0 = w?.created_at ? Date.parse(w.created_at) : 0, s = Math.round((Date.now() - t0) / 1000);
+  return t0 && s >= 0 && s < 5 * 3600 ? s : null;
+}
+function gymTick() {
+  if (!G.el) return;
+  const el = G.el.querySelector("[data-g-clock]"), s = gymElapsed(), m = Math.floor((s || 0) / 60);
+  if (el) el.textContent = s == null ? "" : m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, "0")} мин`;
+  if (G.rest) {
+    const left = Math.max(0, Math.round((G.rest - Date.now()) / 1000)), r = G.el.querySelector("[data-g-rest]");
+    if (r) r.textContent = mmssLeft(left);
+    if (!left) { G.rest = 0; G.moved = false; navigator.vibrate?.([200, 100, 200]); gymPaint(); }
+  }
+}
+function gymPaint() {
+  const list = gymList(), e = list[G.k]; if (!e) return closeGym();
+  if (!e.sets?.length) { e.sets = [{ w: null, r: null, done: false }]; saveEx(e); }
+  const si = e.sets.findIndex(x => !x.done), set = e.sets[si], m = media(e.name), reps = repsFor(e);
+  const last = lastFor(e.name, dayOfWorkout(e.workout_id) || S.day), hint = weightHint(e.name, dayOfWorkout(e.workout_id) || S.day, reps);
+  const next = list.slice(G.k + 1).find(x => !x.done) || list.find(x => !x.done && x !== e);
+  const allDone = list.every(x => x.done);
+  const step = (f, d, v, unit, label) => `<div class="g-step"><span class="g-lab">${label}</span>
+      <div class="g-ctl"><button class="icon-btn" data-g="${f}" data-d="${-d}" aria-label="Меньше">${I.minus}</button>
+      <input class="mono" inputmode="decimal" data-gf="${f}" value="${v ?? ""}" placeholder="—" aria-label="${label}"><button class="icon-btn" data-g="${f}" data-d="${d}" aria-label="Больше">${I.plus}</button></div><span class="g-unit">${unit}</span></div>`;
+  const body = G.rest ? `<div class="g-rest" role="timer">
+        <span class="eyebrow">Отдых</span><b class="mono" data-g-rest>${mmssLeft(Math.max(0, Math.round((G.rest - Date.now()) / 1000)))}</b>
+        <p class="muted">${G.moved ? `Дальше: ${esc(e.name)}` : si < 0 ? (next ? `Дальше: ${esc(next.name)}` : "Это было последнее упражнение") : `Дальше подход ${si + 1} из ${e.sets.length}`}</p>
+        <div class="row"><button class="btn quiet" data-g="rest+">+30 с</button><button class="btn" data-g="rest-x">Хватит отдыхать</button></div></div>`
+    : set ? `<div class="g-set">
+        <div class="g-set-h"><b>Подход ${si + 1} из ${e.sets.length}</b>${reps ? `<span class="muted">по плану ${esc(reps)}</span>` : ""}</div>
+        <div class="g-steps">${step("w", 2.5, set.w, "кг", "Вес")}${step("r", 1, set.r, "раз", "Повторы")}</div>
+        <button class="btn g-go" data-g="done">${I.check}Подход сделан</button></div>`
+    : `<div class="g-set g-ex-done"><b>Все подходы сделаны</b>
+        <div class="row">${next ? `<button class="btn" data-g="next">Дальше: ${esc(next.name)}</button>` : `<button class="btn" data-g="finish">${I.check}Закончить тренировку</button>`}<button class="btn quiet" data-g="add">+ Подход</button></div></div>`;
+  G.el.innerHTML = `<div class="g-wrap">
+    <header class="g-top">
+      <button class="icon-btn bare" data-g="close" aria-label="Свернуть режим «В зале»" title="Свернуть">${I.down}</button>
+      <div class="g-prog"><span>Упражнение ${G.k + 1} из ${list.length}</span><span data-g-clock></span></div>
+      <button class="linkbtn muted-link" data-g="finish">Закончить</button>
+    </header>
+    <div class="g-bars" aria-hidden="true">${list.map((x, i) => `<i class="${x.done ? "done" : ""} ${i === G.k ? "cur" : ""}"></i>`).join("")}</div>
+    <section class="g-ex">
+      ${m ? `<button class="g-ph" data-g="photo" aria-label="Как делать: ${esc(e.name)}"><img src="${m.img}" alt=""><img src="${m.img2}" alt="" class="b"></button>` : ""}
+      <h2>${esc(e.name)}</h2>
+      ${hint ? `<p class="g-hint">${esc(hint)}</p>` : last && setsText(last.sets) ? `<p class="g-hint">В прошлый раз: ${esc(setsText(last.sets))}</p>` : ""}
+      <ol class="g-sets">${e.sets.map((x, i) => `<li class="${x.done ? "done" : ""} ${i === si ? "cur" : ""}"><span class="mono">${x.w != null ? fmt(x.w, 1) : "—"}×${x.r ?? "—"}</span></li>`).join("")}</ol>
+    </section>
+    ${body}
+    <nav class="g-nav"><button class="icon-btn bare" data-g="prev" ${G.k ? "" : "disabled"} aria-label="Предыдущее упражнение">${I.left}</button>
+      <span class="muted">${allDone ? "Всё сделано" : next ? `Потом: ${esc(next.name)}` : ""}</span>
+      <button class="icon-btn bare" data-g="skip" ${G.k < list.length - 1 ? "" : "disabled"} aria-label="Следующее упражнение">${I.right}</button></nav>
+  </div>`;
+  gymTick();
+}
+function gymInput(ev) {
+  const f = ev.target.dataset.gf; if (!f) return;
+  const e = gymList()[G.k], set = e?.sets.find(x => !x.done); if (!set) return;
+  const v = parseFloat(String(ev.target.value).replace(",", ".")); set[f] = Number.isFinite(v) && v >= 0 ? v : null; saveEx(e);
+}
+function gymClick(ev) {
+  const b = ev.target.closest("[data-g]"); if (!b) return;
+  const list = gymList(), e = list[G.k], a = b.dataset.g;
+  const set = e?.sets.find(x => !x.done);
+  if (a === "w" || a === "r") { if (!set) return; set[a] = Math.max(0, Math.round(((+set[a] || 0) + +b.dataset.d) * 10) / 10); saveEx(e);
+    const inp = G.el.querySelector(`[data-gf="${a}"]`); if (inp) inp.value = set[a]; return; }
+  if (a === "done" && set) {
+    set.done = true; e.done = e.sets.every(x => x.done);
+    for (const x of e.sets) if (!x.done) { x.w ??= set.w; x.r ??= set.r; } // пустые следующие подходы — с тем же весом и повторами
+    saveEx(e);
+    const d = dayOfWorkout(e.workout_id) || S.day, i = e.sets.indexOf(set);
+    if (prSetIndex(e, d) === i) toast(`Новый рекорд: ${e.name} — ${fmt(set.w, 1)} кг (было ${fmt(bestBefore(e.name, d), 1)})`);
+    if (list.every(x => x.done)) return finishWorkout(G.wid);
+    G.rest = Date.now() + restFor(e) * 1000; G.moved = e.done;
+    if (e.done) { const n = list.findIndex((x, j) => j > G.k && !x.done); G.k = n >= 0 ? n : list.findIndex(x => !x.done); }
+    return gymPaint();
+  }
+  if (a === "rest+") { G.rest += 30000; return gymTick(); }
+  if (a === "rest-x") { G.rest = 0; G.moved = false; return gymPaint(); }
+  if (a === "add") { const ls = e.sets.at(-1) || {}; e.sets.push({ w: ls.w ?? null, r: ls.r ?? null, done: false }); e.done = false; saveEx(e); return gymPaint(); }
+  if (a === "next") { const n = list.findIndex((x, j) => j > G.k && !x.done); G.k = n >= 0 ? n : list.findIndex(x => !x.done); G.rest = 0; return gymPaint(); }
+  if (a === "prev") { G.k = Math.max(0, G.k - 1); G.rest = 0; return gymPaint(); }
+  if (a === "skip") { G.k = Math.min(list.length - 1, G.k + 1); G.rest = 0; return gymPaint(); }
+  if (a === "photo") return photoSheet(e.name);
+  if (a === "close") return closeGym();
+  if (a === "finish") return finishWorkout(G.wid);
+}
+
+/* ---------- Итог тренировки: время, тоннаж, подходы, рекорды и сравнение с прошлой такой же ---------- */
+function workoutStats(w) {
+  const ex = exercisesOf(w.id), done = ex.flatMap(e => (e.sets || []).filter(x => x.done || e.done));
+  const ton = done.reduce((a, x) => a + (+x.w || 0) * (+x.r || 0), 0);
+  const prs = ex.map(e => { const i = prSetIndex(e, w.day); return i >= 0 ? { name: e.name, w: +e.sets[i].w, was: bestBefore(e.name, w.day) } : null; }).filter(Boolean);
+  return { ex, sets: done.length, ton: Math.round(ton), prs, exDone: ex.filter(e => e.done).length };
+}
+function workoutSummary(w, fresh) {
+  const st = workoutStats(w), title = wTitle(w);
+  let dur = null; try { dur = +localStorage.getItem("gym-dur-" + w.id) || null; } catch {}
+  const prev = S.workouts.filter(x => x.id !== w.id && x.day < w.day && wTitle(x) === title).sort((a, b) => b.day.localeCompare(a.day))[0];
+  const pt = prev ? workoutStats(prev).ton : 0, diff = pt && st.ton ? Math.round((st.ton - pt) / pt * 100) : null;
+  const cmp = diff == null ? "" : diff === 0 ? `Тоннаж как в прошлый раз (${shortDay(prev.day)})` : `${diff > 0 ? "+" : "−"}${Math.abs(diff)}% тоннажа к прошлой «${title}», ${shortDay(prev.day)}`;
+  const share = [`Train · ${title}, ${shortDay(w.day)}`, [dur ? `${dur} мин` : "", `${st.exDone} из ${st.ex.length} ${exWord(st.ex.length)}`, `${st.sets} ${plural(st.sets, "подход", "подхода", "подходов")}`, st.ton ? `тоннаж ${fmt(st.ton)} кг` : ""].filter(Boolean).join(" · "),
+    ...st.prs.map(p => `Рекорд: ${p.name} — ${fmt(p.w, 1)} кг`), cmp].filter(Boolean).join("\n");
+  sheet(fresh ? "Тренировка закончена" : "Итог тренировки", `<div class="sum">
+      <p class="muted">${esc(title)} · ${longDay(w.day)}</p>
+      <div class="stats sum-stats">
+        ${dur ? `<div><b>${dur}</b><span>минут</span></div>` : ""}
+        <div><b>${fmt(st.ton)}</b><span>кг тоннаж</span></div>
+        <div><b>${st.sets}</b><span>${plural(st.sets, "подход", "подхода", "подходов")}</span></div>
+        <div><b>${st.exDone}/${st.ex.length}</b><span>${exWord(st.ex.length)}</span></div>
+      </div>
+      ${cmp ? `<p class="sum-cmp">${esc(cmp)}</p>` : ""}
+      ${st.prs.length ? `<div class="sum-prs"><span class="eyebrow">Рекорды</span>${st.prs.map(p => `<p><b>${esc(p.name)}</b> — ${fmt(p.w, 1)} кг <span class="muted">было ${fmt(p.was, 1)}</span></p>`).join("")}</div>` : ""}
+      <div class="sheet-actions"><button class="btn quiet" type="button" data-sum-share>${I.share}Поделиться</button><button class="btn" type="button" data-close>Готово</button></div>
+    </div>`, el => {
+    el.querySelector("[data-sum-share]").onclick = async () => {
+      try { if (navigator.share) await navigator.share({ text: share }); else { await navigator.clipboard.writeText(share); toast("Итог скопирован — можно вставить в сообщение"); } } catch {}
+    };
+  });
+}
+// «Закончить»: что сделано — то и засчитано (недоделанные подходы не отмечаются сами); время — от «Начать» до сейчас
+function finishWorkout(wid) {
+  const w = S.workouts.find(x => x.id === wid); if (!w) return;
+  if (G.el && G.wid === wid) { const s = gymElapsed(); if (s) try { localStorage.setItem("gym-dur-" + wid, String(Math.max(1, Math.round(s / 60)))); } catch {} closeGym(); }
+  rerender(); workoutSummary(w, true);
 }
 
 async function swapDays(a, b) {
@@ -3411,13 +3588,16 @@ async function run(b, act) {
       b.classList.add("loading"); b.disabled = true;
       const nw = await ensureWorkout().catch(() => null); if (!nw) { b.classList.remove("loading"); b.disabled = false; return; }
       if (S.day < today()) for (const e of exercisesOf(nw.id)) { e.done = true; e.sets = e.sets.map(s => ({ ...s, done: true })); saveEx(e); }
-      else { const first = exercisesOf(nw.id)[0]; if (first) S.open.add(first.id); }
-      rerender(); break;
+      rerender();
+      if (S.day >= today()) openGym(nw.id); // сегодня — сразу режим «В зале»
+      break;
     }
     case "finish": {
       for (const e of exercisesOf(w.id)) { e.done = true; e.sets = (e.sets || []).map(x => ({ ...x, done: true })); saveEx(e); }
-      S.open.clear(); rerender(); toast("Тренировка отмечена"); break;
+      S.open.clear(); rerender(); workoutSummary(w, true); break;
     }
+    case "gym": if (w) openGym(w.id); break;
+    case "summary": if (w) workoutSummary(w); break;
     case "new-w": { b.classList.add("loading"); await createWorkout(S.day).catch(() => {}); rerender(); document.querySelector(".add-ex .inp")?.focus(); break; }
     case "from-example": examplePicker(); break;
     case "skip": { const d = S.day; setRest(d); rerender();
