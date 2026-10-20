@@ -1925,12 +1925,16 @@ async function ytToggle(i) {
 }
 // включить трек плейлиста; big — сразу развернуть видео
 async function ytPlayAt(i, k, big) {
-  const x = YT.list[i];
-  if (YT.i === i && YT.player?.playVideoAt && YT.loaded === x.yt_id) { M.audio.pause(); YT.player.playVideoAt(k); }
+  const x = YT.list[i], id = YTL[x.yt_id]?.items?.[k]?.id;
+  YT.want = { k, id, until: Date.now() + 8000 };
+  if (YT.i === i && YT.player?.playVideoAt && YT.loaded === x.yt_id) { M.audio.pause(); YT.player.playVideoAt(ytPlIdx(id, k)); }
   else await ytPlay(i, k);
   if (big && YT.dock) { YT.dock.classList.add("big"); YT.dock.classList.remove("mini"); }
-  YT.plk = k; YT.want = { k, until: Date.now() + 4000 }; refreshYtList(); ytPaintDock();
+  YT.plk = k; refreshYtList(); ytPaintDock();
 }
+// Наш список треков (со страницы плейлиста) и очередь плеера YouTube могут расходиться: скрытые и удалённые видео
+// есть в одном и нет в другом — номера сдвигаются. Поэтому трек ищем в очереди плеера по id видео, номер — запасной вариант.
+const ytPlIdx = (id, k) => { const j = id ? YT.player?.getPlaylist?.()?.indexOf(id) ?? -1 : -1; return j >= 0 ? j : k; };
 function ytSection() {
   if (!YT.list) { loadYt().then(() => { if (route().path === "music" && M.folder === "yt") rerender(); }); return `<div class="skel" style="height:180px;margin-top:16px"></div>`; }
   const cur = YT.list[YT.i];
@@ -2076,8 +2080,17 @@ function ytTick() {
   YT.dock.querySelector("[data-t1]").textContent = d ? mmss(d) : "0:00";
   // плейлист: какой трек играет сейчас — подсветка в раскрытом списке и «N из M» в плеере
   if (YT.list?.[YT.i]?.kind === "playlist") {
-    const k = P.getPlaylistIndex?.() ?? -1;
-    if (YT.want) { if (k === YT.want.k || Date.now() > YT.want.until) YT.want = null; else return; } // ждём, пока YouTube переключится на выбранный трек — без мигания подсветки
+    const items = YTL[YT.list[YT.i].yt_id]?.items || [], vid = P.getVideoData?.()?.video_id;
+    const k = vid && items.length ? items.findIndex(v => v.id === vid) : P.getPlaylistIndex?.() ?? -1;
+    if (YT.want) { // ждём, пока YouTube переключится на выбранный трек — без мигания подсветки
+      const w = YT.want;
+      if ((w.id ? vid === w.id : k === w.k) || Date.now() > w.until) YT.want = null;
+      else { // плейлист загрузился по номеру, а там другое видео — один раз переключаем на нужное по id
+        const j = w.id && !w.fixed ? P.getPlaylist?.()?.indexOf(w.id) ?? -1 : -1;
+        if (j >= 0 && vid && P.getPlaylistIndex?.() !== j) { w.fixed = true; P.playVideoAt(j); }
+        return;
+      }
+    }
     if (k >= 0 && k !== YT.plk) { YT.plk = k; ytPaintDock(); refreshYtList(); }
   }
 }
