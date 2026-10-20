@@ -1791,3 +1791,23 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 :root[data-mode="dark"] .player{background:color-mix(in srgb,var(--surface) 78%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-color:var(--rim);box-shadow:0 8px 24px rgba(0,0,0,.5)}
 :root[data-mode="dark"] .fold-card:hover .fold-cover{box-shadow:none}
 @media (hover:hover){:root[data-mode="dark"] .folders .fold-card:hover .fold-cover{transform:none}}
+
+/* ---------- Плавность ---------- */
+/* смена вида внутри экрана: старое и новое перетекают друг в друга (одинаковые части не меняются), шапка и меню стоят */
+@media (prefers-reduced-motion: no-preference){
+  html.vt-soft::view-transition-old(root){animation:vtSoftOut .22s ease both}
+  html.vt-soft::view-transition-new(root){animation:vtSoftIn .22s ease both}
+  html.vt-soft .topbar{view-transition-name:topbar}
+  html.vt-soft .tabbar{view-transition-name:tabbar}
+  @keyframes vtSoftOut{from{opacity:1}to{opacity:0}}
+  @keyframes vtSoftIn{from{opacity:0}to{opacity:1}}
+}
+/* вход: подсветка выбранного пункта переезжает, поле «Имя» плавно раскрывается и сворачивается */
+.auth-seg{position:relative;isolation:isolate}
+.auth-seg .seg-pill{position:absolute;z-index:-1;top:3px;bottom:3px;left:3px;width:calc(50% - 4px);border-radius:9px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform var(--t3) var(--ease-out)}
+.auth-seg.up .seg-pill{transform:translateX(calc(100% + 2px))}
+.auth-seg button[aria-checked="true"]{background:none;box-shadow:none}
+.auth-name{display:grid;grid-template-rows:1fr;transition:grid-template-rows var(--t3) var(--ease-out),opacity var(--t2) ease,margin var(--t3) var(--ease-out)}
+.auth-name>*{min-height:0;overflow:hidden;padding:3px;margin:-3px}
+.auth-name.shut{grid-template-rows:0fr;opacity:0;margin-bottom:-14px}
+@media (prefers-reduced-motion: reduce){.auth-seg .seg-pill,.auth-name{transition:none}}

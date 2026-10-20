@@ -446,6 +446,16 @@ function rerender() { // перерисовать экран без анимац
   main.classList.remove("screen");
   main.innerHTML = route().view();
 }
+// смена вида внутри экрана (день, неделя, фильтр, папка): старое и новое мягко перетекают, без резкого скачка;
+// неизменившиеся части при этом остаются на месте. Без View Transitions — просто перерисовка.
+function smooth(fn = rerender) {
+  const root = document.documentElement;
+  if (!document.startViewTransition || calm() || document.hidden) { fn(); return Promise.resolve(); }
+  root.classList.add("vt-soft");
+  const t = document.startViewTransition(fn);
+  t.finished.finally(() => root.classList.remove("vt-soft"));
+  return t.updateCallbackDone.catch(() => {});
+}
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
 }
@@ -746,21 +756,34 @@ function loginView(mode = "in") {
         <h1 class="auth-logo intro" data-scramble><span class="brand-t">Train</span><em>.</em></h1>
         <p class="lead">Тренируйся по программам чемпионов: календарь, рабочие веса и тренер, который видит твой прогресс.</p>
       </div>
-      <div class="seg full" role="radiogroup" aria-label="Вход или регистрация">
+      <div class="seg full auth-seg ${up ? "up" : ""}" role="radiogroup" aria-label="Вход или регистрация">
+        <i class="seg-pill" aria-hidden="true"></i>
         <button role="radio" data-auth="in" aria-checked="${!up}">Вход</button>
         <button role="radio" data-auth="up" aria-checked="${up}">Регистрация</button>
       </div>
       <form id="login" novalidate>
-        ${up ? `<label class="field"><span>Имя</span><input class="inp" name="name" autocomplete="given-name" maxlength="40"></label>` : ""}
+        <div class="auth-name ${up ? "" : "shut"}" ${up ? "" : "inert"}><label class="field"><span>Имя</span><input class="inp" name="name" autocomplete="given-name" maxlength="40"></label></div>
         <label class="field"><span>Почта</span><input class="inp" type="email" name="email" autocomplete="${up ? "email" : "username"}" inputmode="email" required></label>
-        <label class="field"><span>Пароль${up ? ", не короче 6 символов" : ""}</span><input class="inp" type="password" name="password" autocomplete="${up ? "new-password" : "current-password"}" required></label>
+        <label class="field"><span>Пароль<span class="pw-hint" ${up ? "" : "hidden"}>, не короче 6 символов</span></span><input class="inp" type="password" name="password" autocomplete="${up ? "new-password" : "current-password"}" required></label>
         <p class="err" id="lerr" role="alert"></p>
         <button class="btn" type="submit">${up ? "Создать аккаунт" : "Войти"}</button>
       </form>
       <button type="button" class="auth-credit" data-credits>Авторы фото</button>
       </section>
     </main>`;
-  app.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => { if (b.dataset.auth !== mode) { const em = app.querySelector("[name=email]").value; loginView(b.dataset.auth); app.querySelector("[name=email]").value = em; } });
+  let up2 = up; // переключение «Вход / Регистрация» — на месте: лента атлетов, логотип и введённая почта не трогаются
+  const setMode = v => {
+    if (v === up2) return; up2 = v;
+    const f = app.querySelector("#login"), name = app.querySelector(".auth-name");
+    app.querySelector(".auth-seg").classList.toggle("up", v);
+    app.querySelectorAll("[data-auth]").forEach(b => b.setAttribute("aria-checked", String((b.dataset.auth === "up") === v)));
+    name.classList.toggle("shut", !v); name.inert = !v;
+    app.querySelector(".pw-hint").hidden = !v;
+    f.email.autocomplete = v ? "email" : "username"; f.password.autocomplete = v ? "new-password" : "current-password";
+    f.querySelector("[type=submit]").textContent = v ? "Создать аккаунт" : "Войти";
+    document.getElementById("lerr").textContent = "";
+  };
+  app.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => setMode(b.dataset.auth === "up"));
   ytWarm();
   app.querySelector(".auth-art").onclick = ev => { const c = ev.target.closest("[data-ath]"); if (c) athleteSheet(c.dataset.ath); };
   app.querySelector("[data-credits]").onclick = () => sheet("Авторы фото", `<p class="hint">Фото с Wikimedia Commons</p>
@@ -772,6 +795,7 @@ function loginView(mode = "in") {
     const email = f.email.value.trim(), password = f.password.value;
     const fail = text => { err.textContent = text; f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake"); btn.classList.remove("loading"); btn.disabled = false; };
     if (!email || !password) return fail("Введите почту и пароль");
+    const up = up2;
     if (up && password.length < 6) return fail("Пароль должен быть не короче 6 символов");
     btn.classList.add("loading"); btn.disabled = true; err.textContent = "";
     if (up) {
@@ -3305,7 +3329,7 @@ async function run(b, act) {
   const w = workoutOn(S.day);
   switch (act) {
     case "pick-day": {
-      const changed = S.day !== b.dataset.day; S.day = b.dataset.day; rerender();
+      const changed = S.day !== b.dataset.day; S.day = b.dataset.day; await smooth();
       if (changed && innerWidth < 760) document.getElementById("day-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     }
@@ -3313,21 +3337,21 @@ async function run(b, act) {
       const n = +b.dataset.n;
       if (getCalView() === "week") { const d = addDays(S.day, 7 * n); S.day = monday(d) === monday(today()) ? today() : monday(d); }
       else { const d0 = parse(S.day), d = new Date(d0.getFullYear(), d0.getMonth() + n, 1); S.day = iso(d).slice(0, 7) === today().slice(0, 7) ? today() : iso(d); }
-      rerender(); break;
+      smooth(); break;
     }
-    case "cal-view": try { localStorage.setItem("gym-cal-view", b.dataset.v); } catch {} rerender(); break;
-    case "today": S.day = today(); rerender(); break;
+    case "cal-view": try { localStorage.setItem("gym-cal-view", b.dataset.v); } catch {} smooth(); break;
+    case "today": S.day = today(); smooth(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
     case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else { M.queue = visibleTracks().map(x => x.t.file); playAt(i); } break; }
     case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
     case "mu-folder": {
-      M.folder = b.dataset.id || null; M.q = ""; rerender();
+      M.folder = b.dataset.id || null; M.q = ""; await smooth();
       // список открытой папки ниже сетки — на телефоне подкручиваем к нему, если он за краем экрана
       const h = document.querySelector(".mu-head"); if (h && h.getBoundingClientRect().top > innerHeight * .7) h.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
       break;
     }
-    case "mu-folders-all": M.allFolders = !M.allFolders; rerender(); break;
+    case "mu-folders-all": M.allFolders = !M.allFolders; smooth(); break;
     case "mu-fav": toggleFav(+b.dataset.i); break;
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;
@@ -3337,7 +3361,7 @@ async function run(b, act) {
     case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
-    case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
+    case "prog-where": S.progWhere = b.dataset.v; smooth(); break;
     case "prog-vid": videoSheet(programById(b.dataset.id).videos[+b.dataset.k]); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
@@ -3355,7 +3379,7 @@ async function run(b, act) {
     case "mu-up-close": U.items = []; document.getElementById("mu-upl")?.remove(); break;
     case "mu-up-retry": U.items = U.items.filter(y => y.st === "fail" || y.st === "skip").map(y => ({ f: y.f, st: "wait", pct: 0 })); runUpload(); break;
     case "mu-shuffle": M.shuffle = !M.shuffle; b.setAttribute("aria-pressed", M.shuffle); break;
-    case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
+    case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} smooth(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
     case "send-p": sendProgramSheet(b.dataset.u); break;
     case "share-open": acceptSheet(S.shares.find(x => x.id === b.dataset.id)); break;
@@ -3387,9 +3411,9 @@ async function run(b, act) {
       if (sessionOn(w.day)) setRest(w.day); // иначе на этом дне снова появится план программы
       rerender(); break;
     }
-    case "move": S.moving = S.day; S.moveWeek = monday(S.day); rerender(); scrollTo({ top: 0, behavior: "smooth" }); break;
-    case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); rerender(); break;
-    case "move-cancel": S.moving = null; rerender(); break;
+    case "move": S.moving = S.day; S.moveWeek = monday(S.day); await smooth(); scrollTo({ top: 0, behavior: "smooth" }); break;
+    case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); smooth(); break;
+    case "move-cancel": S.moving = null; smooth(); break;
     case "move-to": {
       const from = S.moving, to = b.dataset.day; b.classList.add("busy");
       try { await swapDays(from, to); S.moving = null; S.day = to; rerender(); toast(`Перенесено на ${WD_FULL[wdOf(to)].toLowerCase()}, ${shortDay(to)}`); }
