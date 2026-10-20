@@ -34,6 +34,7 @@ const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100; return m10 
 const exWord = n => plural(n, "упражнение", "упражнения", "упражнений");
 
 const I = {
+  look: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 7.5h6.5M12 12h9M12 16.5h6.5"/></svg>',
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
@@ -178,15 +179,53 @@ function themeColor() { // строка браузера и статус-бар 
   const p = PALETTES[getLook("palette")], t = getTheme();
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
   const add = (c, media) => { const m = document.createElement("meta"); m.name = "theme-color"; m.content = c; if (media) m.media = media; document.head.append(m); };
-  if (t === "system") { add(p.l[0], "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(p[t === "dark" ? "d" : "l"][0]);
+  if (t === "system") { add(concrete(p.l), "(prefers-color-scheme: light)"); add(p.d[0], "(prefers-color-scheme: dark)"); } else add(t === "dark" ? p.d[0] : concrete(p.l));
   setMode();
 }
 themeColor();
 // тёмный режим отдельным атрибутом — на нём держится «мрачная» атмосфера в style.css (системная тема тоже учитывается)
-function setMode() { document.documentElement.dataset.mode = darkNow() ? "dark" : "light"; }
+function setMode() {
+  const r = document.documentElement, dark = darkNow();
+  r.dataset.mode = dark ? "dark" : "light";
+  // светлая тема — «бетон»: фон палитры чуть притушен её же цветом текста
+  if (dark) r.style.removeProperty("--bg"); else r.style.setProperty("--bg", concrete(PALETTES[getLook("palette")].l));
+}
+function concrete(p) { const h = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), a = h(p[0]), b = h(p[2]);
+  return "#" + a.map((x, i) => Math.round(x * .93 + b[i] * .07).toString(16).padStart(2, "0")).join(""); }
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", setMode);
 const palPreview = k => { const c = PALETTES[k][darkNow() ? "d" : "l"];
   return `<span class="pal-prev" style="--p-bg:${c[0]};--p-surface:${c[1]};--p-ink:${c[2]};--p-line:${c[3]}" aria-hidden="true"><i></i><i></i><b><i></i><u></u></b></span>`; };
+
+// Прозрачность: карточки, шторки и панели — дымчатое стекло. По умолчанию включена, выбор — на этом устройстве.
+const getGlass = () => { try { return localStorage.getItem("gym-glass") !== "0"; } catch { return true; } };
+function setGlass(on) {
+  try { on ? localStorage.removeItem("gym-glass") : localStorage.setItem("gym-glass", "0"); } catch {}
+  lookAnim(); document.documentElement.toggleAttribute("data-glass", on);
+}
+document.documentElement.toggleAttribute("data-glass", getGlass());
+// Оформление — отдельным окном из шапки (и с экрана входа): тема, прозрачность, палитра, цвет кнопок
+function lookSheet() {
+  const th = getTheme(), seg = (act, list, cur, label) => `<div class="seg full" role="radiogroup" aria-label="${label}">${list.map(([k, l]) => `<button role="radio" data-look="${act}" data-v="${k}" aria-checked="${cur === k}">${l}</button>`).join("")}</div>`;
+  sheet("Оформление", `<div class="look">
+      <p class="look-label">Тема</p>
+      ${seg("theme", [["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]], th, "Тема")}
+      <p class="look-label">Прозрачность</p>
+      ${seg("glass", [["1", "Стекло"], ["0", "Плотно"]], getGlass() ? "1" : "0", "Прозрачность")}
+      <p class="look-label" id="look-pal">Палитра</p>
+      <div class="look-pals" role="radiogroup" aria-labelledby="look-pal">${Object.entries(PALETTES).map(([k, x]) => `<button class="look-pal" role="radio" data-look="palette" data-v="${k}" aria-checked="${getLook("palette") === k}">${palPreview(k)}<span>${x.label}</span></button>`).join("")}</div>
+      <p class="look-label" id="look-acc">Цвет кнопок и ссылок</p>
+      <div class="look-accents" role="radiogroup" aria-labelledby="look-acc">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-look="accent" data-v="${k}" aria-checked="${getLook("accent") === k}" aria-label="${a.label}" title="${a.label}" style="--sw:${a.l};--sw-d:${a.d}"><i aria-hidden="true"></i></button>`).join("")}</div>
+      <p class="hint">Запоминается на этом устройстве.</p></div>`, el => {
+    el.addEventListener("click", ev => {
+      const b = ev.target.closest("[data-look]"); if (!b) return;
+      const k = b.dataset.look, v = b.dataset.v;
+      if (k === "theme") { setTheme(v); el.querySelectorAll(".look-pal").forEach(x => { x.querySelector(".pal-prev").outerHTML = palPreview(x.dataset.v); }); } // превью — под светлую или тёмную
+      else if (k === "glass") setGlass(v === "1");
+      else setLook(k, v);
+      b.parentElement.querySelectorAll("[data-look]").forEach(x => x.setAttribute("aria-checked", x === b));
+    });
+  });
+}
 
 /* ---------- data ---------- */
 async function loadAll() {
@@ -431,7 +470,7 @@ function render() {
   queueMicrotask(() => { if (S.loaded) S.fabShown = true; paintBadge(); }); // кнопка тренера въезжает только при первом показе
   const links = () => ROUTES.map(x => `<a href="#/${x.path}" ${x === r || x === r.parent ? 'aria-current="page"' : ""}>${x.icon}<span>${x.label}</span></a>`).join("");
   app.innerHTML = `
-    <header class="topbar"><a class="brand" href="#/" aria-label="Train — на главную"><span class="brand-t" aria-hidden="true">Train</span><span aria-hidden="true">.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav></header>
+    <header class="topbar"><a class="brand" href="#/" aria-label="Train — на главную"><span class="brand-t" aria-hidden="true">Train</span><span aria-hidden="true">.</span></a><nav class="nav" aria-label="Разделы">${links()}</nav><button class="icon-btn look-btn" data-act="look-open" aria-label="Оформление" title="Оформление: тема, прозрачность, цвета">${I.look}</button></header>
     <main class="wrap screen" id="main">${S.loaded ? r.view() : skeleton()}</main>
     <nav class="tabbar" aria-label="Разделы">${links()}</nav>
     ${S.loaded && r.path !== "music" ? `<button class="coach-fab ${S.fabShown ? "" : "enter"}" data-act="coach" aria-label="Открыть тренера">${bbSVG("fab")}<span>Тренер</span></button>` : ""}`;
@@ -749,6 +788,7 @@ function loginView(mode = "in") {
   const card = a => `<figure class="ath" data-ath="${a.id}" role="button" tabindex="0" aria-label="${esc(a.name)} — мотивация"><img src="${a.src}" alt="" style="object-position:${a.pos}" decoding="async" onload="this.classList.add('ok')"><figcaption><b>${a.name}</b><span>${a.title}</span></figcaption></figure>`;
   app.innerHTML = `
     <main class="auth screen">
+      <button class="icon-btn look-btn auth-look" type="button" data-look-open aria-label="Оформление" title="Оформление: тема, прозрачность, цвета">${I.look}</button>
       <section class="auth-art" aria-label="Легенды бодибилдинга"><div class="auth-track">${[...ATHLETES, ...ATHLETES, ...ATHLETES].map(card).join("")}</div></section>
       <section class="auth-card">
       <div class="auth-brand">
@@ -786,6 +826,7 @@ function loginView(mode = "in") {
   app.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => setMode(b.dataset.auth === "up"));
   ytWarm();
   app.querySelector(".auth-art").onclick = ev => { const c = ev.target.closest("[data-ath]"); if (c) athleteSheet(c.dataset.ath); };
+  app.querySelector("[data-look-open]").onclick = lookSheet;
   app.querySelector("[data-credits]").onclick = () => sheet("Авторы фото", `<p class="hint">Фото с Wikimedia Commons</p>
     <div class="pick">${ATH_CREDITS.map(([who, cr, url]) => `<a class="pick-row credit-row" href="${url}" target="_blank" rel="noopener"><span><b>${who}</b><span>${cr}</span></span>${I.right}</a>`).join("")}</div>`);
   const f = document.getElementById("login");
@@ -2539,7 +2580,7 @@ function loadPf(uid, force) {
 }
 // блоки «Фото» и «Любимые треки» — на своей странице и на странице друга
 function pfBlocks(uid, own) {
-  if (!PF.photos[uid]) { loadPf(uid).then(() => { if (["me", `u/${uid}`].includes(route().path)) rerender(); }); return `<div class="skel" style="height:140px;margin-top:12px;border-radius:18px"></div>`; }
+  if (!PF.photos[uid]) { loadPf(uid).then(() => { if (["me", `u/${uid}`].includes(route().path)) rerender(); }); return `<div class="skel" style="height:140px;margin-top:12px;border-radius:var(--r-xl)"></div>`; }
   const ph = PF.photos[uid];
   const favs = PF.tracks[uid] || [];
   const idx = favs.map(id => M.tracks ? M.tracks.findIndex(t => t.id === id) : -1).filter(i => i >= 0);
@@ -3257,7 +3298,7 @@ function dietHTML(pr) {
 
 /* ---------- profile ---------- */
 function profileView() {
-  const p = S.profile, th = getTheme(), prog = programById(p.program_id), t = today();
+  const p = S.profile, prog = programById(p.program_id), t = today();
   const done = S.workouts.filter(w => w.day <= t && dayStatus(w.day).st === "done");
   const month = done.filter(w => w.day.slice(0, 7) === t.slice(0, 7)).length;
   const lay = prog ? weekLayout(p, prog) : [], days = WD.filter((_, i) => lay[i] != null).map(w => w.toLowerCase()).join(", ");
@@ -3295,15 +3336,6 @@ function profileView() {
         <label class="field"><span>Рост, см</span><input class="inp" data-field="p-height_cm" inputmode="decimal" value="${p.height_cm ?? ""}" placeholder="например, 180"></label>
       </div>
       <p class="hint">Тренер учитывает вес и рост, когда подбирает нагрузку. Сохраняется само.</p>
-    </section>
-    <section class="card">
-      <h2 class="card-t">Оформление</h2>
-      <div class="seg full" role="radiogroup" aria-label="Тема">${[["system", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]].map(([k, l]) => `<button role="radio" data-act="theme" data-v="${k}" aria-checked="${th === k}">${l}</button>`).join("")}</div>
-      <p class="look-label" id="look-pal">Палитра</p>
-      <div class="look-pals" role="radiogroup" aria-labelledby="look-pal">${Object.entries(PALETTES).map(([k, x]) => `<button class="look-pal" role="radio" data-act="look" data-k="palette" data-v="${k}" aria-checked="${getLook("palette") === k}">${palPreview(k)}<span>${x.label}</span></button>`).join("")}</div>
-      <p class="look-label" id="look-acc">Цвет кнопок и ссылок</p>
-      <div class="look-accents" role="radiogroup" aria-labelledby="look-acc">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-act="look" data-k="accent" data-v="${k}" aria-checked="${getLook("accent") === k}" aria-label="${a.label}" title="${a.label}" style="--sw:${a.l};--sw-d:${a.d}"><i aria-hidden="true"></i></button>`).join("")}</div>
-      <p class="hint">Запоминается на этом устройстве.</p>
     </section>
     <section class="card">
       <h2 class="card-t">Аккаунт</h2>
@@ -3442,9 +3474,7 @@ async function run(b, act) {
       if (!await confirmSheet("Убрать программу из календаря?", "Запланированные дни исчезнут. Уже записанные тренировки останутся.", "Убрать")) return;
       Object.assign(S.profile, { program_id: null, program_start: null, program_days: null, program_week: null, program_moves: {} }); saveProfile(); rerender(); break;
     }
-    case "theme": setTheme(b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b));
-      document.querySelectorAll(".look-pal").forEach(x => { x.querySelector(".pal-prev").outerHTML = palPreview(x.dataset.v); }); break; // превью — под светлую или тёмную
-    case "look": setLook(b.dataset.k, b.dataset.v); b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", x === b)); break;
+    case "look-open": lookSheet(); break;
     case "del-acc": deleteAccount(); break;
     case "logout":
       if (await confirmSheet("Выйти из аккаунта?", "Тренировки сохранены — увидишь их снова, когда войдёшь с этой почтой.", "Выйти")) await sb.auth.signOut();
