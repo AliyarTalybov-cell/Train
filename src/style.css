@@ -911,7 +911,6 @@ a.has-badge::after{content:"";position:absolute;top:6px;left:calc(50% + 8px);wid
 .swatch[aria-checked="true"] i{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--sw)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .swatch i{--sw:var(--sw-d)}}
 :root[data-theme="dark"] .swatch i{--sw:var(--sw-d)}
-html.theme-anim,html.theme-anim *,html.theme-anim *::before,html.theme-anim *::after{transition:background-color var(--t2) ease,color var(--t2) ease,border-color var(--t2) ease,fill var(--t2) ease!important}
 /* музыка: процесс загрузки */
 .mu-upl{display:grid;gap:12px;margin-top:16px;padding:16px;border-radius:var(--r-l);background:var(--surface);border:1px solid var(--line)}
 .upl-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -1794,15 +1793,6 @@ html.yt-locked,html.yt-locked body{overflow:hidden}
 @media (hover:hover){:root[data-mode="dark"] .folders .fold-card:hover .fold-cover{transform:none}}
 
 /* ---------- Плавность ---------- */
-/* смена вида внутри экрана: старое и новое перетекают друг в друга (одинаковые части не меняются), шапка и меню стоят */
-@media (prefers-reduced-motion: no-preference){
-  html.vt-soft::view-transition-old(root){animation:vtSoftOut .22s ease both}
-  html.vt-soft::view-transition-new(root){animation:vtSoftIn .22s ease both}
-  html.vt-soft .topbar{view-transition-name:topbar}
-  html.vt-soft .tabbar{view-transition-name:tabbar}
-  @keyframes vtSoftOut{from{opacity:1}to{opacity:0}}
-  @keyframes vtSoftIn{from{opacity:0}to{opacity:1}}
-}
 /* вход: подсветка выбранного пункта переезжает, поле «Имя» плавно раскрывается и сворачивается */
 .auth-seg{position:relative;isolation:isolate}
 .auth-seg .seg-pill{position:absolute;z-index:-1;top:3px;bottom:3px;left:3px;width:calc(50% - 4px);border-radius:var(--r-m);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform var(--t3) var(--ease-out)}
@@ -1863,10 +1853,10 @@ h2{font-weight:600;letter-spacing:-.005em}
 :root[data-glass]::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
   radial-gradient(60% 40% at 12% 18%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 70%),
   radial-gradient(50% 40% at 92% 78%,color-mix(in srgb,var(--ink) 8%,transparent),transparent 70%)}
-:root[data-glass] :is(.card,.prog,.ex,.wk-day:not(.st-rest),.mu-quick .fold-card,.mu-search,.mu-upl){background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.15);backdrop-filter:blur(14px) saturate(1.15)}
+:root[data-glass] :is(.card,.prog,.ex,.wk-day:not(.st-rest),.mu-quick .fold-card,.mu-search,.mu-upl){background:var(--glass)} /* без размытия: на телефоне оно тормозит прокрутку */
 :root[data-glass] .wk-day.st-done{background:color-mix(in srgb,var(--accent) 9%,var(--glass))}
 :root[data-glass] .ex.done{background:color-mix(in srgb,var(--accent) 7%,var(--glass))}
 :root[data-glass] :is(.player,.rest,.coach-fab,.nav,.tabbar,.auth-card){background:color-mix(in srgb,var(--surface) 70%,transparent);-webkit-backdrop-filter:blur(22px) saturate(1.2);backdrop-filter:blur(22px) saturate(1.2)}
-:root[data-glass] .sheet-backdrop.open{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)} /* сама шторка плотная: липкая шапка внутри неё иначе видна полосой */
+
 :root[data-glass] .yt-dock{-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px)}
 @media (prefers-reduced-transparency: reduce){:root[data-glass] :is(.card,.prog,.ex,.wk-day,.mu-quick .fold-card,.mu-search,.sheet,.player,.nav,.tabbar,.auth-card){background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}

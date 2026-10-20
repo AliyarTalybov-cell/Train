@@ -135,7 +135,6 @@ function confirmSheet(title, text, ok = "Удалить") {
 const getTheme = () => { try { return localStorage.getItem("gym-theme") || "system"; } catch { return "system"; } };
 function setTheme(t) {
   try { t === "system" ? localStorage.removeItem("gym-theme") : localStorage.setItem("gym-theme", t); } catch {}
-  lookAnim();
   if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   themeColor();
 }
@@ -164,15 +163,8 @@ const getLook = k => { const [key, set, def] = LOOK[k]; try { const v = localSto
 function setLook(k, v) {
   const [key, set, def] = LOOK[k]; if (!Object.hasOwn(set, v)) return;
   try { v === def ? localStorage.removeItem(key) : localStorage.setItem(key, v); } catch {}
-  lookAnim();
   if (v === def) delete document.documentElement.dataset[k]; else document.documentElement.dataset[k] = v;
   themeColor();
-}
-let lookTimer;
-function lookAnim() { // цвета перетекают плавно, а не щёлкают
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  document.documentElement.classList.add("theme-anim"); clearTimeout(lookTimer);
-  lookTimer = setTimeout(() => document.documentElement.classList.remove("theme-anim"), 320);
 }
 const darkNow = () => getTheme() === "dark" || (getTheme() === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
 function themeColor() { // строка браузера и статус-бар телефона — в цвет фона палитры
@@ -200,7 +192,7 @@ const palPreview = k => { const c = PALETTES[k][darkNow() ? "d" : "l"];
 const getGlass = () => { try { return localStorage.getItem("gym-glass") !== "0"; } catch { return true; } };
 function setGlass(on) {
   try { on ? localStorage.removeItem("gym-glass") : localStorage.setItem("gym-glass", "0"); } catch {}
-  lookAnim(); document.documentElement.toggleAttribute("data-glass", on);
+  document.documentElement.toggleAttribute("data-glass", on);
 }
 document.documentElement.toggleAttribute("data-glass", getGlass());
 // Оформление — отдельным окном из шапки (и с экрана входа): тема, прозрачность, палитра, цвет кнопок
@@ -484,16 +476,6 @@ function rerender() { // перерисовать экран без анимац
   const main = document.getElementById("main"); if (!main) return render();
   main.classList.remove("screen");
   main.innerHTML = route().view();
-}
-// смена вида внутри экрана (день, неделя, фильтр, папка): старое и новое мягко перетекают, без резкого скачка;
-// неизменившиеся части при этом остаются на месте. Без View Transitions — просто перерисовка.
-function smooth(fn = rerender) {
-  const root = document.documentElement;
-  if (!document.startViewTransition || calm() || document.hidden) { fn(); return Promise.resolve(); }
-  root.classList.add("vt-soft");
-  const t = document.startViewTransition(fn);
-  t.finished.finally(() => root.classList.remove("vt-soft"));
-  return t.updateCallbackDone.catch(() => {});
 }
 function skeleton() {
   return `<div style="display:grid;gap:14px;padding-top:32px"><div class="skel" style="height:22px;width:45%"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:120px"></div></div>`;
@@ -3361,7 +3343,7 @@ async function run(b, act) {
   const w = workoutOn(S.day);
   switch (act) {
     case "pick-day": {
-      const changed = S.day !== b.dataset.day; S.day = b.dataset.day; await smooth();
+      const changed = S.day !== b.dataset.day; S.day = b.dataset.day; rerender();
       if (changed && innerWidth < 760) document.getElementById("day-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     }
@@ -3369,21 +3351,21 @@ async function run(b, act) {
       const n = +b.dataset.n;
       if (getCalView() === "week") { const d = addDays(S.day, 7 * n); S.day = monday(d) === monday(today()) ? today() : monday(d); }
       else { const d0 = parse(S.day), d = new Date(d0.getFullYear(), d0.getMonth() + n, 1); S.day = iso(d).slice(0, 7) === today().slice(0, 7) ? today() : iso(d); }
-      smooth(); break;
+      rerender(); break;
     }
-    case "cal-view": try { localStorage.setItem("gym-cal-view", b.dataset.v); } catch {} smooth(); break;
-    case "today": S.day = today(); smooth(); break;
+    case "cal-view": try { localStorage.setItem("gym-cal-view", b.dataset.v); } catch {} rerender(); break;
+    case "today": S.day = today(); rerender(); break;
     case "photo": photoSheet(b.dataset.name); break;
     case "coach": coachChat(); break;
     case "mu-play": { const i = +b.dataset.i; if (i === M.i) M.audio.paused ? M.audio.play().catch(() => {}) : M.audio.pause(); else { M.queue = visibleTracks().map(x => x.t.file); playAt(i); } break; }
     case "mu-all": { const v = visibleTracks(); M.queue = v.map(x => x.t.file); if (!v.length) break; playAt(M.shuffle ? v[Math.floor(Math.random() * v.length)].i : v[0].i); break; }
     case "mu-folder": {
-      M.folder = b.dataset.id || null; M.q = ""; await smooth();
+      M.folder = b.dataset.id || null; M.q = ""; rerender();
       // список открытой папки ниже сетки — на телефоне подкручиваем к нему, если он за краем экрана
       const h = document.querySelector(".mu-head"); if (h && h.getBoundingClientRect().top > innerHeight * .7) h.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
       break;
     }
-    case "mu-folders-all": M.allFolders = !M.allFolders; smooth(); break;
+    case "mu-folders-all": M.allFolders = !M.allFolders; rerender(); break;
     case "mu-fav": toggleFav(+b.dataset.i); break;
     case "yt-play": { const i = +b.dataset.i; if (i === YT.i && YT.player?.getPlayerState) { YT.playing ? YT.player.pauseVideo() : YT.player.playVideo(); } else ytPlay(i); break; }
     case "yt-all": ytPlay(0); break;
@@ -3393,7 +3375,7 @@ async function run(b, act) {
     case "yt-del": { const x = YT.list[+b.dataset.i]; if (!x || !await confirmSheet("Убрать из списка?", `«${x.title || "Видео"}» пропадёт из общего списка.`, "Убрать")) break;
       try { await q(sb.from("gym_yt").delete().eq("id", x.id)); const cur = YT.list[YT.i]; YT.list = YT.list.filter(y => y !== x); YT.i = cur ? YT.list.indexOf(cur) : -1; rerender(); } catch {} break; }
     case "mu-q-clear": M.q = ""; rerender(); document.querySelector("[data-field=mu-q]")?.focus(); break;
-    case "prog-where": S.progWhere = b.dataset.v; smooth(); break;
+    case "prog-where": S.progWhere = b.dataset.v; rerender(); break;
     case "prog-vid": videoSheet(programById(b.dataset.id).videos[+b.dataset.k]); break;
     case "mu-track-menu": trackMenu(+b.dataset.i); break;
     case "mu-new-folder": newFolderSheet(); break;
@@ -3411,7 +3393,7 @@ async function run(b, act) {
     case "mu-up-close": U.items = []; document.getElementById("mu-upl")?.remove(); break;
     case "mu-up-retry": U.items = U.items.filter(y => y.st === "fail" || y.st === "skip").map(y => ({ f: y.f, st: "wait", pct: 0 })); runUpload(); break;
     case "mu-shuffle": M.shuffle = !M.shuffle; b.setAttribute("aria-pressed", M.shuffle); break;
-    case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} smooth(); break;
+    case "help-hide": try { localStorage.setItem("gym-help-hidden", "1"); } catch {} rerender(); break;
     case "send-w": sendWorkoutSheet(b.dataset.u); break;
     case "send-p": sendProgramSheet(b.dataset.u); break;
     case "share-open": acceptSheet(S.shares.find(x => x.id === b.dataset.id)); break;
@@ -3443,9 +3425,9 @@ async function run(b, act) {
       if (sessionOn(w.day)) setRest(w.day); // иначе на этом дне снова появится план программы
       rerender(); break;
     }
-    case "move": S.moving = S.day; S.moveWeek = monday(S.day); await smooth(); scrollTo({ top: 0, behavior: "smooth" }); break;
-    case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); smooth(); break;
-    case "move-cancel": S.moving = null; smooth(); break;
+    case "move": S.moving = S.day; S.moveWeek = monday(S.day); rerender(); scrollTo({ top: 0, behavior: "smooth" }); break;
+    case "move-week": S.moveWeek = addDays(S.moveWeek, +b.dataset.n); rerender(); break;
+    case "move-cancel": S.moving = null; rerender(); break;
     case "move-to": {
       const from = S.moving, to = b.dataset.day; b.classList.add("busy");
       try { await swapDays(from, to); S.moving = null; S.day = to; rerender(); toast(`Перенесено на ${WD_FULL[wdOf(to)].toLowerCase()}, ${shortDay(to)}`); }
